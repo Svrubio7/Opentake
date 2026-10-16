@@ -4,7 +4,7 @@ Thanks for helping. Take is a small app; issues and pull requests are welcome.
 
 ## Before you start
 
-- Bugs and ideas go in [GitHub Issues](https://github.com/Svrubio7/take/issues). Use the templates so we can reproduce the problem.
+- Bugs and ideas go in [GitHub Issues](https://github.com/Svrubio7/Opentake/issues). Use the templates so we can reproduce the problem.
 - For a larger change, open an issue first so we can agree on the approach before you write it.
 
 ## Working on the code

@@ -32,7 +32,7 @@ Made by [Quetzal](https://quetzaltech.app). Free for everyone, open source under
 
 ## Download
 
-Get the latest version from [GitHub Releases](https://github.com/Svrubio7/take/releases/latest):
+Get the latest version from [GitHub Releases](https://github.com/Svrubio7/Opentake/releases/latest):
 
 - **Windows**: `Take-<version>-win-x64.exe` (installer) or `Take-<version>-portable.exe` (no install).
 - **macOS**: `Take-<version>-mac-arm64.dmg` for Apple Silicon, `Take-<version>-mac-x64.dmg` for Intel.
@@ -69,7 +69,7 @@ The teleprompter shortcuts are active while the prompter is showing. Inside the 
 You need Node.js 22 and npm.
 
 ```sh
-git clone https://github.com/Svrubio7/take.git
+git clone https://github.com/Svrubio7/Opentake.git
 cd take
 npm ci          # also downloads the ffmpeg binary for your platform
 npm run dev     # run the app with hot reload
@@ -95,7 +95,7 @@ Unsigned builds work but warn on first launch. To sign, add these secrets to the
 
 ### Where the repository name lives
 
-The GitHub owner and repository (`Svrubio7/take`) are set once in `package.json` under `repository`; electron-builder reads releases from there. If the repository moves, change that field and the links in this README and `CONTRIBUTING.md`.
+The GitHub owner and repository (`Svrubio7/Opentake`) are set once in `package.json` under `repository`; electron-builder reads releases from there. If the repository moves, change that field and the links in this README and `CONTRIBUTING.md`.
 
 ## Licence
 
