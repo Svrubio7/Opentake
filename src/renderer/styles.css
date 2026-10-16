@@ -1,0 +1,22 @@
+/* Shared tokens. Modules style their own parts in their own CSS files using these variables. */
+:root {
+  --bg: #0b0b0c; --surface: #141416; --card: #1b1b1e; --border: #2a2a2e;
+  --text: #f4f4f5; --muted: #9a9aa3; --accent: #3ddc97; --danger: #ff4d4f; --warn: #ffb020;
+  --radius: 12px;
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+}
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; background: var(--bg); }
+button { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+input, select, textarea { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+.app { display: grid; grid-template-columns: 1fr 380px; height: 100%; }
+.stage-wrap { padding: 16px; min-width: 0; display: flex; }
+.side { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+.tabs { display: flex; gap: 4px; padding: 10px; border-bottom: 1px solid var(--border); }
+.tab { flex: 1; background: transparent; border-color: transparent; }
+.tab.on { background: var(--card); border-color: var(--border); }
+.panel { flex: 1; overflow: auto; padding: 14px; }
+.placeholder { color: var(--muted); padding: 24px; border: 1px dashed var(--border); border-radius: var(--radius); }
+.stage { flex: 1; display: grid; place-items: center; }
