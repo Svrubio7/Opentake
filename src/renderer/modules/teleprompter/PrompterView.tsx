@@ -2,6 +2,7 @@
 // It owns the scroll motion (requestAnimationFrame); the controller in the main window owns the
 // settings, the transport and, in voice-tracked mode, the target word it eases toward.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { IPC } from "@shared/ipc";
 import type { PrompterState } from "@shared/types";
 import {
@@ -162,7 +163,7 @@ export function PrompterSurface({ state, clickThrough = false, onPosition, onClo
       {!embedded && (
         <div className="pv-drag">
           <span className="pv-drag-title">Take prompter</span>
-          {onClose && <button className="pv-close" title="Close" onClick={onClose}>×</button>}
+          {onClose && <button type="button" className="pv-close" title="Close" aria-label="Close" onClick={onClose}><X /></button>}
         </div>
       )}
       <div className="pv-viewport" ref={viewport} onWheel={onWheel} onClick={onClick}

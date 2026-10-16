@@ -1,0 +1,58 @@
+name: Release
+
+# Push a tag like v1.0.1 (matching package.json "version") to build every platform and
+# attach the files to a DRAFT GitHub release. Review the draft, then publish it.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win
+          - os: ubuntu-latest
+            target: --linux
+          # ffmpeg-static downloads ONE ffmpeg binary, for npm_config_arch, so each mac arch
+          # is its own job: the Intel build installs x64 binaries on the Apple Silicon runner.
+          - os: macos-latest
+            target: --mac --arm64
+            arch: arm64
+          - os: macos-latest
+            target: --mac --x64
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+      - run: npm test
+      - run: npm run build
+      - name: Package and publish
+        run: npx electron-builder ${{ matrix.target }} --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Code signing (optional). Without these the builds are unsigned: Windows SmartScreen
+          # and macOS Gatekeeper warn on first launch. See README "Code signing".
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # unsigned mac builds: do not look for an identity in the keychain
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' }}

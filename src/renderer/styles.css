@@ -1,22 +1,53 @@
-/* Shared tokens. Modules style their own parts in their own CSS files using these variables. */
-:root {
-  --bg: #0b0b0c; --surface: #141416; --card: #1b1b1e; --border: #2a2a2e;
-  --text: #f4f4f5; --muted: #9a9aa3; --accent: #3ddc97; --danger: #ff4d4f; --warn: #ffb020;
-  --radius: 12px;
-  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
-  color: var(--text);
+/* The app shell: black rail, the stage on the canvas, the active module's cards on the right.
+   Tokens and primitives live in ui.css; modules style only their own parts. */
+@import "./ui.css";
+
+.app { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 380px; padding-left: 72px; }
+
+/* ---------- rail: Quetzal's black sidebar, opens over the stage on hover ---------- */
+.rail {
+  position: fixed; inset: 0 auto 0 0; z-index: 50; width: 72px; overflow: hidden;
+  display: flex; flex-direction: column; gap: 4px; padding: 14px 12px;
+  background: linear-gradient(180deg, var(--rail-from) 0%, var(--rail-to) 100%); color: var(--rail-fg);
+  transition: width 150ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 150ms ease-out;
 }
-* { box-sizing: border-box; }
-html, body, #root { margin: 0; height: 100%; background: var(--bg); }
-button { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
-button:hover { border-color: var(--muted); }
-input, select, textarea { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
-.app { display: grid; grid-template-columns: 1fr 380px; height: 100%; }
-.stage-wrap { padding: 16px; min-width: 0; display: flex; }
-.side { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
-.tabs { display: flex; gap: 4px; padding: 10px; border-bottom: 1px solid var(--border); }
-.tab { flex: 1; background: transparent; border-color: transparent; }
-.tab.on { background: var(--card); border-color: var(--border); }
-.panel { flex: 1; overflow: auto; padding: 14px; }
-.placeholder { color: var(--muted); padding: 24px; border: 1px dashed var(--border); border-radius: var(--radius); }
-.stage { flex: 1; display: grid; place-items: center; }
+.rail:hover, .rail:has(:focus-visible) { width: 216px; box-shadow: var(--shadow-raised); }
+.rail-label { white-space: nowrap; opacity: 0; transition: opacity 90ms ease-out; }
+.rail:hover .rail-label, .rail:has(:focus-visible) .rail-label { opacity: 1; transition: opacity 140ms ease-out 30ms; }
+
+.rail-brand { display: flex; align-items: center; gap: 12px; height: 44px; padding-left: 8px; margin-bottom: 14px; }
+.rail-mark { width: 32px; height: 32px; object-fit: contain; flex: none; }
+.rail-brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+.rail-brand-text b { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+.rail-brand-text small { font-size: 13px; color: var(--rail-muted); }
+
+.rail-item {
+  position: relative; display: flex; align-items: center; gap: 14px; height: 44px; padding: 0 0 0 13px;
+  border: 0; border-radius: 12px; background: transparent; color: var(--rail-muted);
+  font-size: 15px; font-weight: 500; text-align: left;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+}
+.rail-item:hover { color: var(--rail-fg); background: color-mix(in srgb, var(--rail-active) 60%, transparent); }
+.rail-item.on { color: var(--rail-fg); background: var(--rail-active); }
+.rail-icon { width: 22px; height: 22px; stroke-width: 1.6; flex: none; }
+.rail-dot { position: absolute; top: 7px; left: 37px; width: 6px; height: 6px; border-radius: 50%; background: var(--rail-dot); }
+.rail-item:focus-visible { outline-color: var(--rail-fg); }
+
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+
+/* ---------- workspace: the stage card and its control bar ---------- */
+.workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px 0 16px 16px; }
+.stage-card {
+  flex: 1; min-height: 0; display: flex; background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 20px; box-shadow: var(--shadow-card); padding: 10px; overflow: hidden;
+}
+
+/* ---------- side: the active module ---------- */
+.side { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.panel { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 20px 16px 24px; scrollbar-gutter: stable; }
+.panel-title { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin: 2px 2px 16px; }
+
+/* a module's column of cards */
+.cards { display: flex; flex-direction: column; gap: 12px; }
+
+.placeholder { color: var(--muted); padding: 24px; border: 1px dashed var(--border); border-radius: var(--radius-card); }

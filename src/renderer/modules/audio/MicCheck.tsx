@@ -5,6 +5,7 @@ import { getEngine, type Preview } from "./engine";
 import { MiniInput } from "./Meters";
 import { useAudioStore } from "./store";
 import { applySettings } from "./actions";
+import { Button, Segmented } from "../../ui";
 
 const SILENCE_S = 5;
 const SPEECH_S = 10;
@@ -84,16 +85,16 @@ export function MicCheck() {
 
   if (step === "intro" || step === "failed") {
     return (
-      <div className="au-card au-check">
+      <section className="card au-check">
         <div className="au-check-head">
           <div>
-            <h3>Mic check</h3>
-            <p className="au-muted">15 seconds. We listen to your room and your voice, then tune everything for you.</p>
+            <h3 className="card-title">Mic check</h3>
+            <p className="note">15 seconds to tune everything to your room and your voice.</p>
           </div>
-          <button className="au-primary" disabled={!running} onClick={run}>Start</button>
+          <Button variant="ink" disabled={!running} onClick={run}>Start</Button>
         </div>
-        {error && <p className="au-warn-text">{error}</p>}
-      </div>
+        {error && <p className="note note-warn">{error}</p>}
+      </section>
     );
   }
 
@@ -101,32 +102,32 @@ export function MicCheck() {
     const secs = step === "silence" ? SILENCE_S : SPEECH_S;
     const left = Math.max(0, Math.ceil(secs * (1 - progress)));
     return (
-      <div className="au-card au-check">
+      <section className="card au-check">
         <div className="au-check-step">
-          <span className="au-step-dot rec" />
-          <h3>{step === "silence" ? "Stay quiet" : "Read this out loud"}</h3>
-          <span className="au-num au-muted">{left}s</span>
+          <span className="au-step-dot" />
+          <h3 className="card-title">{step === "silence" ? "Stay quiet" : "Read this out loud"}</h3>
+          <span className="au-num au-left">{left}s</span>
         </div>
         {step === "silence"
-          ? <p className="au-muted">Listening to your room. Don't type or move the mic.</p>
+          ? <p className="note">Listening to your room. Don't type or move the mic.</p>
           : <p className="au-sentence">{MIC_CHECK_SENTENCE}</p>}
-        <div className="au-progress"><div style={{ width: `${progress * 100}%` }} /></div>
+        <div className="progress"><div style={{ width: `${progress * 100}%` }} /></div>
         <MiniInput />
-        <button className="au-ghost" onClick={() => abort.current?.abort()}>Cancel</button>
-      </div>
+        <Button variant="ghost" size="sm" className="au-self-start" onClick={() => abort.current?.abort()}>Cancel</Button>
+      </section>
     );
   }
 
   if (step === "analysing" || !result) {
-    return <div className="au-card au-check"><p className="au-muted">Listening back...</p></div>;
+    return <section className="card au-check"><p className="note">Listening back</p></section>;
   }
 
   const m = result.metrics;
   return (
-    <div className="au-card au-check">
-      <div className="au-check-head">
-        <h3>{result.ok ? "Tuned for you" : "Let's try that again"}</h3>
-        <button className="au-ghost" onClick={run}>Run again</button>
+    <section className="card au-check">
+      <div className="card-head">
+        <h3 className="card-title">{result.ok ? "Tuned for you" : "Let's try that again"}</h3>
+        <Button variant="ghost" size="sm" onClick={run}>Run again</Button>
       </div>
       <ul className="au-findings">
         {result.findings.map((f, i) => <li key={i} className={f.tone}><i />{f.text}</li>)}
@@ -140,16 +141,14 @@ export function MicCheck() {
       {result.ok && (
         <>
           <div className="au-ab">
-            <button className="au-play" onClick={togglePlay} aria-label={playing ? "Stop" : "Play"}>{playing ? "Stop" : "Play"}</button>
-            <div className="au-seg">
-              <button className={!after ? "on" : ""} onClick={() => pick(false)}>Before</button>
-              <button className={after ? "on" : ""} onClick={() => pick(true)}>After</button>
-            </div>
+            <Button className="au-play" onClick={togglePlay} aria-label={playing ? "Stop" : "Play"}
+              title="Same take, switch while it plays. Use headphones so the mic doesn't hear the speakers.">{playing ? "Stop" : "Play"}</Button>
+            <Segmented<"before" | "after"> fill label="Compare" value={after ? "after" : "before"} onChange={(v) => pick(v === "after")}
+              options={[{ value: "before", label: "Before" }, { value: "after", label: "After" }]} />
           </div>
-          <p className="au-muted au-small">Same take, switch while it plays. Use headphones so the mic doesn't hear the speakers.</p>
-          {undo && <button className="au-ghost" onClick={revert}>Undo these changes</button>}
+          {undo && <Button variant="ghost" size="sm" className="au-self-start" onClick={revert}>Undo these changes</Button>}
         </>
       )}
-    </div>
+    </section>
   );
 }

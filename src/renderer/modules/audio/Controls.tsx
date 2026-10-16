@@ -1,35 +1,24 @@
 // Presets and the hand controls for every stage of the chain.
 import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { PRESETS, type NsMode, type PresetId } from "./audio-core";
 import { choosePreset, patchStage, setInputGain } from "./actions";
 import { useAudioStore } from "./store";
+import { Segmented, Slider as UiSlider, SwitchControl } from "../../ui";
 
 function Slider(props: { label: string; value: number; min: number; max: number; step?: number; unit?: string; digits?: number; onChange: (v: number) => void }) {
   const { label, value, min, max, step = 1, unit = "", digits = 0, onChange } = props;
-  return (
-    <label className="au-slider">
-      <span className="au-slider-head"><span>{label}</span><span className="au-num">{value > 0 && unit === "dB" && min < 0 ? "+" : ""}{value.toFixed(digits)}{unit && ` ${unit}`}</span></span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-    </label>
-  );
-}
-
-function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <button
-      type="button" role="switch" aria-checked={on} aria-label={label}
-      className={on ? "au-switch on" : "au-switch"}
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange(!on); }}
-    ><i /></button>
-  );
+  const format = (v: number) => `${v > 0 && unit === "dB" && min < 0 ? "+" : ""}${v.toFixed(digits)}${unit === "%" ? "%" : unit && ` ${unit}`}`;
+  return <UiSlider label={label} value={value} min={min} max={max} step={step} onChange={onChange} format={format} />;
 }
 
 function Stage({ title, hint, on, onToggle, children }: { title: string; hint: string; on?: boolean; onToggle?: (v: boolean) => void; children: ReactNode }) {
   return (
     <details className={on === false ? "au-stage off" : "au-stage"}>
       <summary>
+        <ChevronRight className="au-chev" />
         <span className="au-stage-title">{title}<small>{hint}</small></span>
-        {onToggle && on !== undefined && <Switch on={on} onChange={onToggle} label={`${title} on`} />}
+        {onToggle && on !== undefined && <SwitchControl checked={on} onChange={onToggle} label={`${title} on`} />}
       </summary>
       <div className="au-stage-body">{children}</div>
     </details>
@@ -41,9 +30,9 @@ const NS_LABEL: Record<NsMode, string> = { rnnoise: "AI", speex: "Classic", off:
 export function Presets() {
   const preset = useAudioStore((s) => s.settings.preset);
   return (
-    <div className="au-presets">
+    <div className="seg au-presets" role="radiogroup" aria-label="Preset">
       {(Object.keys(PRESETS) as PresetId[]).map((id) => (
-        <button key={id} className={preset === id ? "on" : ""} onClick={() => choosePreset(id)} title={PRESETS[id].hint}>
+        <button key={id} type="button" role="radio" aria-checked={preset === id} className={preset === id ? "on" : ""} onClick={() => choosePreset(id)} title={PRESETS[id].hint}>
           {PRESETS[id].label}
         </button>
       ))}
@@ -68,13 +57,12 @@ export function Controls() {
       </Stage>
 
       <Stage title="Noise suppression" hint={`${NS_LABEL[nsRunning]}${nsRunning !== "off" ? `, ${Math.round(s.ns.mix * 100)}%` : ""}`} on={s.ns.mode !== "off"} onToggle={(on) => patchStage("ns", { mode: on ? "rnnoise" : "off" })}>
-        <div className="au-seg au-seg-full">
-          {(["rnnoise", "speex", "off"] as NsMode[]).map((m) => (
-            <button key={m} className={s.ns.mode === m ? "on" : ""} disabled={m === "rnnoise" ? !nsAvailable.rnnoise : m === "speex" ? !nsAvailable.speex : false}
-              onClick={() => patchStage("ns", { mode: m })}>{NS_LABEL[m]}</button>
-          ))}
-        </div>
-        {fellBack && <p className="au-warn-text au-small">{NS_LABEL[s.ns.mode]} suppression could not load. Using {NS_LABEL[nsRunning]}.</p>}
+        <Segmented<NsMode> fill label="Noise suppression" value={s.ns.mode} onChange={(m) => patchStage("ns", { mode: m })}
+          options={(["rnnoise", "speex", "off"] as NsMode[]).map((m) => ({
+            value: m, label: NS_LABEL[m],
+            disabled: m === "rnnoise" ? !nsAvailable.rnnoise : m === "speex" ? !nsAvailable.speex : false,
+          }))} />
+        {fellBack && <p className="note note-warn">{NS_LABEL[s.ns.mode]} suppression could not load. Using {NS_LABEL[nsRunning]}.</p>}
         <Slider label="Strength" value={Math.round(s.ns.mix * 100)} min={0} max={100} unit="%" onChange={(v) => patchStage("ns", { mix: v / 100 })} />
       </Stage>
 

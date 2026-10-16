@@ -1,6 +1,8 @@
-// OWNED BY: record agent. The sidebar panel and the big preview in the middle.
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+// OWNED BY: record agent. The big preview in the middle, its control bar, and the Record panel.
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { FolderOpen, Monitor, Pause, PictureInPicture2, Play, Square, Trash, Video, X } from "lucide-react";
 import type { BubbleShape, OutputAspect, RecordMode, ScreenSource, TakeInfo } from "@shared/types";
+import { Button, Card, Field, Hint, Segmented, Slider, Switch, Tag } from "../../ui";
 import { api, hasBridge } from "./api";
 import { compositor } from "./engine";
 import { BACKGROUNDS, clampBubble, formatClock, hitBubble, needsCamera, needsScreen, snapBubble } from "./layout-core";
@@ -15,7 +17,6 @@ export function Stage() {
   const host = useRef<HTMLDivElement>(null);
   const status = useRecord((s) => s.status);
   const countdownValue = useRecord((s) => s.countdownValue);
-  const elapsedMs = useRecord((s) => s.elapsedMs);
   const mode = useRecord((s) => s.mode);
   const aspect = useRecord((s) => s.aspect);
   const drag = useRef<{ kind: "move" | "resize"; dx: number; dy: number; startSize: number; startDist: number } | null>(null);
@@ -74,9 +75,8 @@ export function Stage() {
     s.set({ bubble: snapBubble(s.bubble, L.width, L.height) });
   };
 
-  const live = status === "recording" || status === "paused";
   return (
-    <div className="rec-stage" data-aspect={aspect}>
+    <div className={mode === "screen-camera" && status === "idle" ? "rec-stage has-tip" : "rec-stage"} data-aspect={aspect}>
       <div
         className="rec-canvas-host"
         ref={host}
@@ -88,60 +88,101 @@ export function Stage() {
         onPointerLeave={() => { if (!drag.current) compositor().bubbleHover = null; }}
       />
       {status === "countdown" && <div className="rec-countdown" key={countdownValue}>{countdownValue}</div>}
-      {live && (
-        <div className={status === "paused" ? "rec-live paused" : "rec-live"}>
-          <span className="rec-dot" />
-          {status === "paused" ? "Paused" : "Recording"} <b>{formatClock(elapsedMs)}</b>
-        </div>
-      )}
       {mode === "screen-camera" && status === "idle" && <div className="rec-stage-tip">Drag the camera to move it, drag its edge to resize</div>}
     </div>
   );
 }
 
-// ---------- Panel ----------
+// ---------- Control bar under the stage ----------
 
-const MODES: { id: RecordMode; label: string }[] = [
-  { id: "camera", label: "Camera only" },
-  { id: "screen-camera", label: "Screen + camera" },
-  { id: "screen", label: "Screen only" },
+const MODES: { value: RecordMode; label: ReactNode; hint: string }[] = [
+  { value: "camera", label: <Video />, hint: "Camera only" },
+  { value: "screen-camera", label: <PictureInPicture2 />, hint: "Screen and camera" },
+  { value: "screen", label: <Monitor />, hint: "Screen only" },
 ];
 const ASPECTS: OutputAspect[] = ["16:9", "9:16", "1:1"];
 
-function Segmented<T extends string | number>({ value, options, onChange, disabled }: { value: T; options: { id: T; label: string }[]; onChange: (v: T) => void; disabled?: boolean }) {
+export function RecordBar() {
+  const status = useRecord((s) => s.status);
+  const mode = useRecord((s) => s.mode);
+  const aspect = useRecord((s) => s.aspect);
+  const sourceId = useRecord((s) => s.sourceId);
+  const sourceName = useRecord((s) => s.sourceName);
+  const elapsedMs = useRecord((s) => s.elapsedMs);
+  const error = useRecord((s) => s.error);
+  const notice = useRecord((s) => s.notice);
+  const set = useRecord((s) => s.set);
+  const [picking, setPicking] = useState(false);
+  const busy = isBusy(status);
+  const live = status === "recording" || status === "paused";
+  const bridge = hasBridge();
+
   return (
-    <div className="rec-seg">
-      {options.map((o) => (
-        <button key={String(o.id)} disabled={disabled} className={o.id === value ? "on" : ""} onClick={() => onChange(o.id)}>{o.label}</button>
-      ))}
+    <div className="rec-dock">
+      {error && <button type="button" className="rec-msg danger" onClick={() => set({ error: null })} title="Dismiss">{error}<X /></button>}
+      {notice && !error && <button type="button" className="rec-msg" onClick={() => set({ notice: null })} title="Dismiss">{notice}<X /></button>}
+      <div className="rec-bar">
+        <div className="rec-bar-side">
+          <Segmented icon label="What to record" value={mode} options={MODES} onChange={(m) => set({ mode: m })} disabled={busy} />
+          {needsScreen(mode) && (
+            <Button className="rec-src" disabled={busy || !bridge} onClick={() => setPicking(true)} title={sourceName ? `Recording ${sourceName}. Click to change.` : "Choose a screen or window"}>
+              <Monitor /><span>{sourceId ? sourceName : "Choose screen"}</span>
+            </Button>
+          )}
+        </div>
+
+        <div className="rec-bar-main">
+          {!busy && (
+            <Button variant="ink" size="lg" className="rec-go" onClick={startRecording} disabled={!bridge} title="Start recording (Ctrl+Shift+R)">
+              <span className="rec-dot still" />Record
+            </Button>
+          )}
+          {status === "countdown" && <Button size="lg" onClick={() => void stopRecording()}>Cancel</Button>}
+          {live && (
+            <>
+              <span className={status === "paused" ? "rec-clock paused" : "rec-clock"}><span className="rec-dot" />{formatClock(elapsedMs)}</span>
+              <Button size="icon" onClick={togglePause} title={status === "paused" ? "Resume (Ctrl+Shift+P)" : "Pause (Ctrl+Shift+P)"} aria-label={status === "paused" ? "Resume" : "Pause"}>
+                {status === "paused" ? <Play /> : <Pause />}
+              </Button>
+              <Button variant="danger" size="lg" onClick={() => void stopRecording()} title="Stop (Ctrl+Shift+R)"><Square />Stop</Button>
+            </>
+          )}
+          {status === "stopping" && <span className="note">Saving the take</span>}
+        </div>
+
+        <div className="rec-bar-side end">
+          <Segmented label="Frame" value={aspect} options={ASPECTS.map((a) => ({ value: a, label: a, hint: `Record a ${a} frame` }))} onChange={(a) => set({ aspect: a })} disabled={busy} />
+        </div>
+      </div>
+      {picking && <SourcePicker onClose={() => setPicking(false)} />}
     </div>
   );
 }
 
-function Toggle({ checked, onChange, label, hint, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; disabled?: boolean }) {
+/** The rail's reminder that a take is running, visible from every tab. */
+export function RecordRailStatus({ onOpen }: { onOpen: () => void }) {
+  const status = useRecord((s) => s.status);
+  const elapsedMs = useRecord((s) => s.elapsedMs);
+  if (status !== "recording" && status !== "paused") return null;
   return (
-    <label className={disabled ? "rec-toggle off" : "rec-toggle"} title={hint}>
-      <span>{label}</span>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-      <i />
-    </label>
+    <button type="button" className={status === "paused" ? "rail-rec paused" : "rail-rec"} onClick={onOpen} title={status === "paused" ? "Paused" : "Recording"}>
+      <span className="rec-dot" />
+      <span className="tnum">{formatClock(elapsedMs)}</span>
+    </button>
   );
 }
 
-function Slider({ label, value, min, max, step, onChange, format }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void; format?: (v: number) => string }) {
-  return (
-    <label className="rec-slider">
-      <span>{label}</span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-      <em>{format ? format(value) : value}</em>
-    </label>
-  );
-}
+// ---------- Panel ----------
 
 function SourcePicker({ onClose }: { onClose: () => void }) {
   const [sources, setSources] = useState<ScreenSource[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { api.sources().then(setSources, (e) => setErr(String(e))); }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const choose = async (s: ScreenSource) => {
     const set = useRecord.getState().set;
     set({ sourceId: s.id, sourceName: s.name, displayId: s.displayId ?? null, error: null });
@@ -153,24 +194,28 @@ function SourcePicker({ onClose }: { onClose: () => void }) {
   const screens = sources?.filter((s) => s.id.startsWith("screen:")) ?? [];
   const windows = sources?.filter((s) => !s.id.startsWith("screen:")) ?? [];
   return (
-    <div className="rec-picker">
-      <div className="rec-picker-head"><b>Choose what to record</b><button onClick={onClose}>Close</button></div>
-      {err && <p className="rec-error">{err}</p>}
-      {!sources && !err && <p className="rec-muted">Looking for screens and windows...</p>}
-      {[["Screens", screens], ["Windows", windows]].map(([title, list]) => (list as ScreenSource[]).length > 0 && (
-        <div key={title as string}>
-          <h4>{title as string}</h4>
-          <div className="rec-picker-grid">
-            {(list as ScreenSource[]).map((s) => (
-              <button key={s.id} className="rec-source" onClick={() => choose(s)}>
-                <img src={s.thumbnail} alt="" />
-                <span>{s.name}</span>
-              </button>
-            ))}
-          </div>
+    <div className="modal-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" role="dialog" aria-label="Choose what to record">
+        <div className="row">
+          <h2 className="modal-title">Choose what to record</h2>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close"><X /></Button>
         </div>
-      ))}
-      {windows.length > 0 && <p className="rec-muted">Auto zoom follows clicks on whole screens. On a single window it stays off.</p>}
+        {err && <p className="note note-danger">{err}</p>}
+        {!sources && !err && <p className="note">Looking for screens and windows</p>}
+        {([["Screens", screens], ["Windows", windows]] as const).map(([title, list]) => list.length > 0 && (
+          <div key={title} className="stack">
+            <h3 className="rec-pick-title">{title}{title === "Windows" && <Hint text="Auto zoom follows clicks on whole screens. On a single window it stays off." />}</h3>
+            <div className="rec-picker-grid">
+              {list.map((s) => (
+                <button key={s.id} type="button" className="rec-source" onClick={() => choose(s)} title={s.name}>
+                  <img src={s.thumbnail} alt="" />
+                  <span>{s.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -193,48 +238,54 @@ function TakeRow({ take }: { take: TakeInfo }) {
   return (
     <li className="rec-take">
       <div className="rec-take-top">
-        <div>
+        <div className="rec-take-text">
           <b>{fmtDate(take.createdAt)}</b>
-          <span className="rec-muted">
+          <span className="tnum">
             {take.durationMs != null ? formatClock(take.durationMs) : "Length unknown"} · {MODE_LABEL[take.mode]} · {fmtSize(take.sizeBytes)}
-            {take.status === "recording" && !active ? " · Recovered" : ""}
           </span>
         </div>
-        {take.files.mp4 && <span className="rec-badge">MP4</span>}
+        <div className="rec-take-tags">
+          {take.status === "recording" && !active && <Tag tone="warn" title="This take was interrupted and recovered">Recovered</Tag>}
+          {take.files.mp4 && <Tag tone="good">MP4</Tag>}
+        </div>
       </div>
       {running && (
         <div className="rec-progress">
-          <div className="rec-bar"><i style={{ width: progress.ratio == null ? "100%" : `${Math.round(progress.ratio * 100)}%` }} className={progress.ratio == null ? "indet" : ""} /></div>
-          <span>{progress.stage}{progress.ratio != null ? ` ${Math.round(progress.ratio * 100)}%` : ""}</span>
-          <button onClick={() => api.cancelExport(take.id)}>Cancel</button>
+          <div className="progress"><i style={{ width: progress.ratio == null ? "100%" : `${Math.round(progress.ratio * 100)}%` }} className={progress.ratio == null ? "indet" : ""} /></div>
+          <span className="tnum">{progress.stage}{progress.ratio != null ? ` ${Math.round(progress.ratio * 100)}%` : ""}</span>
+          <Button variant="ghost" size="sm" onClick={() => api.cancelExport(take.id)}>Cancel</Button>
         </div>
       )}
-      {progress?.error && <p className="rec-error">{progress.error}</p>}
+      {progress?.error && <p className="note note-danger">{progress.error}</p>}
       {confirm ? (
         <div className="rec-take-actions">
-          <span className="rec-muted">Move this take to the Recycle Bin?</span>
-          <button className="danger" onClick={del}>Delete</button>
-          <button onClick={() => setConfirm(false)}>Keep</button>
+          <span className="note">Move to the Recycle Bin?</span>
+          <Button variant="danger" size="sm" onClick={del}>Delete</Button>
+          <Button size="sm" onClick={() => setConfirm(false)}>Keep</Button>
         </div>
       ) : (
         <div className="rec-take-actions">
-          <button disabled={running || active || !take.files.composite} onClick={() => exportTake(take.id, "composite")}>{take.files.mp4 ? "Export again" : "Export MP4"}</button>
+          <Button size="sm" disabled={running || active || !take.files.composite} onClick={() => exportTake(take.id, "composite")}>{take.files.mp4 ? "Export again" : "Export MP4"}</Button>
           {take.files.screen && (
-            <button disabled={running || active} title="The screen track at its native resolution, with the zoom redone from the click timeline" onClick={() => exportTake(take.id, "hires")}>Hi-res</button>
+            <Button size="sm" disabled={running || active} title="The screen track at its native resolution, with the zoom redone from the click timeline" onClick={() => exportTake(take.id, "hires")}>Hi-res</Button>
           )}
-          <button onClick={() => api.revealTake(take.id, take.files.hires ?? take.files.mp4)}>Show</button>
-          <button disabled={running || active} onClick={() => setConfirm(true)}>Delete</button>
+          <Button variant="ghost" size="sm" onClick={() => api.revealTake(take.id, take.files.hires ?? take.files.mp4)}>Show</Button>
+          <Button variant="ghost" size="icon-sm" className="rec-del" disabled={running || active} onClick={() => setConfirm(true)} title="Delete" aria-label="Delete"><Trash /></Button>
         </div>
       )}
     </li>
   );
 }
 
+const SOURCE_TAG = {
+  processed: { tone: "good", text: "From the Mic tab" },
+  fallback: { tone: "warn", text: "Default microphone" },
+  none: { tone: "danger", text: "None found" },
+} as const;
+
 export function RecordPanel() {
   const s = useRecord();
-  const [picking, setPicking] = useState(false);
   const busy = isBusy(s.status);
-  const live = s.status === "recording" || s.status === "paused";
 
   useEffect(() => { wireRecorder(); }, []);
   // a new mode that drops the screen releases the capture; one that needs it asks for a source
@@ -250,121 +301,90 @@ export function RecordPanel() {
     s.set({ bubble: clampBubble({ ...s.bubble, ...p }, L.width, L.height) });
   };
 
-  if (!hasBridge()) return <div className="rec-panel"><p className="rec-error">The recorder needs the desktop app.</p></div>;
+  if (!hasBridge()) return <div className="cards"><Card className="card-danger"><p className="note note-danger">The recorder needs the desktop app.</p></Card></div>;
+
+  const mic = SOURCE_TAG[s.micSource === "fallback" ? "fallback" : s.micSource === "none" ? "none" : "processed"];
+  const cam = s.cameraSource === "fallback" ? { tone: "warn", text: "Default camera" } as const
+    : s.cameraSource === "none" ? { tone: "danger", text: "None found" } as const : { tone: "good", text: "From the Camera tab" } as const;
 
   return (
-    <div className="rec-panel">
-      <section>
-        <Segmented value={s.mode} options={MODES} onChange={(mode) => s.set({ mode })} disabled={busy} />
-      </section>
-
-      {needsScreen(s.mode) && (
-        <section>
-          <h3>Source</h3>
-          <div className="rec-source-current">
-            <span>{s.sourceName ?? "Nothing selected"}</span>
-            <button disabled={busy} onClick={() => setPicking(true)}>{s.sourceId ? "Change" : "Choose"}</button>
-          </div>
-          {picking && <SourcePicker onClose={() => setPicking(false)} />}
-        </section>
-      )}
-
-      <section>
-        <h3>Layout</h3>
-        <div className="rec-row"><span>Frame</span><Segmented value={s.aspect} options={ASPECTS.map((a) => ({ id: a, label: a }))} onChange={(aspect) => s.set({ aspect })} disabled={busy} /></div>
-        {s.mode === "screen-camera" && (
-          <>
-            <div className="rec-row">
-              <span>Camera</span>
-              <Segmented<BubbleShape> value={s.bubble.shape} options={[{ id: "circle", label: "Circle" }, { id: "rounded", label: "Rounded" }]} onChange={(shape) => setBubble({ shape })} />
-            </div>
-            <Slider label="Camera size" value={s.bubble.size} min={0.12} max={0.5} step={0.01} onChange={(size) => setBubble({ size })} format={(v) => `${Math.round(v * 100)}%`} />
-          </>
-        )}
-        {needsScreen(s.mode) && (
-          <>
+    <div className="cards">
+      {(needsScreen(s.mode)) && (
+        <Card title="Layout">
+          {s.mode === "screen-camera" && (
+            <>
+              <div className="row">
+                <span className="row-label">Camera shape</span>
+                <Segmented<BubbleShape> value={s.bubble.shape} options={[{ value: "circle", label: "Circle" }, { value: "rounded", label: "Rounded" }]} onChange={(shape) => setBubble({ shape })} />
+              </div>
+              <Slider label="Camera size" value={s.bubble.size} min={0.12} max={0.5} step={0.01} onChange={(size) => setBubble({ size })} format={(v) => `${Math.round(v * 100)}%`} />
+            </>
+          )}
+          <div className="field">
+            <span className="label">Background</span>
             <div className="rec-swatches">
               {BACKGROUNDS.map((b) => (
-                <button key={b.id} title={b.label} className={b.id === s.backgroundId ? "on" : ""} style={{ background: b.css }} onClick={() => s.set({ backgroundId: b.id })}>
+                <button key={b.id} type="button" title={b.label} aria-label={b.label} aria-pressed={b.id === s.backgroundId}
+                  className={b.id === s.backgroundId ? "on" : ""} style={{ background: b.id === "none" ? undefined : b.css }} onClick={() => s.set({ backgroundId: b.id })}>
                   {b.id === "none" ? "None" : ""}
                 </button>
               ))}
             </div>
-            {s.backgroundId !== "none" && (
-              <>
-                <Slider label="Padding" value={s.padding} min={0} max={0.12} step={0.005} onChange={(padding) => s.set({ padding })} format={(v) => `${Math.round(v * 100)}%`} />
-                <Slider label="Corners" value={s.cornerRadius} min={0} max={48} step={1} onChange={(cornerRadius) => s.set({ cornerRadius })} format={(v) => `${v}px`} />
-              </>
-            )}
-          </>
-        )}
-      </section>
-
-      {needsScreen(s.mode) && (
-        <section>
-          <h3>Auto zoom</h3>
-          <Toggle label="Zoom into clicks" checked={s.zoomEnabled} onChange={(zoomEnabled) => s.set({ zoomEnabled })} disabled={busy} />
-          {s.zoomEnabled && <Slider label="Zoom" value={s.zoomScale} min={1.4} max={2.4} step={0.1} onChange={(zoomScale) => s.set({ zoomScale })} format={(v) => `${v.toFixed(1)}x`} />}
-          {s.tracking && (
-            <p className="rec-muted">
-              {!s.tracking.normalized ? "A single window is selected: zoom stays off." :
-                s.tracking.hooks ? "Clicks are tracked across the whole screen." :
-                  `Global clicks are unavailable, so the zoom follows where the cursor stops.${s.tracking.reason ? ` (${s.tracking.reason})` : ""}`}
-            </p>
-          )}
-        </section>
-      )}
-
-      <section>
-        <h3>Recording</h3>
-        <div className="rec-row"><span>Frame rate</span><Segmented<30 | 60> value={s.fps} options={[{ id: 30, label: "30 fps" }, { id: 60, label: "60 fps" }]} onChange={(fps) => s.set({ fps })} disabled={busy} /></div>
-        <Toggle label="3, 2, 1 countdown" checked={s.countdown} onChange={(countdown) => s.set({ countdown })} />
-        <Toggle label="Save separate screen and camera tracks" hint="For editing later: the raw screen and camera as their own files" checked={s.isoTracks} onChange={(isoTracks) => s.set({ isoTracks })} disabled={busy} />
-        <p className="rec-muted">
-          Mic: {s.micSource === "fallback" ? "default microphone (the Mic tab is not ready)" : s.micSource === "none" ? "none found" : "processed voice from the Mic tab"}
-          {needsCamera(s.mode) && <> · Camera: {s.cameraSource === "fallback" ? "default camera" : s.cameraSource === "none" ? "none found" : "from the Camera tab"}</>}
-        </p>
-
-        <div className="rec-controls">
-          {!busy && <button className="rec-big" onClick={startRecording}><span className="rec-dot" /> Start recording</button>}
-          {s.status === "countdown" && <button className="rec-big" onClick={() => void stopRecording()}>Cancel</button>}
-          {live && (
+          </div>
+          {s.backgroundId !== "none" && (
             <>
-              <div className="rec-timer">{formatClock(s.elapsedMs)}</div>
-              <button onClick={togglePause}>{s.status === "paused" ? "Resume" : "Pause"}</button>
-              <button className="rec-stop" onClick={() => void stopRecording()}>Stop</button>
+              <Slider label="Padding" value={s.padding} min={0} max={0.12} step={0.005} onChange={(padding) => s.set({ padding })} format={(v) => `${Math.round(v * 100)}%`} />
+              <Slider label="Corners" value={s.cornerRadius} min={0} max={48} step={1} onChange={(cornerRadius) => s.set({ cornerRadius })} format={(v) => `${v}px`} />
             </>
           )}
-          {s.status === "stopping" && <div className="rec-muted">Saving the take...</div>}
-        </div>
-        <p className="rec-muted rec-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> start or stop · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> pause</p>
-        {s.error && <p className="rec-error" onClick={() => s.set({ error: null })}>{s.error}</p>}
-        {s.notice && !s.error && <p className="rec-notice" onClick={() => s.set({ notice: null })}>{s.notice}</p>}
-      </section>
+        </Card>
+      )}
 
-      <section>
-        <h3>Export</h3>
-        <div className="rec-row">
-          <span>Loudness</span>
-          <select value={s.loudness} onChange={(e) => s.set({ loudness: e.target.value as typeof s.loudness })}>
+      {needsScreen(s.mode) && (
+        <Card title="Auto zoom" hint="Zooms in where you click, then eases back out">
+          <Switch label="Zoom into clicks" checked={s.zoomEnabled} onChange={(zoomEnabled) => s.set({ zoomEnabled })} disabled={busy} />
+          {s.zoomEnabled && <Slider label="Zoom" value={s.zoomScale} min={1.4} max={2.4} step={0.1} onChange={(zoomScale) => s.set({ zoomScale })} format={(v) => `${v.toFixed(1)}x`} />}
+          {s.tracking && (
+            <p className="note" title={s.tracking.reason ?? undefined}>
+              {!s.tracking.normalized ? "A single window is selected: zoom stays off." :
+                s.tracking.hooks ? "Clicks are tracked across the whole screen." :
+                  "Global clicks are unavailable, so the zoom follows where the cursor stops."}
+            </p>
+          )}
+        </Card>
+      )}
+
+      <Card title="Recording">
+        <div className="row">
+          <span className="row-label">Frame rate</span>
+          <Segmented<30 | 60> value={s.fps} options={[{ value: 30, label: "30 fps" }, { value: 60, label: "60 fps" }]} onChange={(fps) => s.set({ fps })} disabled={busy} />
+        </div>
+        <Switch label="3, 2, 1 countdown" checked={s.countdown} onChange={(countdown) => s.set({ countdown })} />
+        <Switch label="Separate tracks" hint="Also saves the raw screen and camera as their own files, for editing later" checked={s.isoTracks} onChange={(isoTracks) => s.set({ isoTracks })} disabled={busy} />
+        <div className="rec-sources">
+          <div className="row"><span className="row-label">Mic</span><Tag tone={mic.tone} title={s.micSource === "fallback" ? "The Mic tab is not ready, so the default microphone is used" : undefined}>{mic.text}</Tag></div>
+          {needsCamera(s.mode) && <div className="row"><span className="row-label">Camera</span><Tag tone={cam.tone}>{cam.text}</Tag></div>}
+        </div>
+        <p className="note rec-keys"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>R</kbd> start or stop, <kbd>P</kbd> pause</p>
+      </Card>
+
+      <Card title="Export">
+        <Field label="Loudness" inline>
+          <select className="select" value={s.loudness} onChange={(e) => s.set({ loudness: e.target.value as typeof s.loudness })}>
             <option value="off">As recorded</option>
             <option value="-14">-14 LUFS (social)</option>
             <option value="-16">-16 LUFS (podcast, YouTube)</option>
           </select>
-        </div>
-        <Toggle label="Trim silence at start and end" checked={s.trimSilence} onChange={(trimSilence) => s.set({ trimSilence })} />
-        <Toggle label="Export MP4 when I stop" checked={s.autoExport} onChange={(autoExport) => s.set({ autoExport })} />
-      </section>
+        </Field>
+        <Switch label="Trim silence at start and end" checked={s.trimSilence} onChange={(trimSilence) => s.set({ trimSilence })} />
+        <Switch label="Export MP4 when I stop" checked={s.autoExport} onChange={(autoExport) => s.set({ autoExport })} />
+      </Card>
 
-      <section>
-        <div className="rec-takes-head">
-          <h3>Takes</h3>
-          <button onClick={() => api.openFolder()}>Open folder</button>
-        </div>
-        {s.takes.length === 0 ? <p className="rec-muted">Your recordings will appear here.</p> : (
+      <Card title="Takes" action={<Button variant="ghost" size="sm" onClick={() => api.openFolder()}><FolderOpen />Open folder</Button>}>
+        {s.takes.length === 0 ? <p className="note">Your recordings will appear here.</p> : (
           <ul className="rec-takes">{s.takes.map((t) => <TakeRow key={t.id} take={t} />)}</ul>
         )}
-      </section>
+      </Card>
     </div>
   );
 }

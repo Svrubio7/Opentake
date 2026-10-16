@@ -46,7 +46,7 @@ export function Meters() {
   const input = useMeterRefs(), output = useMeterRefs();
   const gr = useRef<Record<string, HTMLDivElement | null>>({});
   const lufs = useRef<HTMLSpanElement>(null), lufsBox = useRef<HTMLDivElement>(null), agc = useRef<HTMLSpanElement>(null);
-  const clip = useRef<HTMLDivElement>(null);
+  const clip = useRef<HTMLSpanElement>(null);
   const target = useAudioStore((s) => s.settings.agc.targetLufs);
   const targetRef = useRef(target);
   targetRef.current = target;
@@ -73,8 +73,8 @@ export function Meters() {
   }, []);
 
   return (
-    <div className="au-card au-meters">
-      <div className="au-clip" ref={clip}>Clipping. Turn the mic gain down.</div>
+    <section className="card au-meters">
+      <div className="card-head"><h3 className="card-title">Levels</h3><span className="au-clip" ref={clip}>Clipping. Turn the mic gain down.</span></div>
       <Bar label="Input" refs={input} />
       <Bar label="Output" refs={output} />
       <div className="au-gr">
@@ -86,13 +86,13 @@ export function Meters() {
         ))}
       </div>
       <div className="au-loud" ref={lufsBox}>
-        <div><span className="au-loud-num" ref={lufs}>--</span><span className="au-loud-unit">LUFS</span></div>
+        <div title="Short-term loudness of what is being recorded"><span className="au-loud-num" ref={lufs}>--</span><span className="au-loud-unit">LUFS</span></div>
         <div className="au-loud-side">
-          <span>Target {target}</span>
+          <span>Target <span className="au-num">{target}</span></span>
           <span>Auto level <span ref={agc} className="au-num">+0.0 dB</span></span>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 

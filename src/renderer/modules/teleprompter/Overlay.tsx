@@ -2,6 +2,7 @@
 // It is plain DOM over the app; the recorder's compositor draws only media streams, so it never
 // lands in a recording (unless the screen being recorded shows Take itself: use Pop out then).
 import { useEffect, useRef, useState } from "react";
+import { ExternalLink, GripHorizontal, X } from "lucide-react";
 import { reportPosition } from "./controller";
 import { clampRect, moveRect, resizeRect, snapRect, toPixels, type Corner, type Rect, type Snap } from "./overlay-core";
 import { keyCommand } from "./prompter-core";
@@ -82,13 +83,13 @@ function OverlayBox() {
       onPointerMove={onMove} onPointerUp={end} onPointerCancel={end} data-teleprompter-overlay="">
       <PrompterSurface state={state} embedded onPosition={reportPosition} onClose={hidePrompter} />
       <div className="tpo-bar" onPointerDown={begin("move")} title="Drag to move">
-        <span className="tpo-title">Prompter</span>
+        <span className="tpo-title"><GripHorizontal />Prompter</span>
         <div className="tpo-actions">
           {SNAPS.map((s) => (
-            <button key={s.id} title={s.title} onClick={() => setSettings({ overlay: snapRect(s.id, vp) })}>{s.label}</button>
+            <button key={s.id} type="button" title={s.title} onClick={() => setSettings({ overlay: snapRect(s.id, vp) })}>{s.label}</button>
           ))}
-          <button title="Open in its own window, always on top" onClick={() => showPrompter("window")}>Pop out</button>
-          <button className="tpo-close" title="Hide the prompter" onClick={hidePrompter}>×</button>
+          <button type="button" title="Open in its own window, always on top" aria-label="Pop out" onClick={() => showPrompter("window")}><ExternalLink /></button>
+          <button type="button" className="tpo-close" title="Hide the prompter" aria-label="Hide the prompter" onClick={hidePrompter}><X /></button>
         </div>
       </div>
       {CORNERS.map((c) => <div key={c} className={`tpo-grip tpo-${c}`} onPointerDown={begin(c)} />)}

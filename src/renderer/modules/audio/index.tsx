@@ -7,9 +7,11 @@ import { MicCheck } from "./MicCheck";
 import { getEngine } from "./engine";
 import { retry, selectDevice, setMonitor } from "./actions";
 import { useAudioStore } from "./store";
+import { Button, Card, Switch, Tag } from "../../ui";
 import "./audio.css";
 
 const STATUS: Record<string, string> = { idle: "Off", starting: "Starting", running: "Live", error: "No mic" };
+const TONE: Record<string, "neutral" | "warn" | "good" | "danger"> = { idle: "neutral", starting: "warn", running: "good", error: "danger" };
 
 export function AudioPanel() {
   const status = useAudioStore((s) => s.status);
@@ -24,38 +26,30 @@ export function AudioPanel() {
   const selected = deviceId && devices.some((d) => d.id === deviceId) ? deviceId : "";
 
   return (
-    <div className="au">
-      <div className="au-top">
-        <h2>Microphone</h2>
-        <span className={`au-status ${status}`}><i />{STATUS[status]}</span>
-      </div>
-
-      <select className="au-device" value={selected} onChange={(e) => selectDevice(e.target.value || null)} aria-label="Microphone">
-        <option value="">System default</option>
-        {devices.filter((d) => d.id !== "default" && d.id !== "communications").map((d) => (
-          <option key={d.id} value={d.id}>{d.label}</option>
-        ))}
-      </select>
-
-      {error && (
-        <div className="au-error">
-          <p>{error}</p>
-          <button onClick={retry}>Try again</button>
-        </div>
-      )}
+    <div className="cards au">
+      <Card title="Input" action={<Tag tone={TONE[status] ?? "neutral"}>{STATUS[status]}</Tag>}>
+        <select className="select" value={selected} onChange={(e) => selectDevice(e.target.value || null)} aria-label="Microphone">
+          <option value="">System default</option>
+          {devices.filter((d) => d.id !== "default" && d.id !== "communications").map((d) => (
+            <option key={d.id} value={d.id}>{d.label}</option>
+          ))}
+        </select>
+        {error && (
+          <div className="au-error">
+            <p>{error}</p>
+            <Button size="sm" onClick={retry}>Try again</Button>
+          </div>
+        )}
+        <Switch label="Listen" hint="Hear the processed voice. Use headphones so the mic does not pick up the speakers." checked={monitor} onChange={(v) => setMonitor(v)} />
+      </Card>
 
       <Meters />
       <MicCheck />
 
-      <div className="au-row">
-        <span className="au-label">Sound</span>
-        <label className="au-listen">
-          <input type="checkbox" checked={monitor} onChange={(e) => setMonitor(e.target.checked)} />
-          Listen (headphones)
-        </label>
-      </div>
-      <Presets />
-      <Controls />
+      <Card title="Sound" hint="A preset sets every stage below. Open a stage to fine tune it.">
+        <Presets />
+        <Controls />
+      </Card>
     </div>
   );
 }

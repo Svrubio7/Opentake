@@ -1,0 +1,98 @@
+# Packaging for Take. The GitHub owner/repo is NOT written here: electron-builder reads it
+# from package.json "repository" (the one place to change it).
+appId: app.quetzaltech.take
+productName: Take
+copyright: Copyright © 2026 Quetzal
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+directories:
+  output: release/${version}
+  buildResources: build
+
+# The renderer and main are bundled by electron-vite into out/. The only packages the main
+# process loads at runtime are ffmpeg-static, uiohook-napi and node-gyp-build, so every other
+# dependency (react, geist and the Next.js it pulls in, mediapipe, vosk...) stays out of the app.
+files:
+  - out/**
+  - package.json
+  - "!**/*.map"
+  - "!node_modules/**"
+  - node_modules/ffmpeg-static/index.js
+  - node_modules/ffmpeg-static/package.json
+  - node_modules/ffmpeg-static/LICENSE
+  - node_modules/ffmpeg-static/ffmpeg
+  - node_modules/ffmpeg-static/ffmpeg.exe
+  - node_modules/ffmpeg-static/*.LICENSE
+  - node_modules/ffmpeg-static/*.README
+  - node_modules/uiohook-napi/package.json
+  - node_modules/uiohook-napi/LICENSE
+  - node_modules/uiohook-napi/dist/**
+  - node_modules/uiohook-napi/prebuilds/**
+  - node_modules/node-gyp-build/**
+
+extraResources:
+  - from: LICENSE
+    to: LICENSE
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+
+asar: true
+# Executables and native addons cannot run from inside the asar archive.
+# src/main/record/export.ts already swaps "app.asar" for "app.asar.unpacked" in the ffmpeg path.
+asarUnpack:
+  - node_modules/ffmpeg-static/**
+  - node_modules/uiohook-napi/**
+
+# uiohook-napi ships N-API prebuilds for every platform; nothing to compile.
+npmRebuild: false
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Take
+  license: LICENSE
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+mac:
+  icon: build/icon.png
+  category: public.app-category.video
+  # ffmpeg-static downloads ONE binary for the arch npm installed on, so each mac arch is
+  # built on its own runner (see .github/workflows/release.yml). Locally: --x64 or --arm64.
+  target:
+    - target: dmg
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSCameraUsageDescription: Take uses your camera to record you and to preview the camera look.
+    NSMicrophoneUsageDescription: Take uses your microphone to record and clean up your voice, and for teleprompter voice tracking.
+    NSScreenCaptureUsageDescription: Take records your screen when you choose a screen or window to capture.
+
+dmg:
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+
+linux:
+  icon: build/icon.png
+  category: AudioVideo
+  target:
+    - target: AppImage
+      arch: [x64]
+  synopsis: Free desktop recording studio
+
+publish:
+  provider: github
+  releaseType: draft

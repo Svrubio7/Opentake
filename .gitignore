@@ -1,5 +1,11 @@
-node_modules
-out
-dist
-recordings
+node_modules/
+out/
+dist/
+release/
+recordings/
 *.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+*.blockmap

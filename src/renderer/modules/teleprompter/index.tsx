@@ -6,6 +6,8 @@ import { onMicLevel, usePrompterController } from "./controller";
 import { keyCommand, readingSeconds, sentenceAt, WPM_MAX, WPM_MIN } from "./prompter-core";
 import { snapRect, type Snap } from "./overlay-core";
 import { hidePrompter, parsedFor, prompterShown, showPrompter, usePrompter } from "./store";
+import { ChevronLeft, ChevronRight, ExternalLink, FileText, Pause, Play, Plus, SkipBack, Trash } from "lucide-react";
+import { Button, Card, Field, Hint, Segmented, Slider, Switch } from "../../ui";
 import "./teleprompter.css";
 
 export { PrompterOverlay } from "./Overlay";
@@ -71,58 +73,57 @@ export function TeleprompterPanel() {
     showPrompter("overlay");
   };
 
+
   return (
-    <div className="tp-panel" ref={root}>
-      <div className="tp-row tp-head">
-        <button className={shown ? "tp-primary on" : "tp-primary"} onClick={() => (shown ? hidePrompter() : showPrompter())}>
-          {shown ? "Hide prompter" : "Show prompter"}
-        </button>
-        <button onClick={() => showPrompter(popped ? "overlay" : "window")}
-          title={popped ? "Show the prompter inside this window" : "Open the prompter in its own window, always on top of every app"}>
-          {popped ? "Back in the app" : "Pop out"}
-        </button>
-      </div>
-      <div className="tp-row tp-snaps">
-        <span className="tp-hint">Place</span>
-        {popped ? (
-          <>
-            <button onClick={() => snapWindow("top-center")} disabled={!windowOpen} title="Top centre of the screen, right under the webcam, so your eyes stay near the lens">Under webcam</button>
-            <button onClick={() => snapWindow("center")} disabled={!windowOpen}>Centre</button>
-          </>
-        ) : (
-          <>
-            <button onClick={() => snapOverlay("top")} title="Top centre, under the webcam, so your eyes stay near the lens">Top</button>
-            <button onClick={() => snapOverlay("center")}>Centre</button>
-            <button onClick={() => snapOverlay("left")}>Left</button>
-            <button onClick={() => snapOverlay("right")}>Right</button>
-          </>
-        )}
-      </div>
-      {!popped && shown && <p className="tp-hint">Drag the prompter by its top bar, resize it from a corner. It is never part of the recording.</p>}
-
-      <div className="tp-transport">
-        <button onClick={() => command({ type: "restart" })} title="Restart (Home)">⏮</button>
-        <button onClick={() => command({ type: "prev-sentence" })} title="Previous sentence (Left)">◀</button>
-        <button className="tp-play" onClick={() => command({ type: "toggle" })} title="Play or pause (Space)" disabled={!words}>
-          {s.playing ? "Pause" : "Start"}
-        </button>
-        <button onClick={() => command({ type: "next-sentence" })} title="Next sentence (Right)">▶</button>
-      </div>
-      <div className="tp-progress">
-        <div className="tp-bar"><div style={{ width: `${words ? (Math.min(s.position, words) / words) * 100 : 0}%` }} /></div>
-        <span>{words ? `Sentence ${sentence} of ${parsed.sentences.length}` : "No script yet"}</span>
-      </div>
-
-      <section className="tp-card">
-        <div className="tp-label">Scroll</div>
-        <div className="tp-seg">
-          {MODES.map((m) => (
-            <button key={m.id} className={s.mode === m.id ? "on" : ""} onClick={() => patch({ mode: m.id })}>{m.label}</button>
-          ))}
+    <div className="cards tp-panel" ref={root}>
+      <section className="card">
+        <div className="tp-head">
+          <Button variant={shown ? "outline" : "ink"} className="tp-grow" onClick={() => (shown ? hidePrompter() : showPrompter())}>
+            {shown ? "Hide prompter" : "Show prompter"}
+          </Button>
+          <Button onClick={() => showPrompter(popped ? "overlay" : "window")}
+            title={popped ? "Show the prompter inside this window" : "Open the prompter in its own window, always on top of every app"}>
+            {popped ? "Back in the app" : <><ExternalLink />Pop out</>}
+          </Button>
         </div>
-        <p className="tp-hint">{MODES.find((m) => m.id === s.mode)?.hint}</p>
+        <div className="row">
+          <span className="row-label tp-place">Place{!popped && <Hint text="Drag the prompter by its top bar, resize it from a corner. It is never part of the recording." />}</span>
+          <div className="tp-snaps">
+            {popped ? (
+              <>
+                <Button size="sm" variant="ghost" onClick={() => snapWindow("top-center")} disabled={!windowOpen} title="Top centre of the screen, right under the webcam, so your eyes stay near the lens">Under webcam</Button>
+                <Button size="sm" variant="ghost" onClick={() => snapWindow("center")} disabled={!windowOpen}>Centre</Button>
+              </>
+            ) : (
+              <>
+                <Button size="sm" variant="ghost" onClick={() => snapOverlay("top")} title="Top centre, under the webcam, so your eyes stay near the lens">Top</Button>
+                <Button size="sm" variant="ghost" onClick={() => snapOverlay("center")}>Centre</Button>
+                <Button size="sm" variant="ghost" onClick={() => snapOverlay("left")}>Left</Button>
+                <Button size="sm" variant="ghost" onClick={() => snapOverlay("right")}>Right</Button>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="tp-transport">
+          <Button size="icon" variant="ghost" onClick={() => command({ type: "restart" })} title="Restart (Home)" aria-label="Restart"><SkipBack /></Button>
+          <Button size="icon" variant="ghost" onClick={() => command({ type: "prev-sentence" })} title="Previous sentence (Left)" aria-label="Previous sentence"><ChevronLeft /></Button>
+          <Button variant="ink" className="tp-play" onClick={() => command({ type: "toggle" })} title="Play or pause (Space)" disabled={!words}>
+            {s.playing ? <><Pause />Pause</> : <><Play />Start</>}
+          </Button>
+          <Button size="icon" variant="ghost" onClick={() => command({ type: "next-sentence" })} title="Next sentence (Right)" aria-label="Next sentence"><ChevronRight /></Button>
+        </div>
+        <div className="tp-progress">
+          <div className="progress"><div style={{ width: `${words ? (Math.min(s.position, words) / words) * 100 : 0}%` }} /></div>
+          <span className="tnum">{words ? `Sentence ${sentence} of ${parsed.sentences.length}` : "No script yet"}</span>
+        </div>
+      </section>
+
+      <Card title="Scroll">
+        <Segmented fill label="Scroll mode" value={s.mode} onChange={(mode) => patch({ mode })}
+          options={MODES.map((m) => ({ value: m.id, label: m.label, hint: m.hint }))} />
+        <p className="note">{MODES.find((m) => m.id === s.mode)?.hint}</p>
         {s.mode !== "voice-tracked" && (
-          <Slider label="Speed" value={s.wpm} min={WPM_MIN} max={WPM_MAX} step={5} unit=" wpm" onChange={(wpm) => patch({ wpm })} />
+          <Slider label="Speed" value={s.wpm} min={WPM_MIN} max={WPM_MAX} step={5} format={(v) => `${v} wpm`} onChange={(wpm) => patch({ wpm })} />
         )}
         {s.mode !== "manual" && <VoiceStatusView />}
         {s.mode === "voice-paced" && (
@@ -131,89 +132,85 @@ export function TeleprompterPanel() {
         )}
         {s.mode === "voice-tracked" && (
           <>
-            <div className="tp-row">
-              <label className="tp-field">Language
-                <select value={settings.langChoice} onChange={(e) => setSettings({ langChoice: e.target.value as typeof settings.langChoice })}>
-                  <option value="auto">Auto ({s.lang === "es" ? "Español" : "English"})</option>
-                  <option value="en">English</option>
-                  <option value="es">Español</option>
-                </select>
-              </label>
-            </div>
-            <Toggle label="Listen for script words only (more accurate)" checked={settings.scriptWordsOnly} onChange={(v) => setSettings({ scriptWordsOnly: v })} />
+            <Field label="Language" inline>
+              <select className="select" value={settings.langChoice} onChange={(e) => setSettings({ langChoice: e.target.value as typeof settings.langChoice })}>
+                <option value="auto">Auto ({s.lang === "es" ? "Español" : "English"})</option>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </Field>
+            <Switch label="Script words only" hint="Listens only for the words in your script. More accurate." checked={settings.scriptWordsOnly} onChange={(v) => setSettings({ scriptWordsOnly: v })} />
             <div className="tp-heard" title="What the recognizer heard last">{heard || "Waiting for your voice"}</div>
           </>
         )}
-        <label className="tp-field">Countdown
-          <select value={settings.countdownSec} onChange={(e) => setSettings({ countdownSec: Number(e.target.value) })}>
+        <Field label="Countdown" inline>
+          <select className="select" value={settings.countdownSec} onChange={(e) => setSettings({ countdownSec: Number(e.target.value) })}>
             <option value={0}>None</option>
             <option value={3}>3 seconds</option>
             <option value={5}>5 seconds</option>
           </select>
-        </label>
-      </section>
+        </Field>
+      </Card>
 
-      <section className="tp-card">
-        <div className="tp-row tp-between">
-          <div className="tp-label">Script</div>
-          <div className="tp-row">
-            <button onClick={() => fileInput.current?.click()}>Open file</button>
-            <button onClick={newScript}>New</button>
-          </div>
-        </div>
+      <Card title="Script" hint="Saved on this computer. VISUAL: lines and [bracketed] notes are directions, not words to read."
+        action={<>
+          <Button variant="ghost" size="sm" onClick={() => fileInput.current?.click()} title="Open a .txt or .md file"><FileText />Open</Button>
+          <Button variant="ghost" size="sm" onClick={newScript}><Plus />New</Button>
+        </>}>
         <input ref={fileInput} type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void openFile(f); e.target.value = ""; }} />
         {scripts.length > 0 && (
-          <div className="tp-row">
-            <select className="tp-grow" value={currentId ?? ""} onChange={(e) => e.target.value && loadScript(e.target.value)}>
+          <div className="tp-head">
+            <select className="select tp-grow" value={currentId ?? ""} onChange={(e) => e.target.value && loadScript(e.target.value)} aria-label="Saved scripts">
               {!currentId && <option value="">Unsaved script</option>}
               {scripts.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
             </select>
-            {currentId && <button onClick={() => deleteScript(currentId)} title="Delete this script">Delete</button>}
+            {currentId && <Button size="icon" variant="ghost" className="tp-del" onClick={() => deleteScript(currentId)} title="Delete this script" aria-label="Delete this script"><Trash /></Button>}
           </div>
         )}
-        <textarea className="tp-script" value={s.script} spellCheck={false}
+        <textarea className="textarea tp-script" value={s.script} spellCheck={false}
           placeholder={"Paste your script here, or open a .txt or .md file.\n\nVISUAL: lines and [bracketed] notes are directions, not words to read."}
           onChange={(e) => setScript(e.target.value)}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); void openFile(f); } }} />
-        {fileError && <p className="tp-error">{fileError}</p>}
-        <p className="tp-hint">
-          {words} words{notes ? `, ${notes} notes` : ""}, about {fmt(readingSeconds(parsed, s.wpm))} at {s.wpm} wpm. Saved on this computer.
+        {fileError && <p className="note note-danger">{fileError}</p>}
+        <p className="note tnum">
+          {words} words{notes ? `, ${notes} notes` : ""}, about {fmt(readingSeconds(parsed, s.wpm))} at {s.wpm} wpm
         </p>
-        <Toggle label="Show direction notes" checked={s.showNotes} onChange={(v) => patch({ showNotes: v })} />
-      </section>
+        <Switch label="Show direction notes" checked={s.showNotes} onChange={(v) => patch({ showNotes: v })} />
+      </Card>
 
-      <section className="tp-card">
-        <div className="tp-label">Look</div>
-        <Slider label="Text size" value={s.fontSize} min={24} max={140} step={2} unit=" px" onChange={(fontSize) => patch({ fontSize })} />
-        <Slider label="Line width" value={s.lineWidth} min={35} max={100} step={1} unit="%" onChange={(lineWidth) => patch({ lineWidth })} />
+      <Card title="Look">
+        <Slider label="Text size" value={s.fontSize} min={24} max={140} step={2} format={(v) => `${v} px`} onChange={(fontSize) => patch({ fontSize })} />
+        <Slider label="Line width" value={s.lineWidth} min={35} max={100} step={1} format={(v) => `${v}%`} onChange={(lineWidth) => patch({ lineWidth })} />
         <Slider label="Reading line" value={Math.round(s.guide * 100)} min={10} max={60} step={1} format={(v) => `${v}% down`} onChange={(v) => patch({ guide: v / 100 })} />
-        <Toggle label="Mirror for a beam-splitter glass" checked={s.mirrored} onChange={(v) => patch({ mirrored: v })} />
-      </section>
+        <Switch label="Mirror" hint="Flips the text for a beam-splitter glass" checked={s.mirrored} onChange={(v) => patch({ mirrored: v })} />
+      </Card>
 
-      <section className="tp-card">
-        <div className="tp-label">{popped ? "Pop-out window" : "Overlay"}</div>
-        <Slider label="Opacity" value={Math.round(settings.window.opacity * 100)} min={20} max={100} step={5} unit="%"
+      <Card title={popped ? "Pop-out window" : "Overlay"}
+        hint={popped ? undefined : "If you record the screen Take itself is on, the overlay shows like the rest of Take. Pop it out instead: the window hides itself from screen recordings."}>
+        <Slider label="Opacity" value={Math.round(settings.window.opacity * 100)} min={20} max={100} step={5} format={(v) => `${v}%`}
           onChange={(v) => setSettings({ window: { ...settings.window, opacity: v / 100 } })} />
-        {popped ? (
+        {popped && (
           <>
-            <Toggle label="Click-through (Ctrl+Alt+T)" checked={settings.window.clickThrough}
+            <Switch label="Click-through" hint="Clicks pass through the prompter to the app under it (Ctrl+Alt+T)" checked={settings.window.clickThrough}
               onChange={(v) => setSettings({ window: { ...settings.window, clickThrough: v } })} />
-            <Toggle label="Hide from screen recordings" checked={settings.window.hideFromCapture}
+            <Switch label="Hide from screen recordings" checked={settings.window.hideFromCapture}
               onChange={(v) => setSettings({ window: { ...settings.window, hideFromCapture: v } })} />
           </>
-        ) : (
-          <p className="tp-hint">If you record the screen Take itself is on, the overlay shows like the rest of Take. Pop it out instead: the window hides itself from screen recordings.</p>
         )}
-      </section>
+      </Card>
 
-      <section className="tp-card tp-keys">
-        <div className="tp-label">Keys</div>
-        <p className="tp-hint">In the prompter: Space play/pause, Up/Down speed, Left/Right sentence, Home restart, mouse wheel to scroll.</p>
-        <p className="tp-hint">Anywhere, while the prompter is showing: Ctrl+Alt with the same keys{popped ? ", Ctrl+Alt+T for click-through" : ""}.</p>
-        {shortcutsFailed.length > 0 && <p className="tp-error">Taken by another app: {shortcutsFailed.join(", ")}</p>}
-      </section>
+      <Card title="Keys" hint="The mouse wheel scrolls the prompter too">
+        <ul className="tp-keys">
+          <li><span><kbd>Space</kbd></span>Play or pause</li>
+          <li><span><kbd>Up</kbd> <kbd>Down</kbd></span>Speed</li>
+          <li><span><kbd>Left</kbd> <kbd>Right</kbd></span>Sentence</li>
+          <li><span><kbd>Home</kbd></span>Restart</li>
+        </ul>
+        <p className="note">Anywhere while it shows: <kbd>Ctrl</kbd> <kbd>Alt</kbd> with the same keys{popped ? <>, <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd> for click-through</> : ""}.</p>
+        {shortcutsFailed.length > 0 && <p className="note note-danger">Taken by another app: {shortcutsFailed.join(", ")}</p>}
+      </Card>
     </div>
   );
 }
@@ -237,26 +234,7 @@ function VoiceStatusView() {
   return (
     <div className="tp-voice">
       <div className="tp-meter" ref={meter}><div /></div>
-      <div className="tp-hint">{mic}{rec ? `. ${rec}` : ""}{voice.message ? `. ${voice.message}` : ""}</div>
+      <div className="note">{mic}{rec ? `. ${rec}` : ""}{voice.message ? `. ${voice.message}` : ""}</div>
     </div>
-  );
-}
-
-function Slider(props: { label: string; value: number; min: number; max: number; step: number; unit?: string; format?: (v: number) => string; onChange: (v: number) => void }) {
-  return (
-    <label className="tp-slider">
-      <span>{props.label}</span>
-      <input type="range" min={props.min} max={props.max} step={props.step} value={props.value} onChange={(e) => props.onChange(Number(e.target.value))} />
-      <output>{props.format ? props.format(props.value) : `${props.value}${props.unit ?? ""}`}</output>
-    </label>
-  );
-}
-
-function Toggle(props: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="tp-toggle">
-      <input type="checkbox" checked={props.checked} onChange={(e) => props.onChange(e.target.checked)} />
-      <span>{props.label}</span>
-    </label>
   );
 }

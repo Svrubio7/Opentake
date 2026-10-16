@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, shell } from "electron";
+import { app, BrowserWindow, nativeTheme, session, shell } from "electron";
 import { join } from "node:path";
 import { registerRecordIpc } from "./record";
 import { registerTeleprompterIpc } from "./teleprompter";
@@ -19,7 +19,7 @@ function createMain() {
     height: 900,
     minWidth: 1100,
     minHeight: 700,
-    backgroundColor: "#0b0b0c",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#0a0a0b" : "#f3f4f8",
     title: "Take",
     // backgroundThrottling off: a minimised window must keep feeding the recorder at full frame rate.
     webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true, backgroundThrottling: false },

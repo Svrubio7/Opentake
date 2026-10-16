@@ -1,0 +1,22 @@
+name: Feature request
+description: An idea to make Take better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The recording you are making and where Take gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Part of the app
+      options: [Microphone, Camera, Record, Teleprompter, Export, Other]
