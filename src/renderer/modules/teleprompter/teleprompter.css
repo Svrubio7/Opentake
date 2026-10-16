@@ -26,31 +26,42 @@
 
 /* ---------- the reading surface: always black with white text, the right ground for a prompter ---------- */
 .pv-root, .tpo {
-  --text: #ffffff; --muted: #a1a1aa; --brand: #12a374; --border: rgba(255, 255, 255, 0.14);
-  --chrome: rgba(11, 11, 12, 0.92); --chrome-hover: rgba(255, 255, 255, 0.12); --ring: #12a374;
+  /* the reading surface is dark in both themes, so it carries its own palette */
+  --pv-ground: #000000; --pv-ink: #ffffff;
+  --pv-word: rgba(255, 255, 255, 0.6); --pv-word-read: rgba(255, 255, 255, 0.28);
+  --pv-note: #ffb340;
+  --pv-guide: #12a374; --pv-guide-band: color-mix(in srgb, var(--pv-guide) 7%, transparent);
+  --pv-guide-edge: color-mix(in srgb, var(--pv-guide) 32%, transparent); --pv-guide-mark: color-mix(in srgb, var(--pv-guide) 60%, transparent);
+  --pv-scrim: rgba(0, 0, 0, 0.55);
+  --text: var(--pv-ink); --muted: #a1a1aa; --brand: var(--pv-guide); --ring: var(--pv-guide);
+  --border: rgba(255, 255, 255, 0.14);
+  --chrome: rgba(11, 11, 12, 0.92); --chrome-hover: rgba(255, 255, 255, 0.12); --chrome-ink: rgba(255, 255, 255, 0.82);
+  --grip: rgba(255, 255, 255, 0.7);
+  --tpo-edge: rgba(255, 255, 255, 0.12);
+  --tpo-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 24px 60px -20px rgba(0, 0, 0, 0.6);
 }
-.pv-root { position: fixed; inset: 0; background: #000; color: #fff; overflow: hidden; user-select: none; }
+.pv-root { position: fixed; inset: 0; background: var(--pv-ground); color: var(--pv-ink); overflow: hidden; user-select: none; }
 .pv-viewport { position: absolute; inset: 0; overflow: hidden; }
 .pv-content {
   position: absolute; left: 50%; top: 0; padding-bottom: 100vh;
   font-weight: 600; letter-spacing: -0.005em; will-change: transform;
 }
 .pv-p { margin: 0 0 0.6em; }
-.pv-w { color: rgba(255, 255, 255, 0.6); transition: color 0.25s ease; cursor: pointer; }
-.pv-w.cur { color: #fff; }
-.pv-w.read { color: rgba(255, 255, 255, 0.28); }
-.pv-note { font-size: 0.5em; font-weight: 500; color: #ffb340; opacity: 0.8; vertical-align: middle; }
-.pv-note-p { font-size: 0.45em; font-weight: 500; color: #ffb340; opacity: 0.8; }
+.pv-w { color: var(--pv-word); transition: color 0.25s ease; cursor: pointer; }
+.pv-w.cur { color: var(--pv-ink); }
+.pv-w.read { color: var(--pv-word-read); }
+.pv-note { font-size: 0.5em; font-weight: 500; color: var(--pv-note); opacity: 0.8; vertical-align: middle; }
+.pv-note-p { font-size: 0.45em; font-weight: 500; color: var(--pv-note); opacity: 0.8; }
 .pv-end { font-size: 0.4em; font-weight: 500; color: var(--muted); text-align: center; letter-spacing: 0.02em; }
 
 .pv-guide {
   position: absolute; left: 0; right: 0; pointer-events: none;
-  background: rgba(18, 163, 116, 0.07);
-  border-top: 1px solid rgba(18, 163, 116, 0.32); border-bottom: 1px solid rgba(18, 163, 116, 0.32);
+  background: var(--pv-guide-band);
+  border-top: 1px solid var(--pv-guide-edge); border-bottom: 1px solid var(--pv-guide-edge);
 }
 .pv-marker {
   position: absolute; left: 10px; top: 50%; width: 0; height: 0; transform: translateY(-50%);
-  border-top: 9px solid transparent; border-bottom: 9px solid transparent; border-left: 12px solid rgba(18, 163, 116, 0.6);
+  border-top: 9px solid transparent; border-bottom: 9px solid transparent; border-left: 12px solid var(--pv-guide-mark);
   transition: border-color var(--t, 180ms) ease;
 }
 .pv-marker.on { border-left-color: var(--brand); }
@@ -70,19 +81,19 @@
   background: transparent; border: 0; border-radius: 8px; color: var(--muted);
   transition: background 0.15s ease, color 0.15s ease;
 }
-.pv-close:hover { color: #fff; background: var(--chrome-hover); }
+.pv-close:hover { color: var(--pv-ink); background: var(--chrome-hover); }
 .pv-close svg { width: 16px; height: 16px; stroke-width: 1.75; }
 
 .pv-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 18px; text-align: center; padding: 24px; }
-.pv-countdown { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); z-index: 4; pointer-events: none; }
-.pv-countdown span { font-size: min(40vh, 220px); font-weight: 600; letter-spacing: -0.04em; color: #fff; animation: pv-pop 1s ease-out; font-variant-numeric: tabular-nums; }
+.pv-countdown { position: absolute; inset: 0; display: grid; place-items: center; background: var(--pv-scrim); z-index: 4; pointer-events: none; }
+.pv-countdown span { font-size: min(40vh, 220px); font-weight: 600; letter-spacing: -0.04em; color: var(--pv-ink); animation: pv-pop 1s ease-out; font-variant-numeric: tabular-nums; }
 @keyframes pv-pop { from { transform: scale(1.25); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
 
 /* ---------- the overlay inside the main window ---------- */
 .pv-root.pv-embedded { position: absolute; }
 .tpo {
   position: fixed; z-index: 1000; border-radius: var(--radius-card); overflow: hidden; outline: none;
-  border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 24px 60px -20px rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--tpo-edge); box-shadow: var(--tpo-shadow);
 }
 .tpo:focus-visible { border-color: var(--brand); }
 .tpo-bar {
@@ -97,14 +108,14 @@
 .tpo-actions { display: flex; gap: 2px; min-width: 0; overflow: hidden; }
 .tpo-actions button {
   display: inline-flex; align-items: center; justify-content: center; height: 28px; min-width: 28px; padding: 0 9px;
-  font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.82); background: transparent; border: 0; border-radius: 8px; white-space: nowrap;
+  font-size: 13px; font-weight: 500; color: var(--chrome-ink); background: transparent; border: 0; border-radius: 8px; white-space: nowrap;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.tpo-actions button:hover { background: var(--chrome-hover); color: #fff; }
+.tpo-actions button:hover { background: var(--chrome-hover); color: var(--pv-ink); }
 .tpo-actions button svg { width: 16px; height: 16px; stroke-width: 1.75; }
 .tpo-close { padding: 0 !important; width: 28px; }
 .tpo-grip { position: absolute; width: 18px; height: 18px; z-index: 7; touch-action: none; }
-.tpo-grip::after { content: ""; position: absolute; inset: 5px; border-color: rgba(255, 255, 255, 0.7); border-style: solid; border-width: 0; opacity: 0; transition: opacity 0.2s ease; }
+.tpo-grip::after { content: ""; position: absolute; inset: 5px; border-color: var(--grip); border-style: solid; border-width: 0; opacity: 0; transition: opacity 0.2s ease; }
 .tpo:hover .tpo-grip::after { opacity: 1; }
 .tpo-grip:hover::after { border-color: var(--brand); }
 .tpo-nw { top: 0; left: 0; cursor: nwse-resize; } .tpo-nw::after { border-top-width: 2px; border-left-width: 2px; border-top-left-radius: 4px; }
