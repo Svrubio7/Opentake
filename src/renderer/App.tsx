@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AudioPanel } from "./modules/audio";
 import { CameraPanel } from "./modules/camera";
 import { RecordPanel, Stage } from "./modules/record";
-import { TeleprompterPanel } from "./modules/teleprompter";
+import { PrompterOverlay, TeleprompterPanel } from "./modules/teleprompter";
 
 const TABS = [
   { id: "record", label: "Record", Panel: RecordPanel },
@@ -29,6 +29,7 @@ export function App() {
           <section key={id} className="panel" hidden={id !== tab}><Panel /></section>
         ))}
       </aside>
+      <PrompterOverlay />
     </div>
   );
 }

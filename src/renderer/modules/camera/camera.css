@@ -1,0 +1,90 @@
+/* Camera module. Uses the shared tokens from styles.css. */
+.cam { display: flex; flex-direction: column; gap: 14px; font-size: 13px; }
+
+.cam-hero { display: flex; flex-direction: column; gap: 8px; }
+.cam-preview { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden; background: #000; border: 1px solid var(--border); }
+.cam-preview-video { width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
+.cam-preview-video.flip { transform: scaleX(-1); }
+.cam-overlay { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+.cam-score {
+  position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: 999px; font-weight: 600; font-variant-numeric: tabular-nums;
+  background: rgba(11, 11, 12, 0.7); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.cam-score .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.cam-score.ok .dot { background: var(--warn); }
+.cam-score.poor .dot { background: var(--danger); }
+.cam-meta {
+  position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 6px; font-size: 11px; color: var(--muted);
+  background: rgba(11, 11, 12, 0.6); font-variant-numeric: tabular-nums;
+}
+
+.cam-light { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+.cam-hist { width: 100%; height: 48px; display: block; border-radius: 6px; background: var(--surface); }
+.cam-tip { margin: 0; color: var(--text); line-height: 1.35; }
+.cam-tip.ok { color: var(--warn); }
+.cam-tip.poor { color: var(--danger); }
+
+.cam-card { padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+.cam-status { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.cam-status p { margin: 0; line-height: 1.4; }
+.cam-status.denied, .cam-status.error, .cam-status.busy { border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); }
+.cam-primary { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+.cam-primary:hover { opacity: 0.9; border-color: var(--text); }
+
+.cam-section { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+.cam-section h3 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cam-section-head { display: flex; justify-content: space-between; align-items: center; }
+.cam-link { background: none; border: none; padding: 0; color: var(--muted); font-size: 12px; }
+.cam-link:hover { color: var(--text); }
+
+.cam-row { display: flex; gap: 10px; align-items: flex-end; }
+.cam-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cam-field.grow { flex: 1; }
+.cam-field > span { color: var(--muted); font-size: 12px; }
+.cam-field select { width: 100%; }
+.cam-color { flex-direction: row; align-items: center; justify-content: space-between; }
+.cam-color input[type="color"] { width: 44px; height: 28px; padding: 2px; cursor: pointer; }
+
+.cam-seg { display: flex; padding: 2px; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; }
+.cam-seg button { flex: 1; border: none; background: transparent; border-radius: 7px; padding: 5px 10px; color: var(--muted); }
+.cam-seg button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+
+.cam-toggle { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+.cam-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.cam-switch { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--border); transition: background 0.18s ease; flex: none; }
+.cam-switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--text); transition: transform 0.18s ease;
+}
+.cam-toggle input:checked + .cam-switch { background: var(--accent); }
+.cam-toggle input:checked + .cam-switch::after { transform: translateX(14px); }
+.cam-toggle input:focus-visible + .cam-switch { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.cam-slider { display: flex; flex-direction: column; gap: 4px; }
+.cam-slider-head { display: flex; justify-content: space-between; align-items: center; min-height: 20px; }
+.cam-slider-right { display: flex; align-items: center; gap: 8px; }
+.cam-val { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 38px; text-align: right; }
+.cam-slider input[type="range"] { width: 100%; accent-color: var(--text); padding: 0; border: none; background: transparent; }
+.cam-slider.is-auto input[type="range"] { accent-color: var(--accent); }
+.cam-pill { font-size: 10px; font-weight: 600; letter-spacing: 0.03em; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--muted); }
+.cam-pill.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+button.cam-pill:hover { color: var(--text); }
+
+.cam-looks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.cam-look { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; font-size: 12px; color: var(--muted); }
+.cam-look.on { color: var(--text); border-color: var(--text); }
+.cam-look .swatch { width: 100%; height: 22px; border-radius: 5px; }
+.swatch.natural { background: linear-gradient(90deg, #3b3430, #b08a76, #e9dcd2); }
+.swatch.warm { background: linear-gradient(90deg, #3d2b22, #c88d63, #f6dfc4); }
+.swatch.cool { background: linear-gradient(90deg, #1c2a33, #7f98a6, #e1e8ee); }
+.swatch.cinematic { background: linear-gradient(90deg, #12282c, #8a7a66, #f0c99a); }
+.swatch.bright { background: linear-gradient(90deg, #6b625d, #d6c3b6, #fbf7f3); }
+.swatch.bw { background: linear-gradient(90deg, #111, #777, #eee); }
+
+.cam-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.cam-note.warn { color: var(--warn); }
+
+.cam-bgimg { display: flex; align-items: center; gap: 10px; }
+.cam-bgimg img, .cam-bgimg-empty { width: 96px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+.cam-bgimg-empty { display: grid; place-items: center; color: var(--muted); font-size: 11px; background: var(--surface); }

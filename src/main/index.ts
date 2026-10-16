@@ -21,7 +21,8 @@ function createMain() {
     minHeight: 700,
     backgroundColor: "#0b0b0c",
     title: "Take",
-    webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true },
+    // backgroundThrottling off: a minimised window must keep feeding the recorder at full frame rate.
+    webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true, backgroundThrottling: false },
   });
   main.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
   loadPage(main, "index");
