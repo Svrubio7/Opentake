@@ -1,7 +1,7 @@
 // Takes on disk: Documents/OpenTake recordings/<date time>/ with take.json, timeline.json and the tracks.
 import { app } from "electron";
 import { appendFile, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import type { RecordBeginRequest, RecordMode, RecordTrack, TakeFiles, TakeInfo, TakeTimeline } from "../../shared/types";
 import { takeFolderName, validTakeId } from "./ffmpeg-core";
@@ -90,6 +90,9 @@ export function takeFiles(id: string, meta: TakeMeta): TakeFiles {
     camera: meta.containers.camera && f(`camera.${meta.containers.camera}`),
     mp4: f("take.mp4"),
     hires: f("take-hires.mp4"),
+    edit: f("edit.json"),
+    captions: f("captions.json"),
+    outputs: exportedFiles(dir),
   };
 }
 
@@ -114,3 +117,15 @@ export async function listTakes(): Promise<TakeInfo[]> {
 }
 
 export const forgetTake = (id: string) => metaCache.delete(id);
+
+/** Every export in a take folder (take.mp4, take-reels.webm, take.gif, take.srt...), newest first. */
+function exportedFiles(dir: string): string[] {
+  try {
+    return readdirSync(dir)
+      .filter((n) => /^take(-[\w.-]+)?\.(mp4|webm|gif|srt|vtt)$/.test(n))
+      .map((n) => join(dir, n))
+      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+  } catch {
+    return [];
+  }
+}

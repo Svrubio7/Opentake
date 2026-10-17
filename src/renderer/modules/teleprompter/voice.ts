@@ -29,7 +29,7 @@ const SAMPLE_RATE = 16000;
 const models = new Map<Lang, Promise<Model>>();
 
 /** Each model is unpacked once and cached by Vosk in IndexedDB; later loads take a second or two. */
-function loadModel(lang: Lang): Promise<Model> {
+export function loadModel(lang: Lang): Promise<Model> {
   let p = models.get(lang);
   if (!p) {
     p = (async () => {

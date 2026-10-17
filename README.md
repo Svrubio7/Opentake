@@ -30,6 +30,12 @@ Made by [Quetzal](https://quetzaltech.app). Free for everyone, open source under
 - A 3, 2, 1 countdown, pause, takes you can review, and separate screen and camera tracks if you want to edit elsewhere.
 - MP4 export with optional silence trimming at the start and end and loudness normalisation.
 
+**Edit and export**
+- A take editor: play the take, see its waveform, set in and out points, split at the playhead and delete parts, with undo and redo and a zoomable timeline. Cuts save beside the take (edit.json) and are applied to every export, the hi-res one included.
+- Captions made on your computer from the take's own sound (Vosk, English and Spanish), timed word by word and grouped into readable lines. Fix words, split, join and nudge lines; save .srt and .vtt, or burn them into the video in a Clean, Boxed or Social style, at the top or bottom. Captions follow your cuts.
+- Export presets: Original, YouTube 1080p, Reels / TikTok / Shorts, Square, LinkedIn, X and a custom size, fitted with bars or filled and cropped. MP4, WebM or GIF, by quality or by a target file size (two passes).
+- Editor keys: Space play, J K L back / pause / play, arrows step a frame (Shift a second), I and O set in and out, S split, Delete removes a part or restores a cut, Ctrl+Z undo, Ctrl+Shift+Z redo, Ctrl + wheel zoom.
+
 **Teleprompter**
 - A floating, always-on-top prompter that sits under your webcam so your eyes stay near the lens.
 - Voice tracking: speech recognition (Vosk, English and Spanish) runs on your computer and scrolls the script as you read.

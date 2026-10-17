@@ -109,7 +109,11 @@ export interface TakeTimeline {
   cursor: { t: number; x: number; y: number }[];
 }
 
-export interface TakeFiles { composite?: string; screen?: string; camera?: string; mp4?: string; hires?: string }
+export interface TakeFiles {
+  composite?: string; screen?: string; camera?: string; mp4?: string; hires?: string;
+  /** editor: edit.json and captions.json beside the take, and every other exported file */
+  edit?: string; captions?: string; outputs?: string[];
+}
 
 export interface TakeInfo {
   id: string;
@@ -130,6 +134,10 @@ export interface ExportOptions {
   kind: "composite" | "hires";
   loudness: LoudnessTarget;
   trimSilence: boolean;
+  /** frame, format, quality and captions; left out = the plain MP4 at the take's own size */
+  output?: ExportOutput;
+  /** apply edit.json when the take has one (default true) */
+  useEdit?: boolean;
 }
 export interface ExportProgress { takeId: string; stage: string; ratio: number | null; done?: boolean; error?: string; output?: string }
 
@@ -139,3 +147,56 @@ export type RecordTrack = "composite" | "screen" | "camera";
 export interface RecordChunk { takeId: string; track: RecordTrack; data: Uint8Array }
 export interface RecordSave { takeId: string; final: boolean; durationMs: number; timeline: TakeTimeline }
 export type RecordShortcut = "toggle" | "pause";
+
+// ---- editor: cuts, captions and export options ----
+
+/** A stretch of a take in ms on the recording clock. */
+export interface TimeRange { start: number; end: number }
+/** Saved beside a take as edit.json: the stretches that stay, in order (neighbours may touch: a split). */
+export interface TakeEdit { version: 1; keep: TimeRange[] }
+
+export type CaptionLang = "en" | "es";
+export interface CaptionWord { text: string; start: number; end: number }
+/** One caption on screen: up to two rows of text, timed by its words (ms on the recording clock). */
+export interface CaptionLine { id: string; start: number; end: number; words: CaptionWord[] }
+/** Saved beside a take as captions.json. Times are on the recording clock, before any cut. */
+export interface TakeCaptions { version: 1; lang: CaptionLang; lines: CaptionLine[] }
+
+export type CaptionStyle = "clean" | "boxed" | "social";
+export interface CaptionBurn {
+  style: CaptionStyle;
+  position: "bottom" | "top";
+  /** distance from the edge as a fraction of the frame height */
+  margin: number;
+}
+
+export type ExportPreset = "original" | "youtube" | "vertical" | "square" | "linkedin" | "x" | "custom";
+export type ExportFormat = "mp4" | "webm" | "gif";
+export interface ExportOutput {
+  preset: ExportPreset;
+  format: ExportFormat;
+  /** custom preset only */
+  width?: number;
+  height?: number;
+  /** when the frame's shape differs from the take: fit inside with bars, or fill and crop */
+  fit: "fit" | "fill";
+  /** crf on the x264 scale (18 best .. 28 small), or a target file size in MB (two passes) */
+  quality: { mode: "crf"; crf: number } | { mode: "size"; mb: number };
+  gif?: { fps: number; width: number };
+  captions?: CaptionBurn | null;
+}
+
+/** Audio peaks for the editor's waveform: the loudest sample in each bucket, 0 to 1. */
+export interface TakePeaks { perSecond: number; peaks: number[] }
+
+export interface EditorTake {
+  take: TakeInfo;
+  edit: TakeEdit | null;
+  captions: TakeCaptions | null;
+  /** opentake-media:// address the editor's player can stream (Range requests work) */
+  mediaUrl: string;
+  durationMs: number | null;
+  hasAudio: boolean;
+  /** the bundled ffmpeg can burn captions (has libass) */
+  canBurn: boolean;
+}

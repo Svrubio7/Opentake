@@ -155,6 +155,21 @@ const ffColor = (hex: string | undefined) => `0x${(parseHex(hex ?? "") ?? "#ffff
  * `input` is the composite file (audio source).
  */
 export function hiresArgs(o: HiresArgsInput): string[] {
+  const { inputs, parts, last, audioIdx } = hiresGraph(o);
+  return [
+    "-nostdin", "-y", "-hide_banner",
+    ...inputs,
+    "-filter_complex", parts.join(";"),
+    "-map", `[${last}]`, ...(o.audio ? ["-map", `${audioIdx}:a:0`] : []),
+    ...VIDEO_OUT, "-fps_mode", "cfr", "-r", String(o.fps),
+    ...(o.audio ? audioOut(o.loudness) : ["-an"]),
+    "-shortest",
+    ...TAIL, o.out,
+  ];
+}
+
+/** The hi-res inputs and filter graph, shared by hiresArgs and the editor export (src/main/record/export-core.ts). */
+export function hiresGraph(o: Omit<HiresArgsInput, "out" | "loudness">) {
   const { c, W, H } = hiresFrame(o.screenSize, o.crop);
   const at = (v: number) => Math.max(0, Math.round(v / 2) * 2);
   const cut = c ? `crop=${W}:${H}:${at(c.x)}:${at(c.y)},` : "";
@@ -191,16 +206,7 @@ export function hiresArgs(o: HiresArgsInput): string[] {
     last = "out";
   }
   if (o.audio) inputs.push(...trimArgs(o.trim), "-i", o.input);
-  return [
-    "-nostdin", "-y", "-hide_banner",
-    ...inputs,
-    "-filter_complex", parts.join(";"),
-    "-map", `[${last}]`, ...(o.audio ? ["-map", `${audioIdx}:a:0`] : []),
-    ...VIDEO_OUT, "-fps_mode", "cfr", "-r", String(o.fps),
-    ...(o.audio ? audioOut(o.loudness) : ["-an"]),
-    "-shortest",
-    ...TAIL, o.out,
-  ];
+  return { inputs, parts, last, audioIdx, W, H };
 }
 
 /** Folder name for a take: sortable, and legal on Windows (no colons). */

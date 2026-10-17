@@ -1,5 +1,6 @@
 import { app, BrowserWindow, nativeTheme, session, shell } from "electron";
 import { join } from "node:path";
+import { registerEditorIpc, registerMediaScheme } from "./editor";
 import { registerRecordIpc } from "./record";
 import { registerTeleprompterIpc } from "./teleprompter";
 
@@ -12,6 +13,8 @@ export function loadPage(win: BrowserWindow, page: "index" | "teleprompter") {
 export const preloadPath = () => join(__dirname, "../preload/index.mjs");
 
 let main: BrowserWindow | null = null;
+
+registerMediaScheme();
 
 function createMain() {
   main = new BrowserWindow({
@@ -33,6 +36,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media" || permission === "display-capture"));
   registerRecordIpc(() => main);
   registerTeleprompterIpc(() => main);
+  registerEditorIpc();
   createMain();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createMain(); });
 });

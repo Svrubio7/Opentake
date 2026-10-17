@@ -1,0 +1,91 @@
+/* Editor module: the take editor over the whole window, and the export dialog. Controls come from ui.css. */
+
+.ed-scrim {
+  position: fixed; inset: 0; z-index: 800; display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  /* one column the window wide: the timeline's canvas follows the scroller's width, so nothing may grow it */
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--canvas); animation: q-fade 160ms var(--ease);
+}
+
+/* ---------- header ---------- */
+.ed-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.ed-title { display: flex; flex-direction: column; min-width: 0; }
+.ed-title b { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.ed-title span { font-size: 14px; color: var(--muted); }
+.ed-head-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ed-head-tools .note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; margin-right: 6px; }
+
+/* ---------- body: player and side panel ---------- */
+.ed-body { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; padding: 0 16px; }
+.ed-stage { min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: var(--stage); overflow: hidden; position: relative; }
+.ed-player { position: absolute; inset: 16px; display: flex; align-items: center; justify-content: center; }
+.ed-frame { position: relative; max-width: 100%; max-height: 100%; }
+.ed-frame video { display: block; width: 100%; height: 100%; background: #000; border-radius: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 18px 40px -18px rgba(0, 0, 0, 0.45); cursor: pointer; }
+.ed-player-error { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; }
+.ed-side { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-bottom: 4px; scrollbar-gutter: stable; }
+
+/* the caption preview: the same looks the export burns in (captions-core toAss) */
+.ed-cap { position: absolute; left: 6%; right: 6%; display: flex; justify-content: center; pointer-events: none; text-align: center; line-height: 1.2; font-weight: 700; color: #fff; }
+.ed-cap-text { display: inline-flex; flex-direction: column; align-items: center; }
+.ed-cap .row-line { display: block; }
+.ed-cap.clean .ed-cap-text { text-shadow: 0 0 2px rgba(0, 0, 0, 0.75), 0 2px 6px rgba(0, 0, 0, 0.55); }
+.ed-cap.boxed .row-line { background: rgba(0, 0, 0, 0.62); padding: 0.06em 0.3em; border-radius: 0.12em; }
+.ed-cap.social .ed-cap-text { display: block; letter-spacing: -0.01em; -webkit-text-stroke: 0.09em #000; paint-order: stroke fill; text-shadow: 0 0.05em 0.1em rgba(0, 0, 0, 0.5); }
+.ed-cap.social .hl { color: #ffd60a; }
+
+/* ---------- caption lines ---------- */
+.ed-lines { display: flex; flex-direction: column; gap: 2px; max-height: min(46vh, 420px); overflow-y: auto; margin: 0 -8px; padding: 0 8px; }
+.ed-line { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; padding: 6px 8px; border-radius: 10px; transition: background var(--t) var(--ease); }
+.ed-line:hover { background: var(--hover); }
+.ed-line.on { background: var(--brand-wash); }
+.ed-line.on .ed-line-time { color: var(--brand); }
+.ed-line-time { border: 0; background: none; padding: 4px 0 0; font-size: 13px; color: var(--muted); align-self: start; }
+.ed-line-text {
+  width: 100%; resize: none; field-sizing: content; min-height: 0; border: 1px solid transparent; border-radius: 8px; padding: 3px 6px;
+  background: transparent; font-size: 15px; line-height: 1.4;
+}
+.ed-line-text:hover { border-color: var(--border); }
+.ed-line-text:focus { outline: none; border-color: var(--brand); background: var(--card); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent); }
+/* the tools show on the line being played or typed in */
+.ed-line-tools { grid-column: 2; display: none; gap: 0; margin-left: 2px; }
+.ed-line:focus-within .ed-line-tools, .ed-line.on .ed-line-tools { display: flex; }
+.ed-look { padding-top: 12px; border-top: 1px solid var(--card-border); }
+
+.ed-keys dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 14px; }
+.ed-keys dt { white-space: nowrap; color: var(--muted); }
+.ed-keys dd { margin: 0; color: var(--muted); }
+
+/* ---------- footer: transport and timeline ---------- */
+.ed-foot {
+  min-width: 0; margin: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 8px;
+  background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; box-shadow: var(--shadow-card);
+}
+.ed-transport { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ed-clock { font-size: 18px; font-weight: 600; min-width: 140px; }
+.ed-clock small { font-size: 14px; font-weight: 500; color: var(--muted); }
+.ed-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.ed-zoom { margin-left: auto; display: flex; align-items: center; gap: 4px; width: 240px; }
+.ed-zoom .range { flex: 1; }
+.ed-timeline { min-width: 0; width: 100%; position: relative; overflow-x: auto; overflow-y: hidden; touch-action: none; cursor: text; border-radius: 8px; }
+.ed-canvas { position: sticky; left: 0; display: block; }
+.ed-timeline-wait { height: 124px; display: grid; place-items: center; }
+
+/* ---------- export dialog ---------- */
+.ed-modal-scrim { z-index: 950; }
+.ed-export { width: min(640px, 100%); max-height: min(820px, 100%); }
+.ed-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.ed-preset {
+  display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; text-align: left; min-width: 0;
+  background: var(--card); border: 1px solid var(--card-border); border-radius: 12px;
+  transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
+}
+.ed-preset b { font-size: 14px; font-weight: 600; }
+.ed-preset span { font-size: 13px; color: var(--muted); }
+.ed-preset:hover { border-color: color-mix(in srgb, var(--text) 30%, var(--border)); }
+.ed-preset.on { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 14%, transparent); }
+.ed-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ed-grid { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px solid var(--card-border); }
+/* the buttons stay in view when the dialog scrolls on a short window */
+.ed-export-foot { position: sticky; bottom: -20px; margin: 0 -20px -20px; padding: 14px 20px 20px; display: flex; align-items: center; gap: 8px; background: var(--card); border-top: 1px solid var(--card-border); }
+.ed-export-foot .note { margin-right: auto; }
+.ed-file { font-weight: 600; color: var(--text); }

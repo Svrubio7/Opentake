@@ -1,13 +1,14 @@
 // OWNED BY: record agent. The big preview in the middle, its control bar, and the Record panel.
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { FolderOpen, Monitor, Pause, PictureInPicture2, Play, Square, Trash, Video, X } from "lucide-react";
+import { FolderOpen, Monitor, Pause, PictureInPicture2, Play, Scissors, Square, Trash, Video, X } from "lucide-react";
 import type { OutputAspect, RecordMode, ScreenSource, TakeInfo } from "@shared/types";
 import { Button, Card, Field, Hint, Segmented, Slider, Switch, Tag } from "../../ui";
 import { api, hasBridge } from "./api";
 import { compositor } from "./engine";
 import { clampBubble, formatClock, hitBubble, needsCamera, needsScreen, snapBubble } from "./layout-core";
 import { BackgroundCard, CameraBubbleCard, FrameCard, LooksCard, WindowCard } from "./look-panel";
-import { exportTake, refreshTakes, startRecording, stopRecording, togglePause, wireRecorder } from "./recorder";
+import { EditorHost, openEditor, openExport } from "../editor";
+import { refreshTakes, startRecording, stopRecording, togglePause, wireRecorder } from "./recorder";
 import { currentLayout, isBusy, useRecord } from "./store";
 import "./record.css";
 
@@ -253,6 +254,8 @@ function TakeRow({ take }: { take: TakeInfo }) {
         </div>
         <div className="rec-take-tags">
           {take.status === "recording" && !active && <Tag tone="warn" title="This take was interrupted and recovered">Recovered</Tag>}
+          {take.files.edit && <Tag title="This take has cuts (edit.json)">Edited</Tag>}
+          {take.files.captions && <Tag title="This take has captions (captions.json)">Captions</Tag>}
           {take.files.mp4 && <Tag tone="good">MP4</Tag>}
         </div>
       </div>
@@ -264,6 +267,7 @@ function TakeRow({ take }: { take: TakeInfo }) {
         </div>
       )}
       {progress?.error && <p className="note note-danger">{progress.error}</p>}
+      {progress?.done && !progress.error && progress.output && <p className="note">Saved {progress.output.split(/[\\/]/).pop()}</p>}
       {confirm ? (
         <div className="rec-take-actions">
           <span className="note">Move to the Recycle Bin?</span>
@@ -272,11 +276,9 @@ function TakeRow({ take }: { take: TakeInfo }) {
         </div>
       ) : (
         <div className="rec-take-actions">
-          <Button size="sm" disabled={running || active || !take.files.composite} onClick={() => exportTake(take.id, "composite")}>{take.files.mp4 ? "Export again" : "Export MP4"}</Button>
-          {take.files.screen && (
-            <Button size="sm" disabled={running || active} title="The screen track at its native resolution, with the zoom redone from the click timeline" onClick={() => exportTake(take.id, "hires")}>Hi-res</Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => api.revealTake(take.id, take.files.hires ?? take.files.mp4)}>Show</Button>
+          <Button size="sm" disabled={running || active || !take.files.composite} title="Cut, trim and caption this take" onClick={() => openEditor(take.id)}><Scissors />Edit</Button>
+          <Button size="sm" disabled={running || active || !take.files.composite} title="Choose a frame, a format and the quality" onClick={() => openExport(take.id)}>Export</Button>
+          <Button variant="ghost" size="sm" onClick={() => api.revealTake(take.id, take.files.outputs?.[0] ?? take.files.hires ?? take.files.mp4)}>Show</Button>
           <Button variant="ghost" size="icon-sm" className="rec-del" disabled={running || active} onClick={() => setConfirm(true)} title="Delete" aria-label="Delete"><Trash /></Button>
         </div>
       )}
@@ -362,6 +364,7 @@ export function RecordPanel() {
           <ul className="rec-takes">{s.takes.map((t) => <TakeRow key={t.id} take={t} />)}</ul>
         )}
       </Card>
+      <EditorHost />
     </div>
   );
 }
