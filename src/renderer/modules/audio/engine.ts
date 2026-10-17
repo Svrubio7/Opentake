@@ -15,7 +15,8 @@ import { t } from "../../../shared/i18n";
 
 const SAMPLE_RATE = 48000;
 /** RNNoise buffers 480-sample frames inside 128-sample render quanta: its output trails by 512 samples. */
-const RNNOISE_LATENCY = 512;
+// measured: a chirp through the RNNoise worklet offline comes out 992 samples (20.7 ms) later
+const RNNOISE_LATENCY = 992;
 
 export interface InputMeter { peakDb: number; rmsDb: number; clips: number }
 export interface OutputMeter {
@@ -320,6 +321,27 @@ class VoiceEngine {
       const saved = st.deviceId && devices.some((d) => d.id === st.deviceId) ? st.deviceId : null;
       await this.open(saved);
     }
+  }
+
+  /**
+   * The processed voice `ms` later, as its own stream from this same graph (a DelayNode before a second
+   * destination). A delayed take's composite takes its voice from here: a trip through another audio
+   * context would add about 50 ms of its own and put the sound behind the picture.
+   */
+  delayedVoice(ms: number): { track: MediaStreamTrack; dispose: () => void } | null {
+    if (!this.ctx || !this.chain || !this.stream) return null;
+    const delay = new DelayNode(this.ctx, { maxDelayTime: ms / 1000 + 1, delayTime: ms / 1000 });
+    const dest = new MediaStreamAudioDestinationNode(this.ctx);
+    const out = this.chain.output;
+    out.connect(delay).connect(dest);
+    return {
+      track: dest.stream.getAudioTracks()[0],
+      dispose: () => {
+        try { out.disconnect(delay); } catch { /* the chain was rebuilt */ }
+        delay.disconnect();
+        dest.stream.getTracks().forEach((t) => t.stop());
+      },
+    };
   }
 
   applySettings(s: ChainSettings) {
