@@ -4,6 +4,9 @@ import { X } from "lucide-react";
 import type { ExportFormat, ExportPreset, TakeInfo } from "@shared/types";
 import { Button, Field, Hint, NumberField, Segmented, Switch } from "../../ui";
 import { PRESETS, exportFileName, exportWarnings, resolveFrame } from "../../../main/record/export-core";
+import { presetWords, renderName, shortPath } from "../../../main/settings-core";
+import { dismiss, goTo, useShell } from "../shell/store";
+import { exportSuggestion } from "../shell/suggestions-core";
 import { exportTake } from "../record/recorder";
 import { useRecord } from "../record/store";
 import { outputFrom, useEditor } from "./store";
@@ -29,7 +32,13 @@ export function ExportDialog({ take, onClose }: { take: TakeInfo; onClose: () =>
   const kind = prefs.kind === "hires" && hiresOk ? "hires" : "composite";
   const output = outputFrom(prefs, hasCaptions);
   const frame = resolveFrame(output, { width: 1920, height: 1080 });
-  const name = exportFileName(kind, output, frame);
+  // the name and place main will use (it adds a number if the name is taken)
+  const settings = useShell((s) => s.view?.settings ?? null);
+  const dismissed = useShell((s) => s.dismissed);
+  const stem = settings ? renderName(settings.nameTemplate, { createdAt: take.createdAt, title: take.title, preset: presetWords(exportFileName(kind, output, frame)) }) : null;
+  const name = stem ? `${stem}.${o.format}` : exportFileName(kind, output, frame);
+  const where = !settings ? null : settings.exportDestination === "ask" ? "ask" : settings.exportDestination === "folder" && settings.exportDir ? settings.exportDir : take.dir;
+  const tip = exportSuggestion(take.frame, o.preset, new Set(dismissed));
   const warnings = exportWarnings(output, take.durationMs != null ? take.durationMs / 1000 : null);
   const gif = o.format === "gif";
 
@@ -41,7 +50,7 @@ export function ExportDialog({ take, onClose }: { take: TakeInfo; onClose: () =>
 
   const start = () => {
     onClose();
-    void exportTake(take.id, kind, output);
+    void exportTake(take.id, kind, output, true);
   };
 
   return (
@@ -75,6 +84,15 @@ export function ExportDialog({ take, onClose }: { take: TakeInfo; onClose: () =>
             <div className="ed-pair">
               <NumberField label="Width" value={o.width ?? 1920} min={16} max={4096} step={2} suffix="px" onCommit={(width) => setOut({ width })} />
               <NumberField label="Height" value={o.height ?? 1080} min={16} max={4096} step={2} suffix="px" onCommit={(height) => setOut({ height })} />
+            </div>
+          )}
+          {tip && (
+            <div className="tip">
+              <span>{tip.text}</span>
+              <div className="tip-actions">
+                <Button size="sm" onClick={() => setOut({ preset: "vertical", fit: "fill" })}>{tip.action?.label}</Button>
+                <Button size="icon-sm" variant="ghost" onClick={() => dismiss(tip.id)} title="Do not suggest this again" aria-label="Dismiss"><X /></Button>
+              </div>
             </div>
           )}
           {o.preset !== "original" && (
@@ -149,7 +167,11 @@ export function ExportDialog({ take, onClose }: { take: TakeInfo; onClose: () =>
 
         {warnings.map((w) => <p key={w} className="note note-warn">{w}</p>)}
         <div className="ed-export-foot">
-          <span className="note">Saves <b className="ed-file">{name}</b>{take.files.edit ? " with your cuts" : ""}{hasCaptions && !gif ? ", plus matching .srt and .vtt" : ""}</span>
+          <span className="note ed-export-where">
+            {where === "ask" ? <>You choose where to save <b className="ed-file">{name}</b></> : <>Saves <b className="ed-file">{name}</b>{where ? <> to <span title={where}>{where === take.dir ? "the take's folder" : shortPath(where, 32)}</span></> : null}</>}
+            {take.files.edit ? " with your cuts" : ""}{hasCaptions && !gif ? ", plus matching .srt and .vtt" : ""}.{" "}
+            <button type="button" className="btn-link ed-where-link" onClick={() => { onClose(); goTo("settings"); }}>Change</button>
+          </span>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="ink" onClick={start}>Export</Button>
         </div>

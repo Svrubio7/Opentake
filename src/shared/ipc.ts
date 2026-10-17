@@ -71,4 +71,22 @@ export const IPC = {
   drawDisplay: "take:draw:display",
   /** overlay -> main: nothing is left on screen, the window can hide */
   drawEmpty: "take:draw:empty",
+  // ux: settings, folders, permissions, quitting safely
+  settingsGet: "take:settings:get",
+  settingsSet: "take:settings:set",
+  settingsChooseRecordings: "take:settings:choose-recordings",
+  /** back to the standard folder ("default") or a past one (its index) */
+  settingsUseRecordings: "take:settings:use-recordings",
+  settingsChooseExportDir: "take:settings:choose-export-dir",
+  settingsOpenFolder: "take:settings:open-folder",
+  permissions: "take:settings:permissions",
+  openPrivacy: "take:settings:open-privacy",
+  takeRename: "take:record:take-rename",
+  /** takes the app closed on are finished and listed; resolves to how many */
+  takesRecover: "take:record:takes-recover",
+  /** main window -> main: recording / exporting, so closing the window asks first */
+  appBusy: "take:app:busy",
+  /** main -> main window: stop and save the take, then call appQuitNow */
+  appQuitRequest: "take:app:quit-request",
+  appQuitNow: "take:app:quit-now",
 } as const;

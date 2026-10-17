@@ -22,7 +22,7 @@ npm run typecheck
 npm test
 ```
 
-The code is split by module under `src/renderer/modules/` (audio, camera, record, teleprompter), with the Electron main process in `src/main/` and types shared across processes in `src/shared/`. Pure logic lives in `*-core.ts` files with unit tests next to them; keep new logic there so it can be tested without a window.
+The code is split by module under `src/renderer/modules/` (audio, camera, record, teleprompter, editor, draw, update, and shell for Settings, the first-run setup, the shortcuts sheet and suggestions), with the Electron main process in `src/main/` and types shared across processes in `src/shared/`. Pure logic lives in `*-core.ts` files with unit tests next to them; keep new logic there so it can be tested without a window.
 
 ## Rules of the house
 

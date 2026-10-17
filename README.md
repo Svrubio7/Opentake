@@ -41,6 +41,26 @@ Made by [Quetzal](https://quetzaltech.app). Free for everyone, open source under
 - Export presets: Original, YouTube 1080p, Reels / TikTok / Shorts, Square, LinkedIn, X and a custom size, fitted with bars or filled and cropped. MP4, WebM or GIF, by quality or by a target file size (two passes).
 - Editor keys: Space play, J K L back / pause / play, arrows step a frame (Shift a second), I and O set in and out, S split, Delete removes a part or restores a cut, Ctrl+Z undo, Ctrl+Shift+Z redo, Ctrl + wheel zoom.
 
+**Takes, folders and names**
+- A Takes tab lists every recording with its length, its exports and what it has (cuts, captions). Give a take a title, find it by title or date, and edit, export, show or delete it from there.
+- Settings: record to any folder (Documents/OpenTake recordings by default), with its free space shown. Takes in a folder you used before stay listed there, so you can open it or switch back.
+- Exports go next to the take, to one folder you choose, or wherever a Save dialog says each time. File names follow a template such as `{date} {time} {title} {preset}`, with a live example. A name that is taken gets a number, like (2): nothing is ever overwritten.
+- After an export OpenTake can show it in its folder, open it, or do nothing.
+- Folders with spaces, accents and other scripts work, and file names are made safe on every system.
+
+**Help along the way**
+- A short setup on the first launch: what you record, your mic and camera (with macOS permissions), and where takes go. Skip it any time; Settings opens it again.
+- The Record panel is split into Setup, Look and Overlays. Setup starts with what a take needs (screen, mic, camera, folder), each missing piece with the one button that fixes it.
+- A few suggestions when they help, each gone for good once dismissed: a background for an edge-to-edge screen, light for a dim camera, headphones when the computer's sound would echo, a roomier drive, the Reels preset for a vertical take, captions for a long one.
+- Press ? (or Shortcuts in the left rail) for every keyboard shortcut.
+
+**Safe with your takes**
+- Closing OpenTake during a take asks first, then stops and saves it. During an export it asks before stopping it.
+- A take the app closed on (a crash, a power cut) is finished on the next launch with its real length and marked Recovered.
+- If the recordings drive is unplugged, OpenTake says so before recording and never quietly records somewhere else. If it goes away during a take, the take stops and keeps what was written.
+- A failed export leaves no half-written file, and a full drive is named as the reason.
+- Only one copy of OpenTake runs at a time; opening it again brings the window forward.
+
 **Teleprompter**
 - A floating, always-on-top prompter that sits under your webcam so your eyes stay near the lens.
 - Voice tracking: speech recognition (Vosk, English and Spanish) runs on your computer and scrolls the script as you read.
@@ -74,7 +94,7 @@ Everything runs on your computer. There is no account, no sign-in, no telemetry 
 
 ## Keyboard shortcuts
 
-These work from any app while OpenTake is running (on macOS, Ctrl is Cmd).
+These work from any app while OpenTake is running (on macOS, Ctrl is Cmd). Press ? inside OpenTake to see them all.
 
 | Shortcut | Action |
 |---|---|

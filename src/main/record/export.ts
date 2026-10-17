@@ -1,6 +1,8 @@
 // MP4 export with ffmpeg-static: optional silence trim, two-pass loudnorm, progress from -progress.
+import type { BrowserWindow } from "electron";
 import type { ChildProcess } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import ffmpegStatic from "ffmpeg-static";
 import type { ExportOptions, ExportProgress, TakeFiles } from "../../shared/types";
@@ -12,13 +14,23 @@ import {
 } from "./ffmpeg-core";
 import { exportEdited, wantsEditedExport } from "./export-edit";
 import { runWatched } from "./ffmpeg-run";
-import { readMeta, readTimeline, takeDir, takeFiles, type TakeMeta } from "./takes";
+import { readMeta, readTimeline, recordExport, takeDir, takeFiles, type TakeMeta } from "./takes";
+import { exportTarget } from "./export-target";
+import { openPath, revealFile } from "../dialogs";
+import { getSettings } from "../settings";
+import { friendlyExportError } from "../settings-core";
 
 // inside a packaged app the binary lives in app.asar.unpacked
 export const ffmpegPath = () => (ffmpegStatic ?? "ffmpeg").replace("app.asar", "app.asar.unpacked");
 
 const running = new Map<string, ChildProcess>();
 const cancelled = new Set<string>();
+/** takes between Export and the first ffmpeg run (the Save dialog may be open) */
+const preparing = new Set<string>();
+
+/** How many exports are running now (quitting asks first). */
+export const exportsRunning = () => new Set([...running.keys(), ...preparing]).size;
+export const cancelAllExports = () => { for (const id of running.keys()) cancelExport(id); };
 
 export function run(takeId: string, args: string[], cwd: string, onStdout?: (s: string) => void): Promise<{ code: number; stderr: string }> {
   return new Promise((resolve, reject) => {
@@ -41,9 +53,9 @@ export function cancelExport(takeId: string) {
   return true;
 }
 
-export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => void): Promise<string> {
+export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => void, win: BrowserWindow | null = null): Promise<string> {
   const { takeId } = o;
-  if (running.has(takeId)) throw new Error("This take is already exporting");
+  if (running.has(takeId) || preparing.has(takeId)) throw new Error("This take is already exporting");
   cancelled.delete(takeId);
   const dir = takeDir(takeId);
   const meta = await readMeta(takeId);
@@ -51,9 +63,18 @@ export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => 
   if (!files.composite) throw new Error("This take has no recording file");
   const progress = (stage: string, ratio: number | null) => send({ takeId, stage, ratio });
 
+  let out: string | null = null;
   try {
+    preparing.add(takeId);
+    out = await exportTarget(o, meta, dir, win);
+    if (!out) {
+      // the Save dialog was cancelled: nothing to report
+      send({ takeId, stage: "Not exported", ratio: null, done: true });
+      return "";
+    }
     if (await wantsEditedExport(o)) {
-      const out = await exportEdited(o, { dir, meta, files, run: (args, onStdout) => run(takeId, args, dir, onStdout), progress, hiresSource });
+      await exportEdited(o, { dir, meta, files, out, run: (args, onStdout) => run(takeId, args, dir, onStdout), progress, hiresSource });
+      await finished(o, out);
       send({ takeId, stage: "Done", ratio: 1, done: true, output: out });
       return out;
     }
@@ -87,28 +108,41 @@ export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => 
       if (t != null) progress("Encoding MP4", encodeMs > 0 ? Math.min(0.99, 0.1 + 0.9 * (t / encodeMs)) : null);
     };
 
-    let out: string;
-    let args: string[];
-    if (o.kind === "hires") {
-      out = join(dir, "take-hires.mp4");
-      args = hiresArgs({ ...(await hiresSource(takeId, dir, meta, files, trim.start * 1000)), out, trim, audio, loudness, limitSec: encodeMs > 0 ? encodeMs / 1000 : null });
-    } else {
-      out = join(dir, "take.mp4");
-      args = compositeArgs({ input: files.composite, out, fps: meta.fps || 30, trim, audio, loudness });
-    }
+    const target = out;
+    const args = o.kind === "hires"
+      ? hiresArgs({ ...(await hiresSource(takeId, dir, meta, files, trim.start * 1000)), out: target, trim, audio, loudness, limitSec: encodeMs > 0 ? encodeMs / 1000 : null })
+      : compositeArgs({ input: files.composite, out: target, fps: meta.fps || 30, trim, audio, loudness });
 
     progress("Encoding MP4", 0.1);
     const r = await run(takeId, args, dir, onProgress);
-    if (r.code !== 0) throw new Error(`ffmpeg failed: ${tail(r.stderr)}`);
-    send({ takeId, stage: "Done", ratio: 1, done: true, output: out });
-    return out;
+    if (r.code !== 0) {
+      await rm(target, { force: true }).catch(() => {}); // no half-written file left behind
+      throw new Error(`ffmpeg failed: ${tail(r.stderr)}`);
+    }
+    await finished(o, target);
+    send({ takeId, stage: "Done", ratio: 1, done: true, output: target });
+    return target;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    send({ takeId, stage: "Failed", ratio: null, done: true, error: msg });
+    if (out && cancelled.has(takeId)) await rm(out, { force: true }).catch(() => {});
+    if (!/cancelled/i.test(msg)) console.warn(`[export] ${takeId}: ${msg}`);
+    send({ takeId, stage: "Failed", ratio: null, done: true, error: friendlyExportError(msg) });
     throw e;
   } finally {
+    preparing.delete(takeId);
     cancelled.delete(takeId);
   }
+}
+
+/** Lists the export on its take and, for an export a person started, shows or opens it. */
+async function finished(o: ExportOptions, out: string) {
+  const stem = out.replace(/\.\w+$/, "");
+  const beside = [`${stem}.srt`, `${stem}.vtt`].filter((f) => existsSync(f));
+  await recordExport(o.takeId, [out, ...beside]).catch(() => {});
+  if (!o.manual) return;
+  const after = getSettings().afterExport;
+  if (after === "reveal") revealFile(out);
+  else if (after === "open") await openPath(out);
 }
 
 /**

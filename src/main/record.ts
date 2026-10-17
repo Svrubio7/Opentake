@@ -1,5 +1,8 @@
 import { app, desktopCapturer, globalShortcut, ipcMain, shell, type BrowserWindow } from "electron";
+import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
+import { openPath, revealFile } from "./dialogs";
+import { recoverTakes } from "./record/recover";
 import { IPC } from "../shared/ipc";
 import type {
   ExportOptions, RecordBeginRequest, RecordChunk, RecordSave, RecordShortcut, ScreenSource,
@@ -10,7 +13,7 @@ import { validTakeId } from "./record/ffmpeg-core";
 import { startKeys, stopKeys } from "./record/keys";
 import { shutdownPointer, startPointer, stopPointer } from "./record/pointer";
 import { registerSystemAudioIpc } from "./record/system-audio";
-import { appendChunk, beginTake, forgetTake, listTakes, recordingsRoot, saveTake, takeDir } from "./record/takes";
+import { appendChunk, beginTake, forgetTake, isTakeFile, listTakes, recordingsRoot, renameTake, saveTake, takeDir } from "./record/takes";
 
 // OWNED BY: record agent. Screen sources, global click tracking, saving, ffmpeg export.
 
@@ -57,19 +60,22 @@ export function registerRecordIpc(getMain: () => BrowserWindow | null) {
   });
 
   ipcMain.handle(IPC.takesList, () => listTakes());
+  ipcMain.handle(IPC.takesRecover, () => recoverTakes());
+  ipcMain.handle(IPC.takeRename, (_e, id: string, title: unknown) => renameTake(id, title));
   ipcMain.handle(IPC.takeDelete, async (_e, id: string) => {
     const dir = takeDir(id);
     cancelExport(id);
     await shell.trashItem(dir); // to the Recycle Bin, never a hard delete
     forgetTake(id);
   });
+  // a file is shown only when it belongs to the take (its folder or one of its listed exports)
   ipcMain.handle(IPC.takeReveal, async (_e, id: string, file?: string) => {
-    if (file && typeof file === "string" && file.startsWith(takeDir(id))) shell.showItemInFolder(file);
-    else await shell.openPath(takeDir(id));
+    if (file && typeof file === "string" && existsSync(file) && (await isTakeFile(id, file))) revealFile(file);
+    else await openPath(takeDir(id));
   });
   ipcMain.handle(IPC.openRecordingsFolder, async () => {
-    await mkdir(recordingsRoot(), { recursive: true });
-    await shell.openPath(recordingsRoot());
+    await mkdir(recordingsRoot(), { recursive: true }).catch(() => {});
+    return openPath(recordingsRoot());
   });
 
   ipcMain.handle(IPC.diskSpace, () => diskSpace());
@@ -77,7 +83,7 @@ export function registerRecordIpc(getMain: () => BrowserWindow | null) {
 
   ipcMain.handle(IPC.exportVideo, (_e, o: ExportOptions) => {
     if (!validTakeId(o?.takeId)) throw new Error("bad take id");
-    return exportTake(o, (p) => send(IPC.exportProgress, p));
+    return exportTake(o, (p) => send(IPC.exportProgress, p), getMain());
   });
   ipcMain.handle(IPC.exportCancel, (_e, id: string) => cancelExport(id));
 

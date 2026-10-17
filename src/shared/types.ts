@@ -133,6 +133,12 @@ export interface TakeInfo {
   sceneChanges?: number;
   /** the composite carries overlays the hi-res export does not redraw */
   overlays?: boolean;
+  /** a name the person gave the take (the folder keeps its date name) */
+  title?: string;
+  /** the app closed before the take was saved; the part on disk was recovered */
+  recovered?: boolean;
+  /** the recorded frame in pixels */
+  frame?: { width: number; height: number };
 }
 
 export type LoudnessTarget = "off" | "-14" | "-16";
@@ -146,6 +152,8 @@ export interface ExportOptions {
   output?: ExportOutput;
   /** apply edit.json when the take has one (default true) */
   useEdit?: boolean;
+  /** started by a person (not the export on stop): the "after export" setting applies */
+  manual?: boolean;
 }
 export interface ExportProgress { takeId: string; stage: string; ratio: number | null; done?: boolean; error?: string; output?: string }
 
@@ -255,3 +263,56 @@ export interface EditorTake {
   /** the bundled ffmpeg can burn captions (has libass) */
   canBurn: boolean;
 }
+
+// ---- shell: settings (where takes and exports go) ----
+
+/** next to the take (in its folder), one fixed folder, or a Save dialog every time */
+export type ExportDestination = "take" | "folder" | "ask";
+export type AfterExport = "reveal" | "open" | "nothing";
+/** Saved by the main process as settings.json in the app's data folder. */
+export interface AppSettings {
+  version: 1;
+  /** null = Documents/OpenTake recordings */
+  recordingsDir: string | null;
+  exportDestination: ExportDestination;
+  exportDir: string | null;
+  /** {date} {time} {title} {preset} */
+  nameTemplate: string;
+  afterExport: AfterExport;
+  /** folders takes went to before a change, newest first, so they can still be opened */
+  pastRecordingsDirs: string[];
+}
+
+/** A folder the app writes to, as the main process sees it right now. */
+export interface FolderStatus {
+  path: string;
+  /** the standard Documents/OpenTake recordings */
+  isDefault: boolean;
+  /** "missing": the folder or its drive is gone (a USB drive unplugged); "readonly": cannot write there */
+  state: "ok" | "missing" | "readonly";
+  freeBytes: number | null;
+  /** takes in this folder (recordings folder only) */
+  takes?: number;
+  /** a past recordings folder: its place in the settings list */
+  index?: number;
+}
+
+export interface SettingsView {
+  settings: AppSettings;
+  recordings: FolderStatus;
+  /** the fixed export folder, when one is set */
+  exportFolder: FolderStatus | null;
+  /** earlier recordings folders that still hold takes */
+  past: FolderStatus[];
+  platform: "win32" | "darwin" | "linux";
+}
+
+/** What changing a folder did; `error` is one plain line when the folder cannot be used. */
+export interface FolderChoice { ok: boolean; cancelled?: boolean; error?: string; view?: SettingsView }
+
+/** macOS privacy permissions (always "granted" elsewhere). */
+export type PermissionState = "granted" | "denied" | "not-determined" | "restricted" | "unknown";
+export interface Permissions { camera: PermissionState; microphone: PermissionState; screen: PermissionState; accessibility: boolean; platform: "win32" | "darwin" | "linux" }
+
+/** What the window is in the middle of, so quitting can ask first. */
+export interface AppBusy { recording: boolean; exporting: number }

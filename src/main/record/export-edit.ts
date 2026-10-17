@@ -8,7 +8,7 @@ import { clipEdited, keptDuration, mergeTouching, wholeTake } from "../../render
 import geistBold from "../../../node_modules/geist/dist/fonts/geist-sans/Geist-Bold.ttf?asset";
 import { cutsSomething, readCaptions, readEdit } from "./editor-store";
 import {
-  AUDIO_KBPS, cutAudioArgs, editExportArgs, exportFileName, parseDurationMs, parseVideoSize, resolveFrame, sizeBitrateKbps,
+  AUDIO_KBPS, cutAudioArgs, editExportArgs, parseDurationMs, parseVideoSize, resolveFrame, sizeBitrateKbps,
   type SourceGraph,
 } from "./export-core";
 import { SILENCE_FILTER, hasAudioStream, hiresGraph, loudnormFilter, parseLoudnorm, parseProgressTime, parseSilenceTrim } from "./ffmpeg-core";
@@ -19,6 +19,8 @@ type HiresSource = (takeId: string, dir: string, meta: TakeMeta, files: TakeFile
 
 export interface EditedContext {
   dir: string;
+  /** where the export goes (the name and folder come from Settings, export-target.ts) */
+  out: string;
   meta: TakeMeta;
   files: TakeFiles;
   run: Run;
@@ -106,7 +108,7 @@ export async function exportEdited(o: ExportOptions, c: EditedContext): Promise<
     burn = { ass: "captions.ass", fontsDir: ".fonts" };
   }
 
-  const out = join(dir, exportFileName(o.kind, output, frame));
+  const out = c.out;
   const encodeMs = keep ? keptDuration(keep) : (durationMs ?? 0);
   const stageName = output.format === "gif" ? "Making the GIF" : `Encoding ${output.format.toUpperCase()}`;
   const watch = (from: number, to: number, stage: string) => (s: string) => {
