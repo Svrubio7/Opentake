@@ -297,7 +297,8 @@ export class LiveZoom {
 
   zoomedAt() { return this.cam.director.isZoomed(); }
 
-  update(t: number, cursor: Pt | null): Omit<CameraFrame, "t"> { return this.cam.step(t, cursor, cursor, 100); }
+  /** `ahead`: where the cursor is cursorLeadMs later, when the picture runs behind real time and knows it */
+  update(t: number, cursor: Pt | null, ahead: Pt | null = cursor): Omit<CameraFrame, "t"> { return this.cam.step(t, cursor, ahead, 100); }
 
   reset() { this.cam.reset(); }
 }

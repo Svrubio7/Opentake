@@ -1,15 +1,19 @@
 // The live compositor: screen, camera bubble, frame and auto zoom drawn into one canvas.
 // The canvas IS the recording (recorder.ts captures it), so the stage shows exactly what is recorded.
+// During a take with auto zoom everything is drawn DELAY_MS behind real time (delay-core.ts), from
+// rings of stored frames, so the zoom can start before the click it serves.
 import { getStream, publishStream, subscribeStreams } from "@core/streams";
 import type { CursorSample, RecordLayout, RecordMode } from "@shared/types";
 import { api, hasBridge } from "./api";
 import {
   coverCrop, cropSource, gradientLine, needsCamera, needsScreen, pxScale, resolveBackground, toCropSpace, type Rect,
 } from "./layout-core";
+import { History, planDelay, ringSlots, storeSize } from "./delay-core";
+import { FrameRing, type StoredFrame } from "./frame-ring";
 import { OverlayPainter, useOverlays } from "./overlays";
 import { SCENE_MS, blendScenes, coversFrame, easeInOutCubic, sceneGeometry, type CameraLayer, type Layer, type SceneGeom } from "./scenes-core";
 import { currentLayout, isBusy, useRecord } from "./store";
-import { DEFAULT_ZOOM, DwellDetector, LiveZoom, type Pt } from "./zoom-core";
+import { DEFAULT_ZOOM, DwellDetector, LiveZoom, cursorAt, type Pt, type TimedPt } from "./zoom-core";
 
 type PointerListener = { click?: (p: Pt & { t: number; button: number }) => void; cursor?: (s: CursorSample[]) => void };
 
@@ -22,6 +26,9 @@ function hiddenVideo(): HTMLVideoElement {
 }
 
 const ready = (v: HTMLVideoElement) => v.srcObject != null && v.readyState >= 2 && v.videoWidth > 0;
+
+/** A picture to draw: a live video or a stored frame, and its size in pixels. */
+interface Source { img: CanvasImageSource; w: number; h: number }
 
 class Compositor {
   readonly canvas = document.createElement("canvas");
@@ -48,6 +55,12 @@ class Compositor {
   private keepCamera = false;
   /** hover feedback from the stage (bubble outline while dragging) */
   bubbleHover: "move" | "resize" | null = null;
+  /** how far behind real time the picture is drawn (0 outside a delayed take) */
+  private delayMs = 0;
+  private rings: { screen: FrameRing; camera: FrameRing } | null = null;
+  /** the cursor (cropped-picture space) and the scene, by real time, for the delayed picture */
+  private cursorTrail: TimedPt[] = [];
+  private modes = new History<RecordMode>(10_000);
 
   start() {
     if (this.ticker) return;
@@ -58,7 +71,9 @@ class Compositor {
     this.ticker.onmessage = () => this.draw();
     this.syncTicker();
     subscribeStreams(() => this.syncCamera());
+    this.modes.push(Date.now(), useRecord.getState().mode);
     useRecord.subscribe((s, prev) => {
+      if (s.mode !== prev.mode) this.modes.push(Date.now(), s.mode);
       if (s.fps !== prev.fps) this.syncTicker();
       if (s.mode !== prev.mode || s.status !== prev.status) this.syncCamera();
       if (s.zoomScale !== prev.zoomScale) this.zoom.opts = { ...this.zoom.opts, scale: s.zoomScale };
@@ -76,7 +91,10 @@ class Compositor {
       api.onCursor((samples) => {
         const crop = useRecord.getState().crop;
         const last = samples[samples.length - 1];
-        if (last) { this.cursor = toCropSpace(last, crop); this.zoom.move(last.t); this.overlays.cursorTo(this.cursor); }
+        if (last) { this.cursor = toCropSpace(last, crop); this.zoom.move(last.t); }
+        for (const s of samples) this.cursorTrail.push(toCropSpace(s, crop));
+        const cut = Date.now() - 4000;
+        if (this.cursorTrail.length > 600 || this.cursorTrail[0]?.t < cut) this.cursorTrail = this.cursorTrail.filter((p) => p.t >= cut);
         if (!useRecord.getState().tracking?.hooks) {
           for (const s of samples) {
             const c = this.dwell.push(toCropSpace(s, crop));
@@ -207,26 +225,114 @@ class Compositor {
 
   private draw() {
     const st = useRecord.getState();
-    const L = currentLayout(st);
-    const { width: W, height: H } = L;
+    const live = currentLayout(st);
+    const { width: W, height: H } = live;
     if (this.canvas.width !== W || this.canvas.height !== H) { this.canvas.width = W; this.canvas.height = H; }
     const now = Date.now();
+    // the time the picture shows: real time, or DELAY_MS behind it during a delayed take
+    const at = now - this.delayMs;
     const k = pxScale(W, H);
     if (!st.tracking?.hooks) { const c = this.dwell.tick(now); if (c) this.zoom.click(c, now); }
-    this.overlays.tick(now);
 
-    const sv = this.screenVideo, cv = this.cameraVideo;
-    const src = ready(sv) ? cropSource(L.crop, sv.videoWidth, sv.videoHeight) : null;
-    const g = this.sceneAt(L, src, now);
+    const sv = this.screenVideo;
+    const src = ready(sv) ? cropSource(live.crop, sv.videoWidth, sv.videoHeight) : null;
+    if (this.rings) this.storeFrames(live, src, now);
+    // the scene in force at that time (a switch shows when the picture reaches it)
+    const L = this.delayMs ? { ...live, mode: this.modes.at(at) ?? live.mode } : live;
+    const screen = this.screenSource(src, at);
+    const camera = this.cameraSource(at);
+    const cursor = this.delayMs ? cursorAt(this.cursorTrail, at) : this.cursor;
+    if (cursor) this.overlays.cursorTo(cursor);
+    this.overlays.tick(at);
+    const g = this.sceneAt(L, src, at);
 
-    if (!(coversFrame(g.camera, W, H) && ready(cv))) this.paintBackground(W, H);
-    if (g.screen && src) this.drawScreen(g.screen, src, L, st, now, k);
-    if (g.camera) this.drawCamera(g.camera, k, !this.trans && L.mode === "screen-camera");
+    if (!(coversFrame(g.camera, W, H) && camera)) this.paintBackground(W, H);
+    if (g.screen && src && screen) this.drawScreen(g.screen, screen, L, st, at, k, cursor);
+    if (g.camera) this.drawCamera(g.camera, camera, k, !this.trans && L.mode === "screen-camera");
     if (!this.trans) {
       if (needsScreen(L.mode) && !src) this.hint(st.sourceId ? "Starting the screen capture" : "Pick a screen or a window to record");
-      else if (L.mode === "camera" && !ready(cv)) this.hint("Waiting for the camera");
+      else if (L.mode === "camera" && !camera) this.hint("Waiting for the camera");
     }
-    this.overlays.drawFrame(this.ctx, W, H, k, now, () => this.background(W, H));
+    this.overlays.drawFrame(this.ctx, W, H, k, at, () => this.background(W, H));
+  }
+
+  // ---- the delayed picture ----
+
+  /** The kept part of the screen at time t: the live video, or the frame stored for t. */
+  private screenSource(src: Rect | null, t: number): (Source & { region: Rect }) | null {
+    if (!src) return null;
+    if (!this.delayMs || !this.rings) return { img: this.screenVideo, w: this.screenVideo.videoWidth, h: this.screenVideo.videoHeight, region: src };
+    const f = this.rings.screen.at(t, 1000 / useRecord.getState().fps);
+    return f ? { img: f.canvas, w: f.w, h: f.h, region: { x: 0, y: 0, w: f.w, h: f.h } } : null;
+  }
+
+  private cameraSource(t: number): Source | null {
+    const cv = this.cameraVideo;
+    if (!this.delayMs || !this.rings) return ready(cv) ? { img: cv, w: cv.videoWidth, h: cv.videoHeight } : null;
+    const f: StoredFrame | null = this.rings.camera.at(t, 1000 / useRecord.getState().fps);
+    return f && f.w > 2 ? { img: f.canvas, w: f.w, h: f.h } : null;
+  }
+
+  /** The window sizes a stored frame must serve: this scene's, and the one before it while a switch into this one can still be drawn. */
+  private boxes(L: RecordLayout, src: Rect | null, now: number) {
+    const modes = [L.mode, this.modes.at(now - SCENE_MS - 200) ?? L.mode];
+    let screen = { w: 0, h: 0 }, camera = { w: 0, h: 0 };
+    for (const mode of modes) {
+      const g = sceneGeometry({ ...L, mode }, src);
+      if (g.screen) screen = { w: Math.max(screen.w, g.screen.rect.w), h: Math.max(screen.h, g.screen.rect.h) };
+      if (g.camera) camera = { w: Math.max(camera.w, g.camera.rect.w), h: Math.max(camera.h, g.camera.rect.h) };
+    }
+    return { screen, camera };
+  }
+
+  /** Each tick of a delayed take: the newest screen and camera frames into their rings, at the size they will be shown. */
+  private storeFrames(L: RecordLayout, src: Rect | null, now: number) {
+    const rings = this.rings!;
+    const box = this.boxes(L, src, now);
+    const sv = this.screenVideo, cv = this.cameraVideo;
+    if (src && box.screen.w) {
+      const s = storeSize({ w: src.w, h: src.h }, box.screen, this.zoom.opts.scale);
+      rings.screen.push(sv, src.x, src.y, src.w, src.h, s.w, s.h, now);
+    }
+    if (ready(cv) && box.camera.w) {
+      // the whole camera frame, enough of it for the window's crop
+      const c = coverCrop(cv.videoWidth, cv.videoHeight, box.camera.w, box.camera.h);
+      const s = storeSize({ w: cv.videoWidth, h: cv.videoHeight }, { w: box.camera.w * (cv.videoWidth / c.w), h: box.camera.h * (cv.videoHeight / c.h) });
+      rings.camera.push(cv, 0, 0, cv.videoWidth, cv.videoHeight, s.w, s.h, now);
+    }
+  }
+
+  /**
+   * Starts drawing the picture DELAY_MS behind real time for a take, when auto zoom is on and the
+   * frames fit in memory; returns the delay (0: the take runs live) and why not, for a hint.
+   */
+  beginDelay(): { delayMs: number; reason: string | null } {
+    const st = useRecord.getState();
+    const L = currentLayout(st);
+    const sv = this.screenVideo, cv = this.cameraVideo;
+    const src = ready(sv) ? cropSource(L.crop, sv.videoWidth, sv.videoHeight) : null;
+    const box = this.boxes(L, src, Date.now());
+    const screen = src ? storeSize({ w: src.w, h: src.h }, box.screen, st.zoomScale) : { w: 0, h: 0 };
+    const camera = ready(cv) && box.camera.w ? storeSize({ w: cv.videoWidth, h: cv.videoHeight }, box.camera) : { w: 0, h: 0 };
+    const plan = planDelay({
+      zoomEnabled: L.zoom.enabled, normalized: !!st.tracking?.normalized, mode: L.mode, fps: L.fps, screen, camera,
+      deviceMemoryGb: (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
+    });
+    if (!plan.delayMs || !src) return { delayMs: 0, reason: plan.reason };
+    const slots = ringSlots(plan.delayMs, 1000 / L.fps);
+    this.rings = { screen: new FrameRing(slots), camera: new FrameRing(slots) };
+    this.delayMs = plan.delayMs;
+    this.overlays.delayMs = plan.delayMs;
+    return { delayMs: plan.delayMs, reason: null };
+  }
+
+  /** Back to the live picture once the take's composite has stopped. */
+  endDelay() {
+    this.delayMs = 0;
+    this.overlays.delayMs = 0;
+    this.rings?.screen.release();
+    this.rings?.camera.release();
+    this.rings = null;
   }
 
   /** Where everything sits this frame: the scene's own layout, or part way through a switch into it. */
@@ -241,7 +347,7 @@ class Compositor {
     }
     let g = target;
     if (this.trans) {
-      const t = (now - this.trans.start) / SCENE_MS;
+      const t = Math.max(0, (now - this.trans.start) / SCENE_MS);
       if (t >= 1) this.trans = null;
       else g = blendScenes(this.trans.from, target, easeInOutCubic(t));
     }
@@ -250,10 +356,13 @@ class Compositor {
   }
 
   /** The kept part of the screen in its window, the zoom inside it, and the pointer layer on top. */
-  private drawScreen(layer: Layer, src: Rect, L: RecordLayout, st: ReturnType<typeof useRecord.getState>, now: number, k: number) {
+  private drawScreen(layer: Layer, source: Source & { region: Rect }, L: RecordLayout, st: ReturnType<typeof useRecord.getState>, now: number, k: number, cursor: Pt | null) {
     const ctx = this.ctx;
     const r = layer.rect;
-    const f = L.zoom.enabled && st.tracking?.normalized ? this.zoom.update(now, this.cursor) : { scale: 1, x: 0.5, y: 0.5 };
+    const src = source.region;
+    // a delayed take knows where the cursor is going next, as the export does
+    const ahead = this.delayMs ? cursorAt(this.cursorTrail, now + this.zoom.opts.cursorLeadMs) : cursor;
+    const f = L.zoom.enabled && st.tracking?.normalized ? this.zoom.update(now, cursor, ahead) : { scale: 1, x: 0.5, y: 0.5 };
     const sw = src.w / f.scale, sh = src.h / f.scale;
     const sx = src.x + Math.min(src.w - sw, Math.max(0, f.x * src.w - sw / 2));
     const sy = src.y + Math.min(src.h - sh, Math.max(0, f.y * src.h - sh / 2));
@@ -264,7 +373,7 @@ class Compositor {
     this.roundRect(r.x, r.y, r.w, r.h, layer.radius);
     ctx.clip();
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(this.screenVideo, sx, sy, sw, sh, r.x, r.y, r.w, r.h);
+    ctx.drawImage(source.img, sx, sy, sw, sh, r.x, r.y, r.w, r.h);
     const view = { sx: (sx - src.x) / src.w, sy: (sy - src.y) / src.h, sw: sw / src.w, sh: sh / src.h };
     this.overlays.drawScreen(ctx, r, view, k, now, f.scale, layer.alpha);
     ctx.restore();
@@ -273,9 +382,8 @@ class Compositor {
   }
 
   /** The camera as a bubble, a window, or the whole frame (and anything in between during a switch). */
-  private drawCamera(layer: CameraLayer, k: number, settled: boolean) {
+  private drawCamera(layer: CameraLayer, cam: Source | null, k: number, settled: boolean) {
     const ctx = this.ctx;
-    const cv = this.cameraVideo;
     const b = layer.rect, radius = layer.radius;
     ctx.save();
     ctx.globalAlpha = layer.alpha;
@@ -294,9 +402,9 @@ class Compositor {
     ctx.clip();
     ctx.fillStyle = layer.bubble ? "#1b1b1e" : "#000";
     ctx.fillRect(b.x, b.y, b.w, b.h);
-    if (ready(cv)) {
-      const c = coverCrop(cv.videoWidth, cv.videoHeight, b.w, b.h);
-      ctx.drawImage(cv, c.x, c.y, c.w, c.h, b.x, b.y, b.w, b.h);
+    if (cam) {
+      const c = coverCrop(cam.w, cam.h, b.w, b.h);
+      ctx.drawImage(cam.img, c.x, c.y, c.w, c.h, b.x, b.y, b.w, b.h);
     }
     ctx.restore();
     if (layer.border > 0) this.frameBorder(b, radius, layer.border, layer.borderColor);
