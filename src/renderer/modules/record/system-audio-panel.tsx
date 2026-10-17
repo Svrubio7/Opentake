@@ -1,13 +1,12 @@
 // The Computer sound controls in the Record panel's Recording card: the switch, its level and a meter.
 import { useEffect, useRef, useState } from "react";
 import type { SystemAudioSupport } from "@shared/types";
+import { t } from "@shared/i18n";
 import { Slider, Switch } from "../../ui";
 import { isBusy, useRecord } from "./store";
 import { systemAudioSupport, systemSound, useSystemSound } from "./system-audio";
 import { meterFill, systemAudioKey } from "./system-audio-core";
 import "./system-audio.css";
-
-const ECHO_HINT = "Records what your computer plays, like a video or an app. With the mic open, use headphones so it does not also pick up the speakers.";
 
 /** A small live bar of the computer sound after the level, drawn without React state per frame. */
 function MiniMeter() {
@@ -51,12 +50,12 @@ export function SystemSoundControls() {
   const unsupported = support != null && !support.supported;
   return (
     <>
-      <Switch label="Computer sound" hint={ECHO_HINT} checked={on && !unsupported} disabled={busy || unsupported}
+      <Switch label={t("record.sys.label")} hint={t("record.sys.hint")} checked={on && !unsupported} disabled={busy || unsupported}
         onChange={(v) => set({ [key]: v })} />
       {unsupported && <p className="note">{support.reason}</p>}
       {on && !unsupported && (
         <>
-          <Slider label="Computer sound level" value={level} min={0} max={2} step={0.05}
+          <Slider label={t("record.sys.level")} value={level} min={0} max={2} step={0.05}
             format={(v) => `${Math.round(v * 100)}%`} onChange={(systemAudioLevel) => set({ systemAudioLevel })}
             onDoubleClick={() => set({ systemAudioLevel: 1 })} side={status === "on" ? <MiniMeter /> : null} />
           {status === "failed" && reason && <p className="note note-danger">{reason}</p>}

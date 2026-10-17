@@ -5,6 +5,7 @@
 // DelayNode, and the composite recorder starts, pauses and stops DELAY_MS after the others, so the
 // file's clock is still the take's clock (timeline, ISO tracks and exports need no shift).
 import type { RecordMode } from "@shared/types";
+import { t } from "../../../shared/i18n";
 
 /** How far behind the picture runs: the zoom's lead, so a live zoom lands as the export's does. */
 export const DELAY_MS = 800;
@@ -63,10 +64,10 @@ export function planDelay(i: DelayInput): { delayMs: number; bytes: number; reas
   // the browser reports at most 8 GB: a quarter of it (2 GB) is never the limit, the budget is
   const share = i.deviceMemoryGb ? i.deviceMemoryGb * 1024 ** 3 * 0.25 : Infinity;
   if (i.deviceMemoryGb && i.deviceMemoryGb < 4) {
-    return { delayMs: 0, bytes, reason: "this computer has little memory, so the zoom follows each click instead of arriving with it" };
+    return { delayMs: 0, bytes, reason: t("record.delay.lowMemory") };
   }
   if (bytes > Math.min(RING_BUDGET, share)) {
-    return { delayMs: 0, bytes, reason: "at this size and frame rate the zoom would need too much memory to arrive with each click, so it follows them (a lower frame rate or output size fixes it)" };
+    return { delayMs: 0, bytes, reason: t("record.delay.tooBig") };
   }
   return { delayMs: DELAY_MS, bytes, reason: null };
 }

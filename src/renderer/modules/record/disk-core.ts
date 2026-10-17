@@ -1,5 +1,6 @@
 // Disk space decisions for a take: warn before it starts, warn and then stop while it runs.
 // Pure: bytes and bitrates in, a verdict out.
+import { num, t } from "../../../shared/i18n";
 
 /** Under this much free space a new take starts with a warning. */
 export const LOW_DISK_BYTES = 2 * 1024 ** 3;
@@ -30,19 +31,19 @@ export function minutesLeft(freeBytes: number, bitsPerSecond: number): number {
 export type DiskLevel = "ok" | "low" | "stop";
 export interface DiskVerdict { level: DiskLevel; message?: string }
 
-const gb = (b: number) => (b / 1024 ** 3).toFixed(1);
+const gb = (b: number) => num(b / 1024 ** 3, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export function diskBeforeTake(freeBytes: number): DiskVerdict {
   if (freeBytes >= LOW_DISK_BYTES) return { level: "ok" };
-  return { level: "low", message: `Only ${gb(freeBytes)} GB free on the recordings drive. The take may stop early.` };
+  return { level: "low", message: t("record.disk.low", { gb: gb(freeBytes) }) };
 }
 
 export function diskWhileRecording(freeBytes: number, bitsPerSecond: number): DiskVerdict {
   const m = minutesLeft(freeBytes, bitsPerSecond);
-  if (m < STOP_MINUTES) return { level: "stop", message: "Stopped: the recordings drive is almost full. The take is saved." };
+  if (m < STOP_MINUTES) return { level: "stop", message: t("record.disk.stop") };
   if (m < WARN_MINUTES) {
     const n = Math.floor(m);
-    return { level: "low", message: `The recordings drive is almost full: about ${n} minute${n === 1 ? "" : "s"} left.` };
+    return { level: "low", message: t("record.disk.minutes", { count: n }) };
   }
   return { level: "ok" };
 }

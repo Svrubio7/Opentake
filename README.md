@@ -6,6 +6,8 @@ OpenTake is a free desktop app for recording yourself: it cleans up your microph
 
 Made by [Quetzal](https://quetzaltech.app). Free for everyone, open source under the MIT licence.
 
+OpenTake speaks English and Spanish (Spain). It starts in your system's language, and Settings switches it at any time without a restart. The words live in `src/shared/i18n`, one file per language and area, with a [glossary](src/shared/i18n/GLOSSARY.md) for the Spanish.
+
 ## What it does
 
 **Microphone**

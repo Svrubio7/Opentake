@@ -2,6 +2,7 @@
 // The renderer imports these too, so the Settings preview and the export dialog show the same name
 // the main process will write.
 import type { AfterExport, AppSettings, ExportDestination } from "../shared/types";
+import { t } from "../shared/i18n";
 
 export const DEFAULT_NAME_TEMPLATE = "{date} {time} {title} {preset}";
 
@@ -13,6 +14,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   nameTemplate: DEFAULT_NAME_TEMPLATE,
   afterExport: "reveal",
   pastRecordingsDirs: [],
+  language: "system",
 };
 
 /** The words a name template can use, for the Settings help line. */
@@ -42,6 +44,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     nameTemplate: template.trim() ? template : DEFAULT_NAME_TEMPLATE,
     afterExport: AFTER.includes(r.afterExport as AfterExport) ? (r.afterExport as AfterExport) : "reveal",
     pastRecordingsDirs: Array.isArray(r.pastRecordingsDirs) ? r.pastRecordingsDirs.filter(isPath).slice(0, MAX_PAST) : [],
+    language: r.language === "en" || r.language === "es" ? r.language : "system",
   };
 }
 
@@ -123,12 +126,12 @@ export function uniqueName(stem: string, ext: string, exists: (fileName: string)
 /** An export failure in words a person can act on (the ffmpeg detail stays for the log). */
 export function friendlyExportError(message: string): string {
   if (/No space left on device|ENOSPC|not enough space|disk full/i.test(message)) {
-    return "The drive is full. Free some space, or choose an export folder on another drive in Settings.";
+    return t("main.export.driveFull");
   }
   if (/Permission denied|EACCES|EPERM|read-only file system|EROFS/i.test(message)) {
-    return "OpenTake cannot write to that folder. Choose another one in Settings.";
+    return t("main.export.cannotWrite");
   }
-  if (/Export cancelled/.test(message)) return "Export cancelled.";
+  if (/Export cancelled/.test(message)) return t("main.export.cancelled");
   return message;
 }
 

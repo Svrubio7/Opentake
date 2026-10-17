@@ -1,6 +1,7 @@
 // The prompter's link to the recorder: it opens by itself when a take starts, and the record bar
 // has a button for it, so nobody has to find the Teleprompter tab before reading.
 import { ScrollText } from "lucide-react";
+import { t } from "@shared/i18n";
 import { Button } from "../../ui";
 import { useRecord } from "../record/store";
 import { hidePrompter, parsedFor, prompterShown, showPrompter, usePrompter } from "./store";
@@ -26,7 +27,7 @@ export function linkPrompterToRecorder() {
 export function PrompterToggle() {
   const shown = usePrompter(prompterShown);
   const words = usePrompter((x) => parsedFor(x.state).words.length);
-  const title = !words ? "Write a script in the Teleprompter tab" : shown ? "Hide the teleprompter" : "Show the teleprompter";
+  const title = !words ? t("prompter.toggle.write") : shown ? t("prompter.toggle.hide") : t("prompter.toggle.show");
   return (
     <Button size="icon" variant={shown ? "outline" : "ghost"} className={shown ? "rec-tp on" : "rec-tp"} title={title} aria-label={title} aria-pressed={shown}
       onClick={() => (!words ? openTab("prompter") : shown ? hidePrompter() : showPrompter())}>

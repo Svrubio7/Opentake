@@ -5,6 +5,7 @@ import { IPC } from "../../shared/ipc";
 import type { KeyPress } from "../../shared/types";
 import { ALT_GR, KEY_NAMES, MODIFIER_CODES, isCombo } from "../../renderer/modules/record/keys-core";
 import { globalHook, globalHookError, type HookKeyEvent } from "./pointer";
+import { t } from "../../shared/i18n";
 
 let target: WebContents | null = null;
 let showAll = false;
@@ -29,7 +30,7 @@ function onKeyUp(e: HookKeyEvent) {
 /** Starts sending key presses to the window; false (with the reason) when global hooks are unavailable. */
 export function startKeys(wc: WebContents, opts: { showAll?: boolean }): { ok: boolean; reason?: string } {
   const h = globalHook();
-  if (!h) return { ok: false, reason: globalHookError() ?? "Global key hooks are unavailable" };
+  if (!h) return { ok: false, reason: globalHookError() ?? t("ov.keys.hookOff") };
   if (!listening) {
     h.on("keydown", onKeyDown);
     h.on("keyup", onKeyUp);

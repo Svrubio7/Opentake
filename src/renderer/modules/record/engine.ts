@@ -4,6 +4,7 @@
 // rings of stored frames, so the zoom can start before the click it serves.
 import { getStream, publishStream, subscribeStreams } from "@core/streams";
 import type { CursorSample, RecordLayout, RecordMode } from "@shared/types";
+import { t } from "../../../shared/i18n";
 import { api, hasBridge } from "./api";
 import {
   coverCrop, cropSource, gradientLine, needsCamera, needsScreen, pxScale, resolveBackground, toCropSpace, type Rect,
@@ -142,7 +143,7 @@ class Compositor {
     void this.screenVideo.play().catch(() => {});
     stream.getVideoTracks()[0]?.addEventListener("ended", () => {
       if (this.screenStream === stream) {
-        useRecord.getState().set({ sourceId: null, sourceName: null, displayId: null, notice: "The captured window closed." });
+        useRecord.getState().set({ sourceId: null, sourceName: null, displayId: null, notice: t("record.notice.windowClosedShort") });
         void this.useScreen(null, null);
       }
     });
@@ -250,8 +251,8 @@ class Compositor {
     if (g.screen && src && screen) this.drawScreen(g.screen, screen, L, st, at, k, cursor);
     if (g.camera) this.drawCamera(g.camera, camera, k, !this.trans && L.mode === "screen-camera");
     if (!this.trans) {
-      if (needsScreen(L.mode) && !src) this.hint(st.sourceId ? "Starting the screen capture" : "Pick a screen or a window to record");
-      else if (L.mode === "camera" && !camera) this.hint("Waiting for the camera");
+      if (needsScreen(L.mode) && !src) this.hint(st.sourceId ? t("record.stage.starting") : t("record.stage.pick"));
+      else if (L.mode === "camera" && !camera) this.hint(t("record.stage.waitingCamera"));
     }
     this.overlays.drawFrame(this.ctx, W, H, k, at, () => this.background(W, H));
   }

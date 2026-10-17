@@ -1,13 +1,35 @@
 // When a message under the stage stops being true. Every notice and error the record bar can show is
 // matched here with the state that makes it stale, so a message never outlives its reason (tested in
 // notice-core.test.ts). Informational notices also go away by themselves after a while.
+// A message is kept in the language it was shown in, so each one is matched in English and Spanish.
 import type { RecordMode } from "@shared/types";
+import { tIn, type Key, type Msg } from "../../../shared/i18n";
+import { en } from "../../../shared/i18n/en";
+import { es } from "../../../shared/i18n/es";
 import { needsScreen } from "./layout-core";
 
-export const PICK_NOTICE = "Choose a screen or a window, then press Record again.";
-export const WINDOW_CLOSED_NOTICE = "The captured window closed. Choose another screen or window.";
-export const NAME_CARD_NOTICE = "Turn on the name card first (Record, Overlays).";
-export const SAVED_NOTICE = "Saved. Your take is in Takes.";
+/** The English forms (what the tests and the logs read); show them with t() of the same key. */
+export const PICK_NOTICE = tIn("en", "record.notice.pick");
+export const WINDOW_CLOSED_NOTICE = tIn("en", "record.notice.windowClosed");
+export const NAME_CARD_NOTICE = tIn("en", "record.notice.nameCard");
+export const SAVED_NOTICE = tIn("en", "record.notice.saved");
+
+const forms = (m: Msg) => (typeof m === "string" ? [m] : [m.one, m.other]);
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const cache = new Map<string, RegExp>();
+/** A template as a pattern: every {variable} matches anything. */
+const pattern = (tpl: string) => {
+  let re = cache.get(tpl);
+  if (!re) { re = new RegExp(`^${tpl.split(/\{\w+\}/).map(esc).join("[\\s\\S]*?")}$`); cache.set(tpl, re); }
+  return re;
+};
+/** The message is one of these keys, in either language. */
+const is = (msg: string, ...keys: Key[]) => keys.some((k) => [...forms(en[k]), ...forms(es[k])].some((f) => pattern(f).test(msg)));
+
+// folder problems also come from the main process (settings.ts) in its own words
+const FOLDER_PROBLEM = /recordings folder .*(is not available|cannot write)|cannot write to the recordings folder|carpeta de grabaciones .*(no está disponible|no puede escribir)|no puede escribir en la carpeta de grabaciones/i;
+// "a take was recovered" comes from the shell
+const RECOVERED = /(was|were) recovered and (is|are) in Takes|recuperadas? .*\bTomas\b/i;
 
 export interface MessageState {
   mode: RecordMode;
@@ -22,21 +44,21 @@ export interface MessageState {
 /** Whether a message no longer applies. */
 export function isStale(msg: string, s: MessageState): boolean {
   const screenGone = !needsScreen(s.mode) || !!s.sourceId;
-  if (msg === PICK_NOTICE || msg === WINDOW_CLOSED_NOTICE || msg === "The captured window closed.") return screenGone;
-  if (msg.startsWith("Could not capture ")) return screenGone;
-  if (/recordings folder .*(is not available|cannot write)|cannot write to the recordings folder/i.test(msg)) return s.folderOk === true;
+  if (is(msg, "record.notice.pick", "record.notice.windowClosed", "record.notice.windowClosedShort")) return screenGone;
+  if (is(msg, "record.picker.captureFailed")) return screenGone;
+  if (FOLDER_PROBLEM.test(msg) || is(msg, "record.notice.folderMissing", "record.notice.folderReadonly")) return s.folderOk === true;
   // about the take that was running: once it has ended the message has no subject
-  if (msg.startsWith("Recording without computer sound") || /recordings drive is almost full: about/.test(msg) || /GB free on the recordings drive\. The take may stop early/.test(msg)) {
+  if (is(msg, "record.notice.noComputerSound", "record.notice.noComputerSoundWhy", "record.disk.minutes", "record.disk.low")) {
     return s.status === "idle";
   }
-  if (msg === NAME_CARD_NOTICE) return s.nameCard;
+  if (is(msg, "record.notice.nameCard")) return s.nameCard;
   return false;
 }
 
 /** How long an informational notice stays (ms); null = until dismissed or stale. Errors never time out. */
 export function noticeLifetimeMs(msg: string): number | null {
-  if (msg === SAVED_NOTICE) return 12_000;
-  if (msg === NAME_CARD_NOTICE) return 8_000;
-  if (/(was|were) recovered and (is|are) in Takes/.test(msg)) return 20_000;
+  if (is(msg, "record.notice.saved")) return 12_000;
+  if (is(msg, "record.notice.nameCard")) return 8_000;
+  if (RECOVERED.test(msg)) return 20_000;
   return null;
 }

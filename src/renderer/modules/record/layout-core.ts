@@ -1,5 +1,6 @@
 // Layout and recording decisions as pure functions (tested in layout-core.test.ts).
 import type { BubbleLayout, FrameCrop, OutputAspect, RecordLayout, RecordMode } from "@shared/types";
+import { t, type Key } from "../../../shared/i18n";
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -202,21 +203,22 @@ export function formatClock(ms: number): string {
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-const preset = (id: string, label: string, ...stops: string[]) => ({
-  id, label, stops, css: stops.length > 1 ? `linear-gradient(135deg,${stops.join(",")})` : stops[0],
+// the label is read in the current language each time (the app switches language live)
+const preset = (id: string, key: Extract<Key, `record.bg.${string}`>, ...stops: string[]) => ({
+  id, get label() { return t(key); }, stops, css: stops.length > 1 ? `linear-gradient(135deg,${stops.join(",")})` : stops[0],
 });
 
-export const BACKGROUNDS: { id: string; label: string; css: string; stops: string[] }[] = [
-  preset("none", "None", "#000000"),
-  preset("graphite", "Graphite", "#2b2d33", "#0f1012"),
-  preset("midnight", "Midnight", "#1e3a8a", "#0f172a"),
-  preset("emerald", "Emerald", "#0f8a63", "#06281d"),
-  preset("dusk", "Dusk", "#ff7a59", "#7b4dff"),
-  preset("sea", "Sea", "#1fd1a5", "#2563eb"),
-  preset("rose", "Rose", "#fbcfe8", "#c084fc"),
-  preset("sand", "Sand", "#f6d8b5", "#c9a27e"),
-  preset("white", "White", "#f4f4f5"),
-  preset("black", "Black", "#000000"),
+export const BACKGROUNDS: { id: string; readonly label: string; css: string; stops: string[] }[] = [
+  preset("none", "record.bg.none", "#000000"),
+  preset("graphite", "record.bg.graphite", "#2b2d33", "#0f1012"),
+  preset("midnight", "record.bg.midnight", "#1e3a8a", "#0f172a"),
+  preset("emerald", "record.bg.emerald", "#0f8a63", "#06281d"),
+  preset("dusk", "record.bg.dusk", "#ff7a59", "#7b4dff"),
+  preset("sea", "record.bg.sea", "#1fd1a5", "#2563eb"),
+  preset("rose", "record.bg.rose", "#fbcfe8", "#c084fc"),
+  preset("sand", "record.bg.sand", "#f6d8b5", "#c9a27e"),
+  preset("white", "record.bg.white", "#f4f4f5"),
+  preset("black", "record.bg.black", "#000000"),
 ];
 
 /** The background kinds a person sets up themself, beside the presets. */

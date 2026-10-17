@@ -2,9 +2,10 @@
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
 import {
   AppWindow, ArrowDownUp, AudioLines, Clapperboard, CircleDot, Crop, FileText, FileVideo, FolderOpen, FolderOutput, Frame, IdCard, Image,
-  Info, Keyboard, LifeBuoy, Mic, MousePointer2, Palette, PanelTop, PenLine, PictureInPicture2, Sparkle, Stamp, SunMedium, Video, ZoomIn,
+  Info, Keyboard, Languages, LifeBuoy, Mic, MousePointer2, Palette, PanelTop, PenLine, PictureInPicture2, Sparkle, Stamp, SunMedium, Video, ZoomIn,
   type LucideIcon,
 } from "lucide-react";
+import { t, type Key } from "@shared/i18n";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -23,13 +24,16 @@ export function Hint({ text }: { text: string }) {
 }
 
 /** Each card's mark by its title, so every module's cards carry one without passing it (an `icon` prop wins). */
-const CARD_MARKS: Record<string, LucideIcon> = {
-  Look: Palette, Frame, Background: Image, "Screen window": AppWindow, "Camera window": AppWindow, Camera: Video, Pointer: MousePointer2,
-  "Draw on screen": PenLine, Keystrokes: Keyboard, Logo: Stamp, "Name card": IdCard, "Intro and outro": Clapperboard, Recording: CircleDot,
-  "Auto zoom": ZoomIn, "When you stop": FileVideo, Input: Mic, Sound: AudioLines, "Light and colour": SunMedium, Detail: Sparkle, Framing: Crop,
-  Scroll: ArrowDownUp, Script: FileText, Overlay: PanelTop, "Pop-out window": PictureInPicture2, Keys: Keyboard, "Recordings folder": FolderOpen,
-  Exports: FolderOutput, Help: LifeBuoy,
-};
+const CARD_MARKS: [Extract<Key, `card.${string}`>, LucideIcon][] = [
+  ["card.look", Palette], ["card.frame", Frame], ["card.background", Image], ["card.screenWindow", AppWindow], ["card.cameraWindow", AppWindow],
+  ["card.camera", Video], ["card.pointer", MousePointer2], ["card.drawOnScreen", PenLine], ["card.keystrokes", Keyboard], ["card.logo", Stamp],
+  ["card.nameCard", IdCard], ["card.introOutro", Clapperboard], ["card.recording", CircleDot], ["card.autoZoom", ZoomIn], ["card.whenYouStop", FileVideo],
+  ["card.input", Mic], ["card.sound", AudioLines], ["card.lightColour", SunMedium], ["card.detail", Sparkle], ["card.framing", Crop],
+  ["card.scroll", ArrowDownUp], ["card.script", FileText], ["card.overlay", PanelTop], ["card.popOut", PictureInPicture2], ["card.keys", Keyboard],
+  ["card.recordingsFolder", FolderOpen], ["card.exports", FolderOutput], ["card.help", LifeBuoy], ["card.language", Languages],
+];
+/** a card title is already in the current language: its mark is the one whose key reads the same now */
+const markFor = (title: string) => CARD_MARKS.find(([k]) => t(k) === title)?.[1];
 
 /** The card's mark on its own, for cards that build their header by hand. */
 export function CardMark({ icon: Icon }: { icon: LucideIcon }) {
@@ -37,7 +41,7 @@ export function CardMark({ icon: Icon }: { icon: LucideIcon }) {
 }
 
 export function Card({ title, hint, action, icon, className, children }: { title?: ReactNode; hint?: string; action?: ReactNode; icon?: LucideIcon | null; className?: string; children?: ReactNode }) {
-  const Mark = icon === null ? null : icon ?? (typeof title === "string" ? CARD_MARKS[title] : undefined);
+  const Mark = icon === null ? null : icon ?? (typeof title === "string" ? markFor(title) : undefined);
   return (
     <section className={cx("card", className)}>
       {(title || action) && (
@@ -82,7 +86,7 @@ export function Switch({ checked, onChange, label, hint, disabled }: { checked: 
   return (
     <div className={cx("switch-row", disabled && "disabled")} onClick={() => !disabled && onChange(!checked)}>
       <span>{label}{hint && <Hint text={hint} />}</span>
-      <SwitchControl checked={checked} onChange={onChange} label={typeof label === "string" ? label : "Toggle"} disabled={disabled} />
+      <SwitchControl checked={checked} onChange={onChange} label={typeof label === "string" ? label : t("ui.toggle")} disabled={disabled} />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 // OWNED BY: shell agent. The updater's decisions, kept free of Electron so they can be tested.
 import type { UpdateMode } from "../shared/types";
+import { t } from "../shared/i18n";
 
 export const FIRST_CHECK_MS = 10_000;
 export const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -60,8 +61,8 @@ export function canRestart(s: { ready: boolean; busy: boolean; mode: UpdateMode;
 /** A plain sentence for an updater error (network errors are the common case and say so). */
 export function errorText(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e ?? "");
-  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|net::ERR_/i.test(msg)) return "Could not reach GitHub. Check your connection.";
-  if (/404|No published versions|Cannot find latest/i.test(msg)) return "No published release was found.";
-  if (/rate limit|403/i.test(msg)) return "GitHub is busy. Try again in a while.";
-  return "The update check failed.";
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|net::ERR_/i.test(msg)) return t("main.update.noNetwork");
+  if (/404|No published versions|Cannot find latest/i.test(msg)) return t("main.update.noRelease");
+  if (/rate limit|403/i.test(msg)) return t("main.update.busy");
+  return t("main.update.failed");
 }

@@ -3,6 +3,7 @@
 // The plain "Export MP4" with no edit keeps using compositeArgs / hiresArgs in ffmpeg-core.ts.
 import type { ExportOutput, ExportPreset, TimeRange } from "../../shared/types";
 import type { hiresGraph } from "./ffmpeg-core";
+import { t } from "../../shared/i18n";
 
 export interface PresetSpec {
   label: string;
@@ -15,14 +16,15 @@ export interface PresetSpec {
   maxMB?: number;
 }
 
+// label and hint are read in the current language each time (getters), so a language switch shows at once
 export const PRESETS: Record<ExportPreset, PresetSpec> = {
-  original: { label: "Original", slug: "", size: null, hint: "The take's own frame and size" },
-  youtube: { label: "YouTube 1080p", slug: "youtube", size: { width: 1920, height: 1080 }, hint: "1920 by 1080, 16:9" },
-  vertical: { label: "Reels, TikTok, Shorts", slug: "reels", size: { width: 1080, height: 1920 }, hint: "1080 by 1920, 9:16", maxSec: 180 },
-  square: { label: "Square", slug: "square", size: { width: 1080, height: 1080 }, hint: "1080 by 1080, 1:1" },
-  linkedin: { label: "LinkedIn", slug: "linkedin", size: { width: 1920, height: 1080 }, hint: "1920 by 1080, up to 10 minutes", maxSec: 600 },
-  x: { label: "X (Twitter)", slug: "x", size: { width: 1280, height: 720 }, hint: "1280 by 720, up to 2:20 and 512 MB", maxSec: 140, maxMB: 512 },
-  custom: { label: "Custom", slug: "custom", size: null, hint: "Your own width and height" },
+  original: { get label() { return t("editor.preset.original"); }, get hint() { return t("editor.preset.original.hint"); }, slug: "", size: null },
+  youtube: { get label() { return t("editor.preset.youtube"); }, get hint() { return t("editor.preset.youtube.hint"); }, slug: "youtube", size: { width: 1920, height: 1080 } },
+  vertical: { get label() { return t("editor.preset.vertical"); }, get hint() { return t("editor.preset.vertical.hint"); }, slug: "reels", size: { width: 1080, height: 1920 }, maxSec: 180 },
+  square: { get label() { return t("editor.preset.square"); }, get hint() { return t("editor.preset.square.hint"); }, slug: "square", size: { width: 1080, height: 1080 } },
+  linkedin: { get label() { return t("editor.preset.linkedin"); }, get hint() { return t("editor.preset.linkedin.hint"); }, slug: "linkedin", size: { width: 1920, height: 1080 }, maxSec: 600 },
+  x: { get label() { return t("editor.preset.x"); }, get hint() { return t("editor.preset.x.hint"); }, slug: "x", size: { width: 1280, height: 720 }, maxSec: 140, maxMB: 512 },
+  custom: { get label() { return t("editor.preset.custom"); }, get hint() { return t("editor.preset.custom.hint"); }, slug: "custom", size: null },
 };
 
 export const even = (v: number) => Math.max(2, Math.round(v / 2) * 2);
@@ -65,7 +67,7 @@ const range = (r: TimeRange) => (Number.isFinite(r.end) ? `start=${sec(r.start)}
 export function cutFilters(v: string, a: string | null, keep: TimeRange[] | null, tag = "k"): { parts: string[]; v: string; a: string | null } {
   if (!keep) return { parts: [], v, a };
   const n = keep.length;
-  if (n === 0) throw new Error("Nothing is left after the cuts");
+  if (n === 0) throw new Error(t("main.export.nothingLeft"));
   const parts: string[] = [];
   if (n === 1) {
     parts.push(`[${v}]trim=${range(keep[0])},setpts=PTS-STARTPTS[${tag}v]`);
@@ -123,10 +125,10 @@ export function exportWarnings(o: ExportOutput, durationSec: number | null): str
   const out: string[] = [];
   const p = PRESETS[o.preset];
   const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
-  if (durationSec != null && p.maxSec && durationSec > p.maxSec) out.push(`${p.label} takes up to ${clock(p.maxSec)}. This export runs ${clock(durationSec)}.`);
-  if (p.maxMB && o.quality.mode === "size" && o.quality.mb > p.maxMB) out.push(`${p.label} takes files up to ${p.maxMB} MB.`);
-  if (o.format === "gif" && durationSec != null && durationSec > 15) out.push("A GIF this long will be very large. Under 15 seconds works best.");
-  if (o.format === "gif" && o.quality.mode === "size") out.push("A GIF cannot aim for a file size; it uses its frame rate and width.");
+  if (durationSec != null && p.maxSec && durationSec > p.maxSec) out.push(t("editor.warn.tooLong", { preset: p.label, max: clock(p.maxSec), length: clock(durationSec) }));
+  if (p.maxMB && o.quality.mode === "size" && o.quality.mb > p.maxMB) out.push(t("editor.warn.tooBig", { preset: p.label, mb: p.maxMB }));
+  if (o.format === "gif" && durationSec != null && durationSec > 15) out.push(t("editor.warn.gifLong"));
+  if (o.format === "gif" && o.quality.mode === "size") out.push(t("editor.warn.gifSize"));
   return out;
 }
 

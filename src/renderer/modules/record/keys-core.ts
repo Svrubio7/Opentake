@@ -1,6 +1,16 @@
 // The keystroke overlay as pure functions (tested in keys-core.test.ts): key names, how a combo is
 // written, and how typing collapses into a word. Nothing here is ever written to disk.
 import type { KeyPress } from "@shared/types";
+import { t, type PlainKey } from "../../../shared/i18n";
+
+// keys with a printed name of their own on a Spanish keyboard (Mayús, Intro, Supr...); the rest read the same
+const PRINTED: Record<string, PlainKey> = {
+  Backspace: "record.key.Backspace", Enter: "record.key.Enter", "Caps Lock": "record.key.CapsLock", Space: "record.key.Space",
+  "Page Up": "record.key.PageUp", "Page Down": "record.key.PageDown", End: "record.key.End", Home: "record.key.Home",
+  Insert: "record.key.Insert", Delete: "record.key.Delete", "Print Screen": "record.key.PrintScreen",
+};
+/** A key's name as the keyboard prints it in the app's language. */
+export const shownKey = (key: string) => (PRINTED[key] ? t(PRINTED[key]) : key);
 
 /** libuiohook key codes (the same table as uiohook-napi's UiohookKey) to the label shown. */
 export const KEY_NAMES: Record<number, string> = {
@@ -29,9 +39,9 @@ export const isCombo = (p: Pick<KeyPress, "ctrl" | "alt" | "meta">) => p.ctrl ||
 export function formatCombo(p: KeyPress, mac: boolean): string {
   if (mac) {
     const mods = `${p.ctrl ? "⌃" : ""}${p.alt ? "⌥" : ""}${p.shift ? "⇧" : ""}${p.meta ? "⌘" : ""}`;
-    return mods ? `${mods} ${p.key}` : p.key;
+    return mods ? `${mods} ${shownKey(p.key)}` : shownKey(p.key);
   }
-  return [p.ctrl && "Ctrl", p.alt && "Alt", p.shift && "Shift", p.meta && "Win", p.key].filter(Boolean).join(" + ");
+  return [p.ctrl && "Ctrl", p.alt && "Alt", p.shift && t("record.key.Shift"), p.meta && "Win", shownKey(p.key)].filter(Boolean).join(" + ");
 }
 
 /** The character a key types, or null for keys that do not type one (Enter, arrows, F keys). */
@@ -59,10 +69,10 @@ export function pushKey(feed: KeyFeed | null, p: KeyPress, opts: { showAll: bool
   const typing = feed?.kind === "typing" && now - feed.at < KEY_HOLD_MS;
   if (p.key === "Backspace" && typing && feed) {
     const text = feed.text.slice(0, -1);
-    return text ? { text, kind: "typing", at: now } : { text: "Backspace", kind: "key", at: now };
+    return text ? { text, kind: "typing", at: now } : { text: shownKey("Backspace"), kind: "key", at: now };
   }
   const ch = typedChar(p);
-  if (ch == null) return { text: p.shift ? formatCombo(p, opts.mac) : p.key, kind: "key", at: now };
+  if (ch == null) return { text: p.shift ? formatCombo(p, opts.mac) : shownKey(p.key), kind: "key", at: now };
   const prev = typing && feed ? feed.text : "";
   const text = (prev + ch).replace(/^\s+/, "");
   if (!text) return feed;

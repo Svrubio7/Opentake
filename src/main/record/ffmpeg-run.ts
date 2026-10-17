@@ -2,6 +2,7 @@
 // hanging (tested in ffmpeg-run.test.ts). Activity is the -progress clock moving forward, or anything
 // new on stderr (the stats line of runs without -progress, warnings).
 import { spawn, type ChildProcess } from "node:child_process";
+import { t } from "../../shared/i18n";
 import { parseProgressTime } from "./ffmpeg-core";
 
 /** No forward progress for this long and the run is stopped (a 4K render still moves every second). */
@@ -9,7 +10,7 @@ export const STALL_MS = 90_000;
 
 export class FfmpegStalled extends Error {
   constructor(seconds: number) {
-    super(`ffmpeg stopped making progress for ${seconds} seconds, so the export was stopped. Try again.`);
+    super(t("main.export.stalled", { seconds }));
   }
 }
 

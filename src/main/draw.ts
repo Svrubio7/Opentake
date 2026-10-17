@@ -8,6 +8,7 @@ import { app, BrowserWindow, globalShortcut, ipcMain, screen, type Display, type
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { IPC } from "../shared/ipc";
+import { t } from "../shared/i18n";
 import type { DrawCommand, DrawStatus, DrawTool } from "../shared/types";
 import { shapeWithHole } from "./draw-core";
 import { loadPage, preloadPath } from "./index";
@@ -89,7 +90,7 @@ function makeWindow(bounds: Rectangle, title: string, part: "strokes" | "toolbar
 function ensureWindows() {
   const d = targetDisplay();
   if (!alive(overlay)) {
-    overlay = makeWindow(d.bounds, "OpenTake Drawing", "strokes");
+    overlay = makeWindow(d.bounds, t("draw.strokesWindowTitle"), "strokes");
     overlay.setIgnoreMouseEvents(true, { forward: true });
     overlay.on("closed", () => { overlay = null; empty = true; setDrawing(false); });
     // Windows raises a window it activates above every other topmost one: put the toolbar back on top
@@ -100,7 +101,7 @@ function ensureWindows() {
     if (now.x !== b.x || now.y !== b.y || now.width !== b.width || now.height !== b.height) overlay.setBounds(b);
   }
   if (!alive(toolbar)) {
-    toolbar = makeWindow(toolbarBounds(d), "OpenTake Drawing Tools", "toolbar");
+    toolbar = makeWindow(toolbarBounds(d), t("draw.toolbarWindowTitle"), "toolbar");
     // the recording shows the strokes, never our buttons
     toolbar.setContentProtection(true);
     toolbar.on("closed", () => { toolbar = null; });

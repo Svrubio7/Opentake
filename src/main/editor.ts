@@ -17,6 +17,7 @@ import { computePeaks, parseDurationMs } from "./record/export-core";
 import { hasAudioStream, validTakeId } from "./record/ffmpeg-core";
 import { MEDIA_SCHEME, mediaUrl, mimeFor, parseMediaUrl, parseRange } from "./record/media-core";
 import { listTakes, readMeta, takeDir, takeFiles } from "./record/takes";
+import { t } from "../shared/i18n";
 
 /** Must run before the app is ready: the player needs a scheme that streams and seeks. */
 export function registerMediaScheme() {
@@ -81,7 +82,7 @@ async function peaksFor(takeId: string): Promise<TakePeaks> {
   const dir = takeDir(takeId);
   const meta = await readMeta(takeId);
   const files = takeFiles(takeId, meta);
-  if (!files.composite) throw new Error("This take has no recording file");
+  if (!files.composite) throw new Error(t("main.export.noRecording"));
   const cache = join(dir, "peaks.json");
   try {
     if ((await stat(cache)).mtimeMs >= (await stat(files.composite)).mtimeMs) return JSON.parse(await readFile(cache, "utf8")) as TakePeaks;
@@ -101,7 +102,7 @@ export function registerEditorIpc() {
   ipcMain.handle(IPC.editorOpen, async (_e, takeId: string): Promise<EditorTake> => {
     if (!validTakeId(takeId)) throw new Error("bad take id");
     const take = (await listTakes()).find((t) => t.id === takeId);
-    if (!take?.files.composite) throw new Error("This take has no recording file");
+    if (!take?.files.composite) throw new Error(t("main.export.noRecording"));
     const preview = await ensurePreview(takeId, take.files.composite);
     const durationMs = take.durationMs ?? preview.durationMs;
     return {
@@ -139,9 +140,9 @@ export function registerEditorIpc() {
     if (!validTakeId(takeId)) throw new Error("bad take id");
     const meta = await readMeta(takeId);
     const files = takeFiles(takeId, meta);
-    if (!files.composite) throw new Error("This take has no recording file");
+    if (!files.composite) throw new Error(t("main.export.noRecording"));
     const r = await ff(["-nostdin", "-hide_banner", "-i", files.composite, "-vn", "-ac", "1", "-ar", "16000", "-f", "s16le", "pipe:1"]);
-    if (r.code !== 0 || !r.stdout.length) throw new Error("Could not read the take's sound");
+    if (r.code !== 0 || !r.stdout.length) throw new Error(t("main.editor.noSound"));
     return new Uint8Array(r.stdout.buffer, r.stdout.byteOffset, r.stdout.byteLength);
   });
 
@@ -149,7 +150,7 @@ export function registerEditorIpc() {
   ipcMain.handle(IPC.editorCaptionFiles, async (_e, takeId: string): Promise<string[]> => {
     if (!validTakeId(takeId)) throw new Error("bad take id");
     const caps = await readCaptions(takeId);
-    if (!caps?.lines.some((l) => lineText(l).trim())) throw new Error("There are no captions to save");
+    if (!caps?.lines.some((l) => lineText(l).trim())) throw new Error(t("main.editor.noCaptionsToSave"));
     const meta = await readMeta(takeId);
     const edit = await readEdit(takeId, meta.durationMs);
     const lines = remapLines(caps.lines, cutsSomething(edit, meta.durationMs) ? mergeTouching(edit!.keep) : null);

@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { ExternalLink, Info, RefreshCw } from "lucide-react";
 import { IPC } from "@shared/ipc";
 import type { UpdateStatus } from "@shared/types";
+import { t } from "@shared/i18n";
 import { Button } from "../../ui";
 import { useRecord } from "../record/store";
 import "./update.css";
@@ -48,21 +49,21 @@ export function UpdateNotice() {
       <BusySignal />
       {show && (
         <div className="upd-notice" role="status">
-          <p className="upd-title">{ready ? `OpenTake ${s.version} is ready` : `OpenTake ${s.version} is out`}</p>
+          <p className="upd-title">{ready ? t("update.ready", { version: s.version ?? "" }) : t("update.out", { version: s.version ?? "" })}</p>
           <p className="note">
-            {ready ? (s.busy || refused ? "Restart once your take is saved." : "Restart to update. It takes a few seconds.")
-              : s.mode === "install" ? "The download did not finish. Get it from the release page."
-                : isMac ? "This Mac build cannot update itself yet. Download the new version." : "This copy does not update itself. Download the new version."}
+            {ready ? (s.busy || refused ? t("update.restartLater") : t("update.restartNow"))
+              : s.mode === "install" ? t("update.downloadFailed")
+                : isMac ? t("update.macManual") : t("update.manual")}
           </p>
           <div className="upd-actions">
             {ready ? (
-              <Button variant="ink" size="sm" disabled={s.busy || s.fake} title={s.fake ? "A dev build never installs" : s.busy ? "Waits for the take or export to finish" : undefined}
-                onClick={async () => setRefused(!(await bridge()?.invoke(IPC.updateInstall)))}>Restart</Button>
+              <Button variant="ink" size="sm" disabled={s.busy || s.fake} title={s.fake ? t("update.devNever") : s.busy ? t("update.waitsBusy") : undefined}
+                onClick={async () => setRefused(!(await bridge()?.invoke(IPC.updateInstall)))}>{t("update.restart")}</Button>
             ) : (
-              <Button variant="ink" size="sm" onClick={openRelease}>Download</Button>
+              <Button variant="ink" size="sm" onClick={openRelease}>{t("update.download")}</Button>
             )}
-            <Button variant="ghost" size="sm" onClick={() => setLater(s.version ?? null)}>Later</Button>
-            <Button variant="link" className="upd-notes" onClick={openRelease}>What is new<ExternalLink /></Button>
+            <Button variant="ghost" size="sm" onClick={() => setLater(s.version ?? null)}>{t("update.later")}</Button>
+            <Button variant="link" className="upd-notes" onClick={openRelease}>{t("update.whatsNew")}<ExternalLink /></Button>
           </div>
         </div>
       )}
@@ -71,15 +72,19 @@ export function UpdateNotice() {
 }
 
 function statusLine(s: UpdateStatus): string {
-  if (s.mode === "off") return "Updates are checked in the installed app.";
+  if (s.mode === "off") return t("update.offLine");
+  const version = s.version ?? "";
   switch (s.phase) {
-    case "checking": return "Checking for updates";
-    case "none": return "You have the latest version.";
-    case "downloading": return `Downloading ${s.version ?? "the update"}${s.percent ? ` (${s.percent}%)` : ""}`;
-    case "ready": return `${s.version} is ready. Restart to update.`;
-    case "available": return `${s.version} is out.`;
-    case "error": return s.error ?? "The update check failed.";
-    default: return s.mode === "install" ? "Updates install themselves." : "You will be told when a new version is out.";
+    case "checking": return t("update.checking");
+    case "none": return t("update.latest");
+    case "downloading": {
+      const v = s.version ?? t("update.theUpdate");
+      return s.percent ? t("update.downloadingPct", { version: v, percent: s.percent }) : t("update.downloading", { version: v });
+    }
+    case "ready": return t("update.readyLine", { version });
+    case "available": return t("update.availableLine", { version });
+    case "error": return s.error ?? t("update.checkFailed");
+    default: return s.mode === "install" ? t("update.autoInstall") : t("update.notifyOnly");
   }
 }
 
@@ -114,27 +119,27 @@ export function AboutButton() {
       <button ref={btn} type="button" className={open ? "rail-item on" : "rail-item"} onClick={() => setOpen((o) => !o)} title={`OpenTake ${s.current}`}
         aria-expanded={open}>
         <Info className="rail-icon" />
-        <span className="rail-label">About <span className="upd-rail-version tnum">{s.current}</span></span>
-        {news && <i className="rail-dot" aria-label="Update available" />}
+        <span className="rail-label">{t("update.about")} <span className="upd-rail-version tnum">{s.current}</span></span>
+        {news && <i className="rail-dot" aria-label={t("update.available")} />}
       </button>
       {open && createPortal(
-        <div ref={pop} className="upd-pop" role="dialog" aria-label="About OpenTake">
+        <div ref={pop} className="upd-pop" role="dialog" aria-label={t("update.aboutAria")}>
           <p className="upd-title">OpenTake <span className="tnum">{s.current}</span></p>
-          <p className="note">Free and open source, by Quetzal.</p>
+          <p className="note">{t("update.byline")}</p>
           <p className={s.phase === "error" ? "note note-warn upd-line" : "note upd-line"} aria-live="polite">{statusLine(s)}</p>
           <div className="upd-actions">
             {s.phase === "ready" && s.mode === "install" ? (
-              <Button variant="ink" size="sm" disabled={s.busy || s.fake} onClick={() => void bridge()?.invoke(IPC.updateInstall)}>Restart to update</Button>
+              <Button variant="ink" size="sm" disabled={s.busy || s.fake} onClick={() => void bridge()?.invoke(IPC.updateInstall)}>{t("update.restartToUpdate")}</Button>
             ) : news ? (
-              <Button variant="ink" size="sm" onClick={openRelease}>Download</Button>
+              <Button variant="ink" size="sm" onClick={openRelease}>{t("update.download")}</Button>
             ) : (
               <Button size="sm" disabled={s.mode === "off" || checking || s.phase === "downloading"} onClick={() => void check()}>
-                <RefreshCw className={checking ? "upd-spin" : undefined} />Check for updates
+                <RefreshCw className={checking ? "upd-spin" : undefined} />{t("update.check")}
               </Button>
             )}
-            <Button variant="link" className="upd-notes" onClick={openRelease}>Release notes<ExternalLink /></Button>
+            <Button variant="link" className="upd-notes" onClick={openRelease}>{t("update.notes")}<ExternalLink /></Button>
           </div>
-          <a className="upd-repo" href={REPO_URL} target="_blank" rel="noreferrer">Source code on GitHub</a>
+          <a className="upd-repo" href={REPO_URL} target="_blank" rel="noreferrer">{t("update.source")}</a>
         </div>,
         document.body,
       )}

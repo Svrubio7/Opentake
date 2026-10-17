@@ -8,6 +8,7 @@ import { registerDraw } from "./draw";
 import { registerUpdater } from "./updater";
 import { registerSettingsIpc } from "./settings";
 import { guardClose, registerQuitIpc } from "./quit";
+import { registerLanguageIpc } from "./i18n";
 
 /** Loads one of the renderer pages (dev server in dev, built file in production). `part` picks a view inside the page. */
 export function loadPage(win: BrowserWindow, page: "index" | "teleprompter" | "draw", part?: string) {
@@ -66,6 +67,7 @@ app.whenReady().then(() => {
   if (!firstCopy) return;
   // Camera, mic and screen are the whole job of this app: grant media to our own pages.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media" || permission === "display-capture"));
+  registerLanguageIpc();
   registerRecordIpc(() => main);
   registerTeleprompterIpc(() => main);
   registerDraw(() => main);

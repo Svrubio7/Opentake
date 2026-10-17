@@ -91,4 +91,9 @@ export const IPC = {
   /** main -> main window: stop and save the take, then call appQuitNow */
   appQuitRequest: "take:app:quit-request",
   appQuitNow: "take:app:quit-now",
+  // i18n: the app's language
+  /** the language every window shows: { lang, locale, setting } */
+  langGet: "take:lang:get",
+  /** main -> every window: the language changed in Settings */
+  langChanged: "take:lang:changed",
 } as const;

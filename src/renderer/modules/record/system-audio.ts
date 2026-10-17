@@ -4,6 +4,7 @@
 import { create } from "zustand";
 import { IPC } from "@shared/ipc";
 import type { SystemAudioSupport } from "@shared/types";
+import { t } from "../../../shared/i18n";
 import { hasBridge } from "./api";
 import { useRecord } from "./store";
 import { peakDb } from "./system-audio-core";
@@ -26,8 +27,8 @@ export interface TakeAudio {
 
 let support: Promise<SystemAudioSupport> | null = null;
 export function systemAudioSupport(): Promise<SystemAudioSupport> {
-  if (!hasBridge()) return Promise.resolve({ supported: false, reason: "Computer sound needs the desktop app." });
-  support ??= (window.take.invoke(IPC.systemAudioSupport) as Promise<SystemAudioSupport>).catch(() => ({ supported: false, reason: "Could not check for computer sound." }));
+  if (!hasBridge()) return Promise.resolve({ supported: false, reason: t("record.sys.needsApp") });
+  support ??= (window.take.invoke(IPC.systemAudioSupport) as Promise<SystemAudioSupport>).catch(() => ({ supported: false, reason: t("record.sys.checkFailed") }));
   return support;
 }
 
@@ -93,13 +94,13 @@ class SystemSound {
       track.addEventListener("ended", () => {
         if (this.stream !== stream) return;
         this.close();
-        useSystemSound.getState().set({ status: "failed", reason: "The computer sound capture stopped." });
+        useSystemSound.getState().set({ status: "failed", reason: t("record.sys.stopped") });
       });
       st.set({ status: "on", reason: null });
       return true;
     } catch (e) {
       console.warn("[record] computer sound unavailable", e);
-      st.set({ status: "failed", reason: "Could not capture the computer sound on this system." });
+      st.set({ status: "failed", reason: t("record.sys.failed") });
       return false;
     }
   }
