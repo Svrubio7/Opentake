@@ -1,10 +1,10 @@
-import { useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { CircleDot, Mic, ScrollText, Video, type LucideIcon } from "lucide-react";
 import markWhite from "./assets/iconwhitenobg.png";
 import { AudioPanel } from "./modules/audio";
 import { CameraPanel } from "./modules/camera";
 import { RecordBar, RecordPanel, RecordRailStatus, Stage } from "./modules/record";
-import { PrompterOverlay, TeleprompterPanel } from "./modules/teleprompter";
+import { PrompterOverlay, TeleprompterPanel, linkPrompterToRecorder } from "./modules/teleprompter";
 
 const TABS: { id: string; label: string; title: string; icon: LucideIcon; Panel: ComponentType }[] = [
   { id: "record", label: "Record", title: "Record", icon: CircleDot, Panel: RecordPanel },
@@ -15,6 +15,13 @@ const TABS: { id: string; label: string; title: string; icon: LucideIcon; Panel:
 
 export function App() {
   const [tab, setTab] = useState("record");
+  useEffect(() => {
+    linkPrompterToRecorder();
+    // other modules ask for a tab (the record bar sends you to write a script)
+    const onTab = (e: Event) => { const id = (e as CustomEvent<string>).detail; if (TABS.some((t) => t.id === id)) setTab(id); };
+    window.addEventListener("opentake:tab", onTab);
+    return () => window.removeEventListener("opentake:tab", onTab);
+  }, []);
   return (
     <div className="app">
       <nav className="rail" aria-label="Sections">

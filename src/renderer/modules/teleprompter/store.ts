@@ -24,6 +24,8 @@ export interface Settings {
   /** where the prompter shows: over the app (default) or popped out into its own window */
   display: "overlay" | "window";
   overlay: OverlayRect;
+  /** open the prompter by itself when a take starts and there is a script */
+  showOnRecord: boolean;
 }
 
 interface Store {
@@ -77,6 +79,7 @@ const DEFAULT_SETTINGS: Settings = {
   window: { opacity: 1, clickThrough: false, hideFromCapture: true },
   display: "overlay",
   overlay: { x: 0.2, y: 0.01, w: 0.42, h: 0.3 },
+  showOnRecord: true,
 };
 
 const PERSISTED = ["wpm", "fontSize", "mirrored", "mode", "lineWidth", "guide", "showNotes"] as const;

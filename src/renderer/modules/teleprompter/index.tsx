@@ -11,6 +11,7 @@ import { Button, Card, Field, Hint, Segmented, Slider, Switch } from "../../ui";
 import "./teleprompter.css";
 
 export { PrompterOverlay } from "./Overlay";
+export { PrompterToggle, linkPrompterToRecorder } from "./record-link";
 
 const MODES: { id: PrompterState["mode"]; label: string; hint: string }[] = [
   { id: "manual", label: "Manual", hint: "Scrolls at a steady speed. Space plays and pauses." },
@@ -178,6 +179,7 @@ export function TeleprompterPanel() {
           {words} words{notes ? `, ${notes} notes` : ""}, about {fmt(readingSeconds(parsed, s.wpm))} at {s.wpm} wpm
         </p>
         <Switch label="Show direction notes" checked={s.showNotes} onChange={(v) => patch({ showNotes: v })} />
+        <Switch label="Show when I record" hint="Opens the prompter by itself when a take starts, if there is a script." checked={settings.showOnRecord} onChange={(v) => setSettings({ showOnRecord: v })} />
       </Card>
 
       <Card title="Look">

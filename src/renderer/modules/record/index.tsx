@@ -9,6 +9,7 @@ import { clampBubble, formatClock, hitBubble, needsCamera, needsScreen, snapBubb
 import { BackgroundCard, CameraBubbleCard, FrameCard, LooksCard, WindowCard } from "./look-panel";
 import { exportTake, refreshTakes, startRecording, stopRecording, togglePause, wireRecorder } from "./recorder";
 import { currentLayout, isBusy, useRecord } from "./store";
+import { PrompterToggle } from "../teleprompter/record-link";
 import "./record.css";
 
 // ---------- Stage ----------
@@ -133,6 +134,7 @@ export function RecordBar() {
               <Monitor /><span>{sourceId ? sourceName : "Choose screen"}</span>
             </Button>
           )}
+          <PrompterToggle />
         </div>
 
         <div className="rec-bar-main">

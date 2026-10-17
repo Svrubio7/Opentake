@@ -112,3 +112,5 @@
 }
 .swatch-label svg { width: 14px; height: 14px; }
 .corner-pick { display: flex; gap: 2px; margin-right: -6px; }
+.rec-tp { flex: none; color: var(--muted); }
+.rec-tp.on { color: var(--text); }
