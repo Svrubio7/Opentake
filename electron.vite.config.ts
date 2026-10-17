@@ -15,6 +15,8 @@ export default defineConfig({
           index: resolve("src/renderer/index.html"),
           teleprompter: resolve("src/renderer/teleprompter.html"),
           draw: resolve("src/renderer/draw.html"),
+          // the hidden window that makes captions for the assistant (src/main/mcp/transcriber.ts)
+          assistant: resolve("src/renderer/assistant.html"),
         },
       },
     },

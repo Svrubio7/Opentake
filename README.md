@@ -43,6 +43,14 @@ OpenTake speaks English and Spanish (Spain). It starts in your system's language
 - Export presets: Original, YouTube 1080p, Reels / TikTok / Shorts, Square, LinkedIn, X and a custom size, fitted with bars or filled and cropped. MP4, WebM or GIF, by quality or by a target file size (two passes).
 - Editor keys: Space play, J K L back / pause / play, arrows step a frame (Shift a second), I and O set in and out, S split, Delete removes a part or restores a cut, Ctrl+Z undo, Ctrl+Shift+Z redo, Ctrl + wheel zoom.
 
+**Use with Claude or Codex**
+- OpenTake has an MCP server built in: ask Claude (Desktop or Code) or Codex to cut the pauses and ums, fix captions, find the best 60 seconds, add chapters or export a vertical cut with captions.
+- It works on your take folders, on your computer, and changes only the edit and the captions: every change shows in the editor and can be undone from Settings.
+- Settings, *Use with Claude or Codex*: one click sets up Claude Desktop, and there are commands to copy for Claude Code and Codex. See [docs/mcp.md](docs/mcp.md).
+
+**Open in an editor**
+- Write a take as an OpenTimelineIO (.otio) and FCPXML timeline with its cuts, and clicks, scene switches, chapters and captions as markers, for FilmCraft, DaVinci Resolve, Premiere or Final Cut. The captions come along as .srt.
+
 **Takes, folders and names**
 - A Takes tab lists every recording with its length, its exports and what it has (cuts, captions). Give a take a title, find it by title or date, and edit, export, show or delete it from there.
 - Settings: record to any folder (Documents/OpenTake recordings by default), with its free space shown. Takes in a folder you used before stay listed there, so you can open it or switch back.
@@ -92,7 +100,7 @@ OpenTake checks GitHub Releases for a new version shortly after it starts and ev
 
 ## Privacy
 
-Everything runs on your computer. There is no account, no sign-in, no telemetry and no analytics. Your voice, camera, screen and scripts never leave your machine: noise suppression, face detection, background segmentation and speech recognition all run locally, and the speech models ship inside the app. OpenTake makes one kind of network request on its own: it asks GitHub whether a newer version has been released (after launch and every 6 hours) and downloads it if so. Nothing about you or your recordings is sent.
+Everything runs on your computer. There is no account, no sign-in, no telemetry and no analytics. Your voice, camera, screen and scripts never leave your machine: noise suppression, face detection, background segmentation and speech recognition all run locally, and the speech models ship inside the app. If you connect Claude or Codex, the assistant tools run on your computer too; what the assistant reads (a transcript, a frame) goes to it as part of your chat. OpenTake makes one kind of network request on its own: it asks GitHub whether a newer version has been released (after launch and every 6 hours) and downloads it if so. Nothing about you or your recordings is sent.
 
 ## Keyboard shortcuts
 

@@ -11,6 +11,7 @@ import { PrompterOverlay, TeleprompterPanel, linkPrompterToRecorder } from "./mo
 import { DrawBridge } from "./modules/draw";
 import { AboutButton, UpdateNotice } from "./modules/update";
 import { SettingsPanel, ShellHost, refreshSettings, useShell } from "./modules/shell";
+import { AssistantSync } from "./modules/assistant";
 
 type TabId = "record" | "takes" | "audio" | "camera" | "prompter" | "settings";
 interface Tab { id: TabId; icon: LucideIcon; Panel: ComponentType; foot?: boolean }
@@ -63,6 +64,7 @@ export function App() {
 
   return (
     <div className="app">
+      <AssistantSync />
       <nav className="rail" aria-label={t("app.sections")}>
         <div className="rail-brand">
           <img src={markWhite} alt="" className="rail-mark" />

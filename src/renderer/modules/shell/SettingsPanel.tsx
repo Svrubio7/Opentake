@@ -9,6 +9,7 @@ import { Button, Card, Hint, Segmented, Tag } from "../../ui";
 import { DEFAULT_NAME_TEMPLATE, NAME_TOKENS, renderName, shortPath } from "../../../main/settings-core";
 import { useRecord } from "../record/store";
 import { applyChoice, freeLabel, refreshSettings, setLanguage, setTheme, shellApi, useShell } from "./store";
+import { AssistantCard } from "../assistant";
 import "./shell.css";
 
 function FolderLine({ f }: { f: FolderStatus }) {
@@ -185,6 +186,7 @@ export function SettingsPanel() {
       <ExportsCard />
       <LanguageCard />
       <AppearanceCard />
+      <AssistantCard />
       <HelpCard />
     </div>
   );

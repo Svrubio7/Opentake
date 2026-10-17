@@ -9,9 +9,12 @@ import { registerUpdater } from "./updater";
 import { registerSettingsIpc } from "./settings";
 import { guardClose, registerQuitIpc } from "./quit";
 import { registerLanguageIpc } from "./i18n";
+import { BACKGROUND_FLAG } from "../shared/assistant";
+import { keepRunningWithoutWindows, registerAssistant, windowShown } from "./mcp/assistant";
+import { sessionGate, type Session } from "./mcp/background-core";
 
 /** Loads one of the renderer pages (dev server in dev, built file in production). `part` picks a view inside the page. */
-export function loadPage(win: BrowserWindow, page: "index" | "teleprompter" | "draw", part?: string) {
+export function loadPage(win: BrowserWindow, page: "index" | "teleprompter" | "draw" | "assistant", part?: string) {
   const dev = process.env.ELECTRON_RENDERER_URL;
   const q = part ? `?part=${part}` : "";
   return dev ? win.loadURL(`${dev}/${page}.html${q}`) : win.loadFile(join(__dirname, `../renderer/${page}.html`), part ? { query: { part } } : undefined);
@@ -20,13 +23,19 @@ export function loadPage(win: BrowserWindow, page: "index" | "teleprompter" | "d
 export const preloadPath = () => join(__dirname, "../preload/index.mjs");
 
 let main: BrowserWindow | null = null;
+/** started by the assistant (the MCP server) with no window: see src/main/mcp/assistant.ts */
+const background = process.argv.includes(BACKGROUND_FLAG);
+/** shortcuts, hooks and the recording IPC: registered when a window first opens, never in a background start */
+let recordingSession: Session | null = null;
 
 // one copy at a time: a second launch brings the open window forward instead of fighting over the
 // shortcuts and the recordings folder
 const firstCopy = app.requestSingleInstanceLock();
 if (!firstCopy) app.quit();
-app.on("second-instance", () => {
-  if (!main || main.isDestroyed()) return;
+app.on("second-instance", (_e, argv) => {
+  // the assistant asking for the app it is already talking to: nothing to show
+  if (argv.includes(BACKGROUND_FLAG)) return;
+  if (!main || main.isDestroyed()) { if (app.isReady()) createMain(); return; }
   if (main.isMinimized()) main.restore();
   main.show();
   main.focus();
@@ -36,6 +45,9 @@ enableLoopbackFeatures();
 registerMediaScheme();
 
 function createMain() {
+  recordingSession?.windowOpening();
+  windowShown();
+  if (process.platform === "darwin") app.dock?.show();
   main = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -71,19 +83,23 @@ app.whenReady().then(() => {
   // Camera, mic and screen are the whole job of this app: grant media to our own pages.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media" || permission === "display-capture"));
   registerLanguageIpc();
-  registerRecordIpc(() => main);
-  registerTeleprompterIpc(() => main);
-  registerDraw(() => main);
+  recordingSession = sessionGate(background, () => {
+    registerRecordIpc(() => main);
+    registerTeleprompterIpc(() => main);
+    registerDraw(() => main);
+  });
   registerUpdater();
   registerEditorIpc();
   registerSettingsIpc(() => main);
   registerQuitIpc();
-  createMain();
+  registerAssistant(() => main, { background });
+  if (background && process.platform === "darwin") app.dock?.hide();
+  if (!background) createMain();
   // the window's own colour (seen while it resizes) follows Settings > Appearance and the system
   nativeTheme.on("updated", () => {
     if (main && !main.isDestroyed()) main.setBackgroundColor(nativeTheme.shouldUseDarkColors ? "#0a0a0b" : "#f3f4f8");
   });
-  app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createMain(); });
+  app.on("activate", () => { if (!main || main.isDestroyed()) createMain(); });
 });
 
-app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+app.on("window-all-closed", () => { if (process.platform !== "darwin" && !keepRunningWithoutWindows()) app.quit(); });

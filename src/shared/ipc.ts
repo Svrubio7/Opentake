@@ -96,4 +96,19 @@ export const IPC = {
   langGet: "take:lang:get",
   /** main -> every window: the language changed in Settings */
   langChanged: "take:lang:changed",
+  // assistant: the MCP server's Settings section, its activity list, and the hidden captions window
+  /** how to connect Claude or Codex on this computer */
+  assistantStatus: "take:assistant:status",
+  assistantSetupClaude: "take:assistant:setup-claude",
+  assistantTest: "take:assistant:test",
+  assistantActivity: "take:assistant:activity",
+  assistantUndo: "take:assistant:undo",
+  /** main -> main window: the assistant changed a take (reload the list and an open editor) */
+  assistantChanged: "take:assistant:changed",
+  /** "Open in an editor": the take's timeline as .otio (and .fcpxml) */
+  assistantTimeline: "take:assistant:timeline",
+  assistantWorkerReady: "take:assistant:worker-ready",
+  assistantWorkerJob: "take:assistant:worker-job",
+  assistantWorkerProgress: "take:assistant:worker-progress",
+  assistantWorkerDone: "take:assistant:worker-done",
 } as const;

@@ -11,6 +11,7 @@ import { exportSuggestion } from "../shell/suggestions-core";
 import { exportTake } from "../record/recorder";
 import { useRecord } from "../record/store";
 import { outputFrom, useEditor } from "./store";
+import { OpenInEditor } from "../assistant";
 
 const PRESET_ORDER: ExportPreset[] = ["original", "youtube", "vertical", "square", "linkedin", "x", "custom"];
 const quality = () => [
@@ -177,6 +178,7 @@ export function ExportDialog({ take, onClose }: { take: TakeInfo; onClose: () =>
             hint={take.files.edit ? t("editor.exp.trimHint") : undefined} />
         </div>
 
+        <OpenInEditor take={take} />
         {warnings.map((w) => <p key={w} className="note note-warn">{w}</p>)}
         <div className="ed-export-foot">
           <span className="note ed-export-where">

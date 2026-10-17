@@ -8,6 +8,7 @@ import { bytes, dateTime, t } from "@shared/i18n";
 import { Button, Card, Tag } from "../../ui";
 import { shortPath } from "../../../main/settings-core";
 import { openEditor, openExport } from "../editor";
+import { OpenInEditor } from "../assistant";
 import { applyChoice, dismiss, freeLabel, goTo, refreshSettings, shellApi, useShell } from "../shell/store";
 import { takeSuggestion } from "../shell/suggestions-core";
 import { api, hasBridge } from "./api";
@@ -134,6 +135,7 @@ function TakeRow({ take }: { take: TakeInfo }) {
         <div className="rec-take-actions">
           <Button size="sm" disabled={running || active || !take.files.composite} title={t("takes.editTitle")} onClick={() => openEditor(take.id)}><Scissors />{t("takes.edit")}</Button>
           <Button size="sm" disabled={running || active || !take.files.composite} title={t("takes.exportTitle")} onClick={() => openExport(take.id)}>{t("takes.export")}</Button>
+          <OpenInEditor take={take} compact />
           <Button variant="ghost" size="sm" title={lastVideo ? t("takes.showExportTitle") : t("takes.showFolderTitle")} onClick={() => api.revealTake(take.id, lastVideo ?? take.files.outputs?.[0])}>{t("takes.show")}</Button>
           <Button variant="ghost" size="icon-sm" className="rec-del" disabled={running || active} onClick={() => setConfirm(true)} title={t("takes.deleteTitle")} aria-label={t("takes.delete")}><Trash /></Button>
         </div>

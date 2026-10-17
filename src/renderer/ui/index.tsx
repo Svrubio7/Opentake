@@ -1,7 +1,7 @@
 // The shared controls every module uses, so the whole app speaks one design language (styles in ui.css).
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
 import {
-  AppWindow, ArrowDownUp, AudioLines, Clapperboard, CircleDot, Crop, FileText, FileVideo, FolderOpen, FolderOutput, Frame, IdCard, Image,
+  AppWindow, ArrowDownUp, AudioLines, Bot, Clapperboard, CircleDot, Crop, FileText, FileVideo, FolderOpen, FolderOutput, Frame, IdCard, Image,
   Info, Keyboard, Languages, LifeBuoy, Mic, MousePointer2, Palette, PanelTop, PenLine, PictureInPicture2, Sparkle, Stamp, SunMedium, SunMoon, Video, ZoomIn,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +31,7 @@ const CARD_MARKS: [Extract<Key, `card.${string}`>, LucideIcon][] = [
   ["card.input", Mic], ["card.sound", AudioLines], ["card.lightColour", SunMedium], ["card.detail", Sparkle], ["card.framing", Crop],
   ["card.scroll", ArrowDownUp], ["card.script", FileText], ["card.overlay", PanelTop], ["card.popOut", PictureInPicture2], ["card.keys", Keyboard],
   ["card.recordingsFolder", FolderOpen], ["card.exports", FolderOutput], ["card.help", LifeBuoy], ["card.language", Languages], ["card.appearance", SunMoon],
+  ["card.assistant", Bot],
 ];
 /** a card title is already in the current language: its mark is the one whose key reads the same now */
 const markFor = (title: string) => CARD_MARKS.find(([k]) => t(k) === title)?.[1];

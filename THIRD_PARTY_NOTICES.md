@@ -49,6 +49,21 @@ Electron includes Chromium, Node.js and other components under their own licence
 - CLAPACK / OpenBLAS: BSD-3-Clause
 - blueimp-md5 (Sebastian Tschan): MIT; tslib (Microsoft): 0BSD
 
+### Inside the assistant's MCP server (`resources/mcp/opentake-mcp.cjs`)
+
+The server Claude or Codex starts (docs/mcp.md) is one bundled file with these packages in it:
+
+| Package | Version | Licence | Source |
+|---|---|---|---|
+| @modelcontextprotocol/sdk | 1.32.1 | MIT | https://github.com/modelcontextprotocol/typescript-sdk |
+| zod | 4.6.7 | MIT | https://github.com/colinhacks/zod |
+| zod-to-json-schema | 3.25.2 | ISC | https://github.com/StefanTerdell/zod-to-json-schema |
+| ajv | 8.20.0 | MIT | https://github.com/ajv-validator/ajv |
+| ajv-formats | 3.0.1 | MIT | https://github.com/ajv-validator/ajv-formats |
+| fast-deep-equal | 3.1.3 | MIT | https://github.com/epoberezkin/fast-deep-equal |
+| fast-uri | 3.1.8 | BSD-3-Clause | https://github.com/fastify/fast-uri |
+| json-schema-traverse | 1.0.0 | MIT | https://github.com/epoberezkin/json-schema-traverse |
+
 ## Models and data
 
 | File | Licence | Source |

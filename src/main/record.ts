@@ -19,7 +19,7 @@ import { appendChunk, beginTake, forgetTake, isTakeFile, listTakes, recordingsRo
 
 // OWNED BY: record agent. Screen sources, global click tracking, saving, ffmpeg export.
 
-const SHORTCUTS: Record<string, RecordShortcut> = {
+export const SHORTCUTS: Record<string, RecordShortcut> = {
   "CommandOrControl+Shift+R": "toggle",
   "CommandOrControl+Shift+P": "pause",
   "CommandOrControl+Shift+1": "scene-camera",
