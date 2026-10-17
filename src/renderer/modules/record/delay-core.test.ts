@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DELAY_MS, RING_OVERHEAD, History, Pending, laterQueue, pickFrame, planDelay, ringBytes, ringSlots, storeSize } from "./delay-core";
+import { DELAY_MS, RING_OVERHEAD, delayedSoundPath, History, Pending, laterQueue, pickFrame, planDelay, ringBytes, ringSlots, storeSize } from "./delay-core";
 
 describe("storeSize", () => {
   it("keeps a 1080p screen whole in a 1080p take at 1.8x", () => {
@@ -91,5 +91,20 @@ describe("laterQueue", () => {
     let n = 0;
     laterQueue(0)(() => n++);
     expect(n).toBe(1);
+  });
+});
+
+describe("delayedSoundPath", () => {
+  const base = { delayMs: 800, hasSound: true, systemMix: false, voiceEngine: true };
+  it("delays the sound inside the graph that makes it, never through another audio context", () => {
+    expect(delayedSoundPath({ ...base, systemMix: true })).toBe("mix");
+    expect(delayedSoundPath(base)).toBe("voice");
+  });
+  it("takes the extra trip only for a mic opened without the voice engine", () => {
+    expect(delayedSoundPath({ ...base, voiceEngine: false })).toBe("hop");
+  });
+  it("does nothing without a delay or without sound", () => {
+    expect(delayedSoundPath({ ...base, delayMs: 0 })).toBe("none");
+    expect(delayedSoundPath({ ...base, hasSound: false })).toBe("none");
   });
 });

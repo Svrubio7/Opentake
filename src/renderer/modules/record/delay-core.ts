@@ -131,3 +131,14 @@ export function laterQueue(delayMs: number, timer: (fn: () => void, ms: number) 
   };
 }
 
+
+/**
+ * Where a take's composite sound gets its delay. It must be delayed inside the graph that makes it:
+ * the computer-sound mix when there is one ("mix"), else the voice engine ("voice"). Only a mic
+ * opened without the engine goes through an audio context of its own ("hop"), which adds 50 ms.
+ */
+export function delayedSoundPath(o: { delayMs: number; hasSound: boolean; systemMix: boolean; voiceEngine: boolean }): "none" | "mix" | "voice" | "hop" {
+  if (!o.delayMs || !o.hasSound) return "none";
+  if (o.systemMix) return "mix";
+  return o.voiceEngine ? "voice" : "hop";
+}

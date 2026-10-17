@@ -5,7 +5,8 @@ import type { ExportOutput, RecordMode, RecordShortcut, RecordTrack, TakeTimelin
 import { t } from "../../../shared/i18n";
 import { api, hasBridge } from "./api";
 import { AUDIO_BPS, DISK_POLL_MS, diskBeforeTake, diskWhileRecording, takeBitrate, type DiskLevel } from "./disk-core";
-import { laterQueue } from "./delay-core";
+import { delayedSoundPath, laterQueue } from "./delay-core";
+import { getEngine } from "../audio/engine";
 import { delayedSound } from "./delayed-sound";
 import { compositor } from "./engine";
 import { extensionFor, needsCamera, needsScreen, pickMime, videoBitrate } from "./layout-core";
@@ -155,11 +156,11 @@ function cancelCountdown() {
 }
 
 /** Opens the computer sound for a take and mixes it with the mic; null when it is off or unavailable. */
-async function takeSystemAudio(mic: MediaStreamTrack[], cleanup: (() => void)[]): Promise<TakeAudio | null> {
+async function takeSystemAudio(mic: MediaStreamTrack[], cleanup: (() => void)[], delayMs: number): Promise<TakeAudio | null> {
   const sys = systemSound();
   const ok = await sys.acquire();
   cleanup.push(() => sys.release());
-  const audio = ok ? sys.mix(mic) : null;
+  const audio = ok ? sys.mix(mic, delayMs) : null;
   if (!audio) {
     const reason = useSystemSound.getState().reason;
     st().set({ notice: reason ? t("record.notice.noComputerSoundWhy", { reason: `${reason.charAt(0).toLowerCase()}${reason.slice(1)}` }) : t("record.notice.noComputerSound") });
@@ -206,12 +207,16 @@ async function begin() {
     if (delay.reason) s.set({ notice: t("record.rec.zoomNotice", { reason: delay.reason }) });
     await checkDiskBeforeTake();
     const mic = await getMicTracks(owned);
-    const sysAudio = systemAudioWanted(layout.mode, s) ? await takeSystemAudio(mic, cleanup) : null;
+    const sysAudio = systemAudioWanted(layout.mode, s) ? await takeSystemAudio(mic, cleanup, delay.delayMs) : null;
     const canvasTrack = comp.canvas.captureStream(layout.fps).getVideoTracks()[0];
     owned.push(canvasTrack);
+    // a delayed take's composite sound is delayed inside the graph that makes it (the computer sound
+    // mix, or the voice engine): one more trip between audio contexts would put it 50 ms behind
     let compositeAudio = sysAudio ? [sysAudio.mixed] : mic;
-    if (delay.delayMs && compositeAudio.length) {
-      const d = delayedSound(compositeAudio, delay.delayMs);
+    const path = delayedSoundPath({ delayMs: delay.delayMs, hasSound: compositeAudio.length > 0, systemMix: !!sysAudio, voiceEngine: st().micSource === "module" });
+    if (path === "voice" || path === "hop") {
+      const voice = path === "voice" ? getEngine().delayedVoice(delay.delayMs) : null;
+      const d = voice ? { tracks: [voice.track], dispose: voice.dispose } : delayedSound(compositeAudio, delay.delayMs);
       cleanup.push(d.dispose);
       compositeAudio = d.tracks;
     }

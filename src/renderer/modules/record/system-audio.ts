@@ -127,17 +127,23 @@ class SystemSound {
     return peakDb(this.block);
   }
 
-  /** The take's sound: the mic plus the computer sound in one track, and the computer sound on its own. */
-  mix(mic: MediaStreamTrack[]): TakeAudio | null {
+  /**
+   * The take's sound: the mic plus the computer sound in one track, and the computer sound on its own.
+   * `delayMs` delays the mixed track inside this graph (a delayed take's composite), never the other.
+   */
+  mix(mic: MediaStreamTrack[], delayMs = 0): TakeAudio | null {
     const ctx = this.ctx, gain = this.gain;
     if (!ctx || !gain || !this.live) return null;
     const mixDest = new MediaStreamAudioDestinationNode(ctx);
     const sysDest = new MediaStreamAudioDestinationNode(ctx);
-    gain.connect(mixDest);
+    const delay = delayMs > 0 ? new DelayNode(ctx, { maxDelayTime: delayMs / 1000 + 1, delayTime: delayMs / 1000 }) : null;
+    delay?.connect(mixDest);
+    const into = delay ?? mixDest;
+    gain.connect(into);
     gain.connect(sysDest);
     const micSources = mic.map((t) => {
       const s = new MediaStreamAudioSourceNode(ctx, { mediaStream: new MediaStream([t]) });
-      s.connect(mixDest);
+      s.connect(into);
       return s;
     });
     return {
@@ -145,7 +151,8 @@ class SystemSound {
       system: sysDest.stream.getAudioTracks()[0],
       dispose: () => {
         micSources.forEach((s) => s.disconnect());
-        try { gain.disconnect(mixDest); gain.disconnect(sysDest); } catch { /* the capture already closed */ }
+        try { gain.disconnect(into); gain.disconnect(sysDest); } catch { /* the capture already closed */ }
+        delay?.disconnect();
         mixDest.stream.getTracks().forEach((t) => t.stop());
         sysDest.stream.getTracks().forEach((t) => t.stop());
       },
