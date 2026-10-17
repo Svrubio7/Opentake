@@ -9,6 +9,7 @@
   position: fixed; inset: 0 auto 0 0; z-index: 50; width: 72px; overflow: hidden;
   display: flex; flex-direction: column; gap: 4px; padding: 14px 12px;
   background: linear-gradient(180deg, var(--rail-from) 0%, var(--rail-to) 100%); color: var(--rail-fg);
+  box-shadow: inset -1px 0 0 var(--rail-edge);
   transition: width 150ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 150ms ease-out;
 }
 .rail:hover, .rail:has(:focus-visible) { width: 216px; box-shadow: var(--shadow-raised); }
@@ -45,7 +46,10 @@
 /* ---------- side: the active module ---------- */
 .side { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .panel { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 20px 16px 24px; scrollbar-gutter: stable; }
-.panel-title { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin: 2px 2px 16px; }
+.panel-title { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin: 2px 2px 16px; }
+/* a panel arrives with a short settle, never a slide across the screen */
+.panel:not([hidden]) > .cards { animation: q-settle 180ms cubic-bezier(0.23, 1, 0.32, 1); }
+@keyframes q-settle { from { opacity: 0; transform: translateY(4px); } }
 
 /* a module's column of cards */
 .cards { display: flex; flex-direction: column; gap: 12px; }

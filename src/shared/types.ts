@@ -291,6 +291,8 @@ export interface FolderStatus {
   /** "missing": the folder or its drive is gone (a USB drive unplugged); "readonly": cannot write there */
   state: "ok" | "missing" | "readonly";
   freeBytes: number | null;
+  /** the drive's size, for the space bar */
+  totalBytes?: number | null;
   /** takes in this folder (recordings folder only) */
   takes?: number;
   /** a past recordings folder: its place in the settings list */

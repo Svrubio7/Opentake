@@ -1,7 +1,7 @@
 // ffmpeg arguments and output parsing as pure functions (tested in ffmpeg-core.test.ts).
 import type { BubbleLayout, LoudnessTarget } from "../../shared/types";
 import { bubbleAspect, bubbleRadius, parseHex, pxScale } from "../../renderer/modules/record/layout-core";
-import { cropRect, type CameraFrame } from "../../renderer/modules/record/zoom-core";
+import type { CameraFrame } from "../../renderer/modules/record/zoom-core";
 
 /** Reads `-progress pipe:1` output; returns the encoded position in ms, or null. */
 export function parseProgressTime(text: string): number | null {
@@ -65,26 +65,59 @@ export function parseSilenceTrim(stderr: string, durationSec: number | null, pad
   return { start, end };
 }
 
-/** ffmpeg sendcmd script: one crop per changed frame, times shifted by the trimmed start. */
-export function zoomCommands(frames: CameraFrame[], w: number, h: number, offsetMs = 0, target = "crop@zoom"): string {
+/**
+ * Where the zoom chain (crop@zin, scale@zs, crop@zout) samples the screen for one camera frame.
+ * A crop alone moves in whole even pixels, which at 1.8x is a 2-5 px judder through every ease.
+ * Here the crop takes the whole pixels around the view (with a margin), the scale enlarges them by
+ * the camera's own factor, and the last crop places the view at the output's resolution: the
+ * picture lands within half an output pixel of where the camera really is.
+ */
+export function zoomChainRect(f: Pick<CameraFrame, "scale" | "x" | "y">, w: number, h: number) {
+  const s = Math.max(1, f.scale);
+  const cw = w / s, ch = h / s;
+  const L = Math.min(w - cw, Math.max(0, f.x * w - cw / 2)), T = Math.min(h - ch, Math.max(0, f.y * h - ch / 2));
+  // whole pixels around the view, even for yuv420, two pixels of margin for the scaler's taps
+  const span = (lo: number, len: number, max: number) => {
+    let a = Math.max(0, Math.floor((Math.floor(lo) - 2) / 2) * 2);
+    let b = Math.min(max, Math.ceil(lo + len) + 2);
+    if ((b - a) % 2) { if (b < max) b++; else a = Math.max(0, a - 2); if ((b - a) % 2) b--; }
+    return { a, n: b - a };
+  };
+  const X = span(L, cw, w), Y = span(T, ch, h);
+  const sw = Math.max(w, Math.round(X.n * s)), sh = Math.max(h, Math.round(Y.n * s));
+  const kx = sw / X.n, ky = sh / Y.n;
+  const ox = Math.min(sw - w, Math.max(0, Math.round((L - X.a) * kx)));
+  const oy = Math.min(sh - h, Math.max(0, Math.round((T - Y.a) * ky)));
+  return { crop: { x: X.a, y: Y.a, w: X.n, h: Y.n }, scale: { w: sw, h: sh }, out: { x: ox, y: oy } };
+}
+
+/** ffmpeg sendcmd script for the zoom chain (see zoomChainRect): one line per changed frame, times shifted by the trimmed start. */
+export function zoomCommands(frames: CameraFrame[], w: number, h: number, offsetMs = 0): string {
   const lines: string[] = [];
   let prev = "";
+  const line = (t: number, f: CameraFrame) => {
+    const r = zoomChainRect(f, w, h);
+    return {
+      key: JSON.stringify(r),
+      text: `${t.toFixed(3)} crop@zin w ${r.crop.w}, crop@zin h ${r.crop.h}, crop@zin x ${r.crop.x}, crop@zin y ${r.crop.y}, ` +
+        `scale@zs w ${r.scale.w}, scale@zs h ${r.scale.h}, crop@zout x ${r.out.x}, crop@zout y ${r.out.y};`,
+    };
+  };
+  // each line half a frame before its frame: written at the frame's own time, a time rounded up to
+  // the millisecond (frame 2 at 30 fps is 66.667 ms, "0.067") lands one frame late, a jolt every third frame
+  const half = frames.length > 1 ? (frames[1].t - frames[0].t) / 2 : 0;
   for (const f of frames) {
-    const t = (f.t - offsetMs) / 1000;
-    const r = cropRect(f, w, h);
-    const key = `${r.w} ${r.h} ${r.x} ${r.y}`;
-    if (key === prev) continue;
-    if (t < 0) { prev = ""; continue; }
-    prev = key;
-    lines.push(`${t.toFixed(3)} ${target} w ${r.w}, ${target} h ${r.h}, ${target} x ${r.x}, ${target} y ${r.y};`);
+    const t = (f.t - offsetMs - half) / 1000;
+    const l = line(Math.max(0, t), f);
+    if (t < 0) { prev = l.key; continue; }
+    if (l.key === prev) continue;
+    prev = l.key;
+    lines.push(l.text);
   }
   if (!lines.length || !lines[0].startsWith("0.000")) {
-    // the first frame after the trim point must set the crop too
+    // the first frame after the trim point must set the chain too
     const first = frames.find((f) => f.t >= offsetMs) ?? frames[frames.length - 1];
-    if (first) {
-      const r = cropRect(first, w, h);
-      lines.unshift(`0.000 ${target} w ${r.w}, ${target} h ${r.h}, ${target} x ${r.x}, ${target} y ${r.y};`);
-    }
+    if (first) lines.unshift(line(0, first).text);
   }
   return lines.join("\n") + "\n";
 }
@@ -176,8 +209,9 @@ export function hiresGraph(o: Omit<HiresArgsInput, "out" | "loudness">) {
   const { c, W, H } = hiresFrame(o.screenSize, o.crop);
   const at = (v: number) => Math.max(0, Math.round(v / 2) * 2);
   const cut = c ? `crop=${W}:${H}:${at(c.x)}:${at(c.y)},` : "";
-  const parts = [`[0:v]fps=${o.fps},${cut}sendcmd=f=${o.cmdFile},crop@zoom=w=${W}:h=${H}:x=0:y=0,format=yuv420p,scale=${W}:${H}:flags=lanczos,setsar=1[base]`];
-  // format before the scale: a crop at full size scaled to the same size crashed the bundled ffmpeg 6.1 at 1080p
+  const parts = [`[0:v]fps=${o.fps},${cut}sendcmd=f=${o.cmdFile},crop@zin=w=${W}:h=${H}:x=0:y=0,format=yuv420p,scale@zs=w=${W}:h=${H}:flags=bicubic,crop@zout=w=${W}:h=${H}:x=0:y=0:exact=1,setsar=1[base]`];
+  // format before the scale: a crop at full size scaled to the same size crashed the bundled ffmpeg 6.1 at 1080p.
+  // bicubic, not lanczos: the scaler is rebuilt on every moving frame, and lanczos took 8x longer to rebuild
   const inputs = [...trimArgs(o.trim), "-i", o.screen];
   let last = "base";
   let audioIdx = 1;

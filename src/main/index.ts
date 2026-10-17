@@ -62,6 +62,18 @@ function createMain() {
   loadPage(main, "index");
 }
 
+// Automated checks run on a computer someone is using: OPENTAKE_TEST_OFFSCREEN=1 keeps every
+// window off the visible screens and out of the taskbar, so a test never shows up in front of them.
+if (process.env.OPENTAKE_TEST_OFFSCREEN === "1") {
+  app.on("browser-window-created", (_e, win) => {
+    const away = () => { const [w, h] = win.getSize(); win.setBounds({ x: -20000, y: 0, width: w, height: h }); };
+    away();
+    win.setSkipTaskbar(true);
+    win.on("show", away);
+    win.on("move", () => { if (win.getPosition()[0] > -10000) away(); });
+  });
+}
+
 app.whenReady().then(() => {
   if (!firstCopy) return;
   // Camera, mic and screen are the whole job of this app: grant media to our own pages.

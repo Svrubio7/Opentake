@@ -82,6 +82,8 @@ export const IPC = {
   permissions: "take:settings:permissions",
   openPrivacy: "take:settings:open-privacy",
   takeRename: "take:record:take-rename",
+  /** a small picture of the take (thumb.jpg in its folder), as an opentake-media:// address */
+  takeThumb: "take:record:take-thumb",
   /** takes the app closed on are finished and listed; resolves to how many */
   takesRecover: "take:record:takes-recover",
   /** main window -> main: recording / exporting, so closing the window asks first */

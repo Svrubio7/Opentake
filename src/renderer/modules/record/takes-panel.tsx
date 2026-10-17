@@ -1,7 +1,8 @@
 // The Takes tab: every take in the recordings folder, newest first, with its title, exports and the
 // actions people reach for after recording (edit, export, show, rename, delete).
 import { useEffect, useRef, useState } from "react";
-import { CircleDot, FolderOpen, Pencil, Scissors, Search, Settings2, Trash, X } from "lucide-react";
+import { CircleDot, FolderOpen, Monitor, Pencil, PictureInPicture2, Scissors, Search, Settings2, Trash, Video, X } from "lucide-react";
+import { IPC } from "@shared/ipc";
 import type { RecordMode, TakeInfo } from "@shared/types";
 import { Button, Card, Tag } from "../../ui";
 import { shortPath } from "../../../main/settings-core";
@@ -36,6 +37,27 @@ function TitleEditor({ take, onDone }: { take: TakeInfo; onDone: () => void }) {
   );
 }
 
+const MODE_ICON: Record<RecordMode, typeof Video> = { camera: Video, "screen-camera": PictureInPicture2, screen: Monitor };
+
+/** The take's picture (made once by main as thumb.jpg) with its length on it; the scene's icon until it exists. */
+function TakeThumb({ take, active }: { take: TakeInfo; active: boolean }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (active || take.status !== "done" || !take.files.composite) return;
+    let live = true;
+    void window.take.invoke(IPC.takeThumb, take.id).then((u) => { if (live) setSrc((u as string | null) ?? null); }, () => {});
+    return () => { live = false; };
+  }, [take.id, take.status, take.sizeBytes, active, take.files.composite]);
+  const Icon = MODE_ICON[take.mode];
+  return (
+    <div className={active ? "tk-thumb live" : "tk-thumb"} aria-hidden>
+      {src ? <img src={src} alt="" draggable={false} onError={() => setSrc(null)} /> : <Icon />}
+      {active ? <span className="tk-thumb-badge rec"><i />REC</span>
+        : take.durationMs != null ? <span className="tk-thumb-badge tnum">{formatClock(take.durationMs)}</span> : null}
+    </div>
+  );
+}
+
 function TakeRow({ take }: { take: TakeInfo }) {
   const progress = useRecord((s) => s.exports[take.id]);
   const recordingId = useRecord((s) => (s.status !== "idle" ? s.takeId : null));
@@ -54,23 +76,24 @@ function TakeRow({ take }: { take: TakeInfo }) {
   };
   return (
     <li className={active ? "rec-take live" : "rec-take"}>
-      <div className="rec-take-top">
-        <div className="rec-take-text">
+      <div className="tk-row">
+        <TakeThumb take={take} active={active} />
+        <div className="tk-main">
           {renaming ? <TitleEditor take={take} onDone={() => setRenaming(false)} /> : (
             <button type="button" className="tk-title" onClick={() => setRenaming(true)} title="Rename this take" disabled={active}>
               <b>{take.title || fmtDate(take.createdAt)}</b>{!active && <Pencil aria-hidden />}
             </button>
           )}
-          <span className="tnum">
-            {take.title ? `${fmtDate(take.createdAt)} · ` : ""}{active ? "Recording now" : take.durationMs != null ? formatClock(take.durationMs) : "Length unknown"} · {MODE_LABEL[take.mode]} · {fmtSize(take.sizeBytes)}
+          <span className="tk-meta tnum">
+            {take.title ? `${fmtDate(take.createdAt)} · ` : ""}{active ? "Recording now · " : take.durationMs == null ? "Length unknown · " : ""}{MODE_LABEL[take.mode]} · {fmtSize(take.sizeBytes)}
           </span>
-        </div>
-        <div className="rec-take-tags">
+          <div className="rec-take-tags">
           {active && <Tag tone="rec">Recording</Tag>}
           {!active && (take.recovered || take.status === "recording") && <Tag tone="warn" title="OpenTake closed while this take was recording. What reached the disk was kept.">Recovered</Tag>}
           {take.files.edit && <Tag title="This take has cuts">Edited</Tag>}
           {take.files.captions && <Tag title="This take has captions">Captions</Tag>}
           {exportsCount > 0 && <Tag tone="good" title={`${exportsCount} exported ${exportsCount === 1 ? "file" : "files"}`}>Exported</Tag>}
+          </div>
         </div>
       </div>
       {running && (
@@ -140,6 +163,7 @@ function FolderBar() {
   }
   return (
     <div className="tk-folder">
+      <span className="tk-folder-mark" aria-hidden><FolderOpen /></span>
       <div className="tk-folder-text">
         <span className="label">Saved in{r.freeBytes != null && <span className="tnum"> · {freeLabel(r.freeBytes)}</span>}</span>
         <span className="set-path" title={r.path}>{shortPath(r.path, 46)}</span>

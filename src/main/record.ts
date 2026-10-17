@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { openPath, revealFile } from "./dialogs";
 import { recoverTakes } from "./record/recover";
+import { takeThumb } from "./record/thumbs";
 import { IPC } from "../shared/ipc";
 import type {
   ExportOptions, RecordBeginRequest, RecordChunk, RecordSave, RecordShortcut, ScreenSource,
@@ -61,6 +62,7 @@ export function registerRecordIpc(getMain: () => BrowserWindow | null) {
 
   ipcMain.handle(IPC.takesList, () => listTakes());
   ipcMain.handle(IPC.takesRecover, () => recoverTakes());
+  ipcMain.handle(IPC.takeThumb, (_e, id: string) => (validTakeId(id) ? takeThumb(id).catch(() => null) : null));
   ipcMain.handle(IPC.takeRename, (_e, id: string, title: unknown) => renameTake(id, title));
   ipcMain.handle(IPC.takeDelete, async (_e, id: string) => {
     const dir = takeDir(id);

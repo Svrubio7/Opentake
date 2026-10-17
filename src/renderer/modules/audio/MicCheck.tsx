@@ -5,7 +5,8 @@ import { getEngine, type Preview } from "./engine";
 import { MiniInput } from "./Meters";
 import { useAudioStore } from "./store";
 import { applySettings } from "./actions";
-import { Button, Segmented } from "../../ui";
+import { Wand2 } from "lucide-react";
+import { Button, CardMark, Segmented } from "../../ui";
 
 const SILENCE_S = 5;
 const SPEECH_S = 10;
@@ -88,7 +89,7 @@ export function MicCheck() {
       <section className="card au-check">
         <div className="au-check-head">
           <div>
-            <h3 className="card-title">Mic check</h3>
+            <h3 className="card-title"><CardMark icon={Wand2} />Mic check</h3>
             <p className="note">15 seconds to tune everything to your room and your voice.</p>
           </div>
           <Button variant="ink" disabled={!running} onClick={run}>Start</Button>
@@ -105,7 +106,7 @@ export function MicCheck() {
       <section className="card au-check">
         <div className="au-check-step">
           <span className="au-step-dot" />
-          <h3 className="card-title">{step === "silence" ? "Stay quiet" : "Read this out loud"}</h3>
+          <h3 className="card-title"><CardMark icon={Wand2} />{step === "silence" ? "Stay quiet" : "Read this out loud"}</h3>
           <span className="au-num au-left">{left}s</span>
         </div>
         {step === "silence"
@@ -126,7 +127,7 @@ export function MicCheck() {
   return (
     <section className="card au-check">
       <div className="card-head">
-        <h3 className="card-title">{result.ok ? "Tuned for you" : "Let's try that again"}</h3>
+        <h3 className="card-title"><CardMark icon={Wand2} />{result.ok ? "Tuned for you" : "Let's try that again"}</h3>
         <Button variant="ghost" size="sm" onClick={run}>Run again</Button>
       </div>
       <ul className="au-findings">

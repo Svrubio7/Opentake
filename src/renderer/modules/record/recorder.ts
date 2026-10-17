@@ -7,6 +7,7 @@ import { AUDIO_BPS, DISK_POLL_MS, diskBeforeTake, diskWhileRecording, takeBitrat
 import { compositor } from "./engine";
 import { extensionFor, needsCamera, needsScreen, pickMime, videoBitrate } from "./layout-core";
 import { currentLayout, useRecord } from "./store";
+import { NAME_CARD_NOTICE, PICK_NOTICE, SAVED_NOTICE } from "./notice-core";
 import { useShell } from "../shell/store";
 import { muteOwnAudio, systemSound, useSystemSound, type TakeAudio } from "./system-audio";
 import { pickAudioMime, systemAudioWanted } from "./system-audio-core";
@@ -37,7 +38,7 @@ let outroTimer: ReturnType<typeof setTimeout> | null = null;
 /** the app is quitting: the take ends without its outro or the export after it */
 let quitting = false;
 
-export const PICK_NOTICE = "Choose a screen or a window, then press Record again.";
+export { PICK_NOTICE } from "./notice-core";
 
 /** An error from the main process without Electron's "Error invoking remote method" wrapping. */
 export function ipcMessage(e: unknown): string {
@@ -336,7 +337,7 @@ async function finishTake(s: Session) {
   } catch (e) {
     st().set({ error: s.failed ?? `Could not close the take: ${e instanceof Error ? e.message : e}` });
   }
-  st().set({ status: "idle", elapsedMs: 0, notice: s.failed ? null : "Saved. Your take is in Takes.", noticeAction: s.failed ? null : "takes" });
+  st().set({ status: "idle", elapsedMs: 0, notice: s.failed ? null : SAVED_NOTICE, noticeAction: s.failed ? null : "takes" });
   await refreshTakes();
   if (st().autoExport && !s.failed && !quitting) void exportTake(s.takeId, "composite");
 }
@@ -388,7 +389,7 @@ function onShortcut(a: RecordShortcut) {
   const scene = SCENE_SHORTCUTS[a];
   if (scene) return switchScene(scene);
   if (a === "lower-third" && !compositor().overlays.toggleLowerThird()) {
-    st().set({ notice: "Turn on the name card in the Record panel first (Branding)." });
+    st().set({ notice: NAME_CARD_NOTICE, noticeAction: "overlays" });
   }
 }
 
