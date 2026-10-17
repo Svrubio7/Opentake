@@ -31,9 +31,15 @@ export interface DelayInput {
   normalized: boolean;
   mode: RecordMode;
   fps: number;
-  /** stored sizes of one screen frame and one camera frame (0 x 0 when there is none) */
+  /**
+   * The largest stored sizes of one screen frame and one camera frame over every scene the take can
+   * switch to (0 x 0 when there is none): a ring keeps its canvases at the largest size it was given,
+   * so a take started on the screen alone still grows its camera ring after a switch to the camera.
+   */
   screen: { w: number; h: number };
   camera: { w: number; h: number };
+  /** the screen and camera are also recorded on their own tracks (ISO) */
+  isoTracks?: boolean;
   /** navigator.deviceMemory (GB, rounded down, at most 8), when the browser says */
   deviceMemoryGb?: number;
 }
@@ -53,23 +59,63 @@ export function ringBytes(i: Pick<DelayInput, "fps" | "screen" | "camera">, dela
 export const RING_BUDGET = 1.5 * 1024 ** 3;
 
 /**
- * Whether this take draws its picture behind real time: only with auto zoom on a tracked screen,
- * and only when the rings fit in memory. `reason` says why not, for a hint (null: delay on, or
- * zoom is off and nothing needs saying).
+ * How far the stored frames may shrink (each side) to fit the budget before the delay is given up:
+ * at 0.8 a zoomed-in 4K screen is still sharper than the 1080p picture it is shown in.
  */
-export function planDelay(i: DelayInput): { delayMs: number; bytes: number; reason: string | null } {
-  if (!i.zoomEnabled || i.mode === "camera") return { delayMs: 0, bytes: 0, reason: null };
-  if (!i.normalized) return { delayMs: 0, bytes: 0, reason: null };
+export const MIN_STORE_SCALE = 0.8;
+
+/** A stored size shrunk by `scale` (each side), never below 2 x 2 unless there is none. */
+export const scaleStore = (s: { w: number; h: number }, scale: number) =>
+  !s.w || !s.h || scale >= 1 ? s : { w: Math.max(2, Math.round(s.w * scale)), h: Math.max(2, Math.round(s.h * scale)) };
+
+/**
+ * A stored size kept within the pixels the budget was planned for (`cap`), keeping its shape: a
+ * camera that opens bigger than assumed, or a scene planned smaller, never grows the rings past it.
+ */
+export function capStore(s: { w: number; h: number }, cap: { w: number; h: number }): { w: number; h: number } {
+  const area = s.w * s.h, max = cap.w * cap.h;
+  if (!area || area <= max) return s;
+  if (!max) return { w: 0, h: 0 };
+  return scaleStore(s, Math.sqrt(max / area));
+}
+
+/** The larger of two stored sizes, each kind on its own (the ring holds the largest it was given). */
+export const largerStore = (a: { w: number; h: number }, b: { w: number; h: number }) => (a.w * a.h >= b.w * b.h ? a : b);
+
+/**
+ * Whether this take draws its picture behind real time, when the rings fit in memory: with auto zoom
+ * on a tracked screen (the zoom arrives with each click), and in any take that also records ISO
+ * tracks. Started at the same moment as the ISO recorders, the composite lost 0.4-0.6 s of picture
+ * at the start of every take while their encoders set up; started DELAY_MS later it loses none.
+ * `reason` says why the zoom cannot run ahead, for a hint (null: delay on, or nothing to say).
+ */
+export function planDelay(i: DelayInput): { delayMs: number; bytes: number; scale: number; reason: string | null } {
+  const off = { delayMs: 0, bytes: 0, scale: 1, reason: null };
+  if (i.mode === "camera") return off;
+  const zoom = i.zoomEnabled && i.normalized;
+  if (!zoom && !i.isoTracks) return off;
+  const fit = fitRings(i);
+  // only the zoom has something to say: a staggered start that does not fit just starts together
+  if (!zoom) return fit.reason ? { ...fit, delayMs: 0, scale: 1, reason: null } : fit;
+  return fit;
+}
+
+function fitRings(i: DelayInput): { delayMs: number; bytes: number; scale: number; reason: string | null } {
   const bytes = ringBytes(i);
   // the browser reports at most 8 GB: a quarter of it (2 GB) is never the limit, the budget is
   const share = i.deviceMemoryGb ? i.deviceMemoryGb * 1024 ** 3 * 0.25 : Infinity;
   if (i.deviceMemoryGb && i.deviceMemoryGb < 4) {
-    return { delayMs: 0, bytes, reason: t("record.delay.lowMemory") };
+    return { delayMs: 0, bytes, scale: 1, reason: t("record.delay.lowMemory") };
   }
-  if (bytes > Math.min(RING_BUDGET, share)) {
-    return { delayMs: 0, bytes, reason: t("record.delay.tooBig") };
+  const budget = Math.min(RING_BUDGET, share);
+  if (bytes <= budget) return { delayMs: DELAY_MS, bytes, scale: 1, reason: null };
+  // a little over: store every frame a little smaller instead of giving the delay up
+  const scale = Math.floor(Math.sqrt(budget / bytes) * 100) / 100;
+  if (scale >= MIN_STORE_SCALE) {
+    const fitted = ringBytes({ fps: i.fps, screen: scaleStore(i.screen, scale), camera: scaleStore(i.camera, scale) });
+    if (fitted <= budget) return { delayMs: DELAY_MS, bytes: fitted, scale, reason: null };
   }
-  return { delayMs: DELAY_MS, bytes, reason: null };
+  return { delayMs: 0, bytes, scale: 1, reason: t("record.delay.tooBig") };
 }
 
 /** Values stamped with a real time, read back as they were at a delayed time. */

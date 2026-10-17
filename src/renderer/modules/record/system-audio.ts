@@ -40,6 +40,8 @@ export async function muteOwnAudio(muted: boolean) {
 class SystemSound {
   private ctx: AudioContext | null = null;
   private stream: MediaStream | null = null;
+  /** the capture's own picture, unused, stopped only when the sound closes */
+  private idleVideo: MediaStreamTrack[] = [];
   private source: MediaStreamAudioSourceNode | null = null;
   private gain: GainNode | null = null;
   private analyser: AnalyserNode | null = null;
@@ -78,11 +80,14 @@ class SystemSound {
     st.set({ status: "starting", reason: null });
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: { width: 320, height: 180, frameRate: 1 } });
-      // the picture comes from the screen capture; this one only carried the sound
-      stream.getVideoTracks().forEach((t) => { t.stop(); stream.removeTrack(t); });
+      // the picture comes from the screen capture; this one only carries the sound. Its tiny 1 fps
+      // picture is kept until the sound closes: stopping it tore the capture down while a take's
+      // recorders were starting, and the camera track lost ~0.5 s of picture at the start.
+      this.idleVideo = stream.getVideoTracks();
+      this.idleVideo.forEach((t) => { t.enabled = false; stream.removeTrack(t); });
       const track = stream.getAudioTracks()[0];
       if (!track) throw new Error("no sound track");
-      if (this.users === 0) { track.stop(); st.set({ status: "off" }); return false; }
+      if (this.users === 0) { track.stop(); this.stopIdleVideo(); st.set({ status: "off" }); return false; }
       const ctx = this.ctx ?? new AudioContext({ sampleRate: 48000, latencyHint: "interactive" });
       this.ctx = ctx;
       if (ctx.state === "suspended") await ctx.resume().catch(() => {});
@@ -99,13 +104,20 @@ class SystemSound {
       st.set({ status: "on", reason: null });
       return true;
     } catch (e) {
+      this.stopIdleVideo();
       console.warn("[record] computer sound unavailable", e);
       st.set({ status: "failed", reason: t("record.sys.failed") });
       return false;
     }
   }
 
+  private stopIdleVideo() {
+    this.idleVideo.forEach((t) => t.stop());
+    this.idleVideo = [];
+  }
+
   private close() {
+    this.stopIdleVideo();
     this.source?.disconnect();
     this.gain?.disconnect();
     this.stream?.getTracks().forEach((t) => t.stop());

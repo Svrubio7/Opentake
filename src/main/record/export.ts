@@ -15,7 +15,7 @@ import {
 import { exportEdited, wantsEditedExport } from "./export-edit";
 import { runWatched } from "./ffmpeg-run";
 import { readMeta, readTimeline, recordExport, takeDir, takeFiles, type TakeMeta } from "./takes";
-import { exportTarget } from "./export-target";
+import { exportTarget, releaseExportName } from "./export-target";
 import { openPath, revealFile } from "../dialogs";
 import { getSettings } from "../settings";
 import { friendlyExportError } from "../settings-core";
@@ -130,6 +130,7 @@ export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => 
     send({ takeId, stage: t("main.export.failed"), ratio: null, done: true, error: friendlyExportError(msg) });
     throw e;
   } finally {
+    if (out) releaseExportName(out);
     preparing.delete(takeId);
     cancelled.delete(takeId);
   }

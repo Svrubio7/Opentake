@@ -1,5 +1,5 @@
 // The export dialog: a frame preset, the format, quality or a file size, captions and sound.
-import { Fragment, useEffect, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import type { ExportFormat, ExportPreset, TakeInfo } from "@shared/types";
 import { t } from "@shared/i18n";
@@ -8,6 +8,7 @@ import { PRESETS, exportFileName, exportWarnings, resolveFrame } from "../../../
 import { presetWords, renderName, shortPath } from "../../../main/settings-core";
 import { dismiss, goTo, useShell } from "../shell/store";
 import { exportSuggestion } from "../shell/suggestions-core";
+import { api, hasBridge } from "../record/api";
 import { exportTake } from "../record/recorder";
 import { useRecord } from "../record/store";
 import { outputFrom, useEditor } from "./store";
@@ -45,11 +46,24 @@ export function ExportDialog({ take, onClose }: { take: TakeInfo; onClose: () =>
   const kind = prefs.kind === "hires" && hiresOk ? "hires" : "composite";
   const output = outputFrom(prefs, hasCaptions);
   const frame = resolveFrame(output, { width: 1920, height: 1080 });
-  // the name and place main will use (it adds a number if the name is taken)
+  // the name and place main will use: main says the real name, with the number a taken name gets
   const settings = useShell((s) => s.view?.settings ?? null);
   const dismissed = useShell((s) => s.dismissed);
   const stem = settings ? renderName(settings.nameTemplate, { createdAt: take.createdAt, title: take.title, preset: presetWords(exportFileName(kind, output, frame)) }) : null;
-  const name = stem ? `${stem}.${o.format}` : exportFileName(kind, output, frame);
+  const guess = stem ? `${stem}.${o.format}` : exportFileName(kind, output, frame);
+  const running = useRecord((s) => Object.values(s.exports).filter((e) => !e.done).length);
+  const ask = JSON.stringify({ takeId: take.id, kind, output, at: settings?.nameTemplate, to: settings?.exportDestination, dir: settings?.exportDir, running });
+  const [real, setReal] = useState<{ ask: string; name: string } | null>(null);
+  useEffect(() => {
+    if (!hasBridge()) return;
+    let live = true;
+    api.exportName({ takeId: take.id, kind, loudness, trimSilence, output, manual: true })
+      .then((n) => { if (live && n) setReal({ ask, name: n }); })
+      .catch(() => {});
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ask]);
+  const name = real?.ask === ask ? real.name : guess;
   const where = !settings ? null : settings.exportDestination === "ask" ? "ask" : settings.exportDestination === "folder" && settings.exportDir ? settings.exportDir : take.dir;
   const tip = exportSuggestion(take.frame, o.preset, new Set(dismissed));
   const warnings = exportWarnings(output, take.durationMs != null ? take.durationMs / 1000 : null);

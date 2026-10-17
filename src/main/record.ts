@@ -11,11 +11,12 @@ import type {
 } from "../shared/types";
 import { diskSpace } from "./record/disk";
 import { cancelExport, exportTake } from "./record/export";
+import { exportPreviewName } from "./record/export-target";
 import { validTakeId } from "./record/ffmpeg-core";
 import { startKeys, stopKeys } from "./record/keys";
 import { shutdownPointer, startPointer, stopPointer } from "./record/pointer";
 import { registerSystemAudioIpc } from "./record/system-audio";
-import { appendChunk, beginTake, forgetTake, isTakeFile, listTakes, recordingsRoot, renameTake, saveTake, takeDir } from "./record/takes";
+import { appendChunk, beginTake, forgetTake, isTakeFile, listTakes, readMeta, recordingsRoot, renameTake, saveTake, takeDir } from "./record/takes";
 
 // OWNED BY: record agent. Screen sources, global click tracking, saving, ffmpeg export.
 
@@ -92,6 +93,10 @@ export function registerRecordIpc(getMain: () => BrowserWindow | null) {
     return exportTake(o, (p) => send(IPC.exportProgress, p), getMain());
   });
   ipcMain.handle(IPC.exportCancel, (_e, id: string) => cancelExport(id));
+  ipcMain.handle(IPC.exportName, async (_e, o: ExportOptions) => {
+    if (!validTakeId(o?.takeId)) throw new Error("bad take id");
+    return exportPreviewName(o, await readMeta(o.takeId), takeDir(o.takeId));
+  });
 
   for (const [accel, action] of Object.entries(SHORTCUTS)) {
     if (!globalShortcut.register(accel, () => send(IPC.recordShortcut, action))) {

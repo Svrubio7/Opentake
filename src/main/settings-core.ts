@@ -125,6 +125,41 @@ export function uniqueName(stem: string, ext: string, exists: (fileName: string)
   return `${stem} ${Date.now()}.${ext}`;
 }
 
+/**
+ * Names held by exports still being written. Two exports that start together must never pick the
+ * same free name: each sees the other's file missing, and ffmpeg -y overwrites. Keys are folder plus
+ * name without case (Windows and macOS file names ignore it).
+ */
+export class NameReservations {
+  private held = new Map<string, string[]>();
+  private key = (folder: string, name: string) => `${folder.replace(/[\\/]+$/, "")}/${name}`.toLowerCase();
+  private taken = (folder: string, exists: (fileName: string) => boolean) => (n: string) =>
+    exists(n) || [...this.held.values()].some((keys) => keys.includes(this.key(folder, n)));
+
+  /** The free name a new export would get now, without holding it (what the export dialog shows). */
+  peek(folder: string, stem: string, ext: string, exists: (fileName: string) => boolean, alsoCheck: string[] = []): string {
+    return uniqueName(stem, ext, this.taken(folder, exists), alsoCheck);
+  }
+
+  /** A free name, held with its .srt and .vtt partners until release(). */
+  reserve(folder: string, stem: string, ext: string, exists: (fileName: string) => boolean, alsoCheck: string[] = []): string {
+    const name = this.peek(folder, stem, ext, exists, alsoCheck);
+    this.hold(folder, name, alsoCheck);
+    return name;
+  }
+
+  /** Holds a name chosen elsewhere (the Save dialog). */
+  hold(folder: string, name: string, alsoCheck: string[] = []) {
+    const base = name.replace(/\.\w+$/, "");
+    this.held.set(this.key(folder, name), [this.key(folder, name), ...alsoCheck.map((e) => this.key(folder, `${base}.${e}`))]);
+  }
+
+  /** Lets the name go: the export ended, and from now on the file on disk speaks for itself. */
+  release(folder: string, name: string) {
+    this.held.delete(this.key(folder, name));
+  }
+}
+
 /** An export failure in words a person can act on (the ffmpeg detail stays for the log). */
 export function friendlyExportError(message: string): string {
   if (/No space left on device|ENOSPC|not enough space|disk full/i.test(message)) {

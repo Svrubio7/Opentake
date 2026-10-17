@@ -310,6 +310,7 @@ export const record: Shape<typeof en> = {
   "record.rec.track.system": "sonido del ordenador",
   "record.rec.startFailed": "No se ha podido empezar a grabar: {reason}",
   "record.rec.closeFailed": "No se ha podido cerrar la toma: {reason}",
+  "record.rec.trackStopped": "La pista de {track} ha dejado de grabar, así que la toma se ha detenido y se ha guardado hasta ahí",
   "record.rec.exportStarting": "Empezando",
   "record.rec.zoomNotice": "Zoom automático: {reason}.",
   "record.delay.lowMemory": "este ordenador tiene poca memoria, así que el zoom sigue a cada clic en lugar de llegar con él",

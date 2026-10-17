@@ -307,6 +307,7 @@ export const record = {
   "record.rec.track.system": "computer sound",
   "record.rec.startFailed": "Could not start recording: {reason}",
   "record.rec.closeFailed": "Could not close the take: {reason}",
+  "record.rec.trackStopped": "The {track} track stopped recording, so the take was stopped and kept as far as it got",
   "record.rec.exportStarting": "Starting",
   "record.rec.zoomNotice": "Auto zoom: {reason}.",
   "record.delay.lowMemory": "this computer has little memory, so the zoom follows each click instead of arriving with it",

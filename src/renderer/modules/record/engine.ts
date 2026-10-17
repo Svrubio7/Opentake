@@ -9,7 +9,9 @@ import { api, hasBridge } from "./api";
 import {
   coverCrop, cropSource, gradientLine, needsCamera, needsScreen, pxScale, resolveBackground, toCropSpace, type Rect,
 } from "./layout-core";
-import { History, planDelay, ringSlots, storeSize } from "./delay-core";
+import { FramePacer, TICK_MS } from "./pace-core";
+import { frameDrawn } from "@core/gpu-quiet";
+import { History, capStore, largerStore, planDelay, ringSlots, scaleStore, storeSize } from "./delay-core";
 import { FrameRing, type StoredFrame } from "./frame-ring";
 import { OverlayPainter, useOverlays } from "./overlays";
 import { SCENE_MS, blendScenes, coversFrame, easeInOutCubic, sceneGeometry, type CameraLayer, type Layer, type SceneGeom } from "./scenes-core";
@@ -31,6 +33,15 @@ const ready = (v: HTMLVideoElement) => v.srcObject != null && v.readyState >= 2 
 /** A picture to draw: a live video or a stored frame, and its size in pixels. */
 interface Source { img: CanvasImageSource; w: number; h: number }
 
+/** What a camera frame needs stored for a window: the whole frame, enough of it for the window's crop. */
+function cameraStore(vw: number, vh: number, box: { w: number; h: number }) {
+  const c = coverCrop(vw, vh, box.w, box.h);
+  return storeSize({ w: vw, h: vh }, { w: box.w * (vw / c.w), h: box.h * (vh / c.h) });
+}
+
+/** The longest wait between camera frames that still counts as a steady picture. */
+const STEADY_GAP_MS = 150;
+
 class Compositor {
   readonly canvas = document.createElement("canvas");
   private ctx = this.canvas.getContext("2d", { alpha: false, desynchronized: true })!;
@@ -47,6 +58,7 @@ class Compositor {
   private screenStream: MediaStream | null = null;
   private ticker: Worker | null = null;
   private tickFps = 0;
+  private pacer = new FramePacer(1000 / 30);
   /** the scene on screen, and the switch animating into it */
   private shownMode: RecordMode | null = null;
   private trans: { from: SceneGeom; start: number } | null = null;
@@ -59,6 +71,8 @@ class Compositor {
   /** how far behind real time the picture is drawn (0 outside a delayed take) */
   private delayMs = 0;
   private rings: { screen: FrameRing; camera: FrameRing } | null = null;
+  /** the most each ring may store per frame this take (the budget was planned for it) */
+  private ringCap = { screen: { w: 0, h: 0 }, camera: { w: 0, h: 0 } };
   /** the cursor (cropped-picture space) and the scene, by real time, for the delayed picture */
   private cursorTrail: TimedPt[] = [];
   private modes = new History<RecordMode>(10_000);
@@ -69,7 +83,9 @@ class Compositor {
     // and the recording must not freeze while you work in another app.
     const src = "let id=null;onmessage=(e)=>{clearInterval(id);id=setInterval(()=>postMessage(0),e.data)}";
     this.ticker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
-    this.ticker.onmessage = () => this.draw();
+    // the worker ticks often; a frame is drawn only when one is due, so the picture keeps an even
+    // cadence whatever the timer's granularity
+    this.ticker.onmessage = () => { if (this.pacer.due(performance.now())) this.draw(); };
     this.syncTicker();
     subscribeStreams(() => this.syncCamera());
     this.modes.push(Date.now(), useRecord.getState().mode);
@@ -112,7 +128,25 @@ class Compositor {
     const fps = useRecord.getState().fps;
     if (fps === this.tickFps || !this.ticker) return;
     this.tickFps = fps;
-    this.ticker.postMessage(1000 / fps);
+    this.pacer = new FramePacer(1000 / fps);
+    this.ticker.postMessage(TICK_MS);
+  }
+
+  /** the take's composite track, fed one frame at a time on its own clock (pace-core.ts) */
+  private capture: { track: CanvasCaptureMediaStreamTrack; pacer: FramePacer } | null = null;
+
+  /** A video track of the stage for a take's composite, at exactly `fps` frames a second. */
+  captureTrack(fps: number): MediaStreamTrack {
+    const track = this.canvas.captureStream(0).getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
+    this.capture = { track, pacer: new FramePacer(1000 / fps) };
+    return track;
+  }
+
+  private emitFrame() {
+    const c = this.capture;
+    if (!c) return;
+    if (c.track.readyState !== "live") { this.capture = null; return; }
+    if (c.pacer.due(performance.now())) c.track.requestFrame();
   }
 
   onPointer(l: PointerListener) { this.listeners.add(l); return () => { this.listeners.delete(l); }; }
@@ -212,6 +246,29 @@ class Compositor {
     }, isBusy(useRecord.getState().status) ? 0 : 1500);
   }
 
+  /**
+   * Resolves once the camera picture arrives steadily again (three frames, none more than
+   * STEADY_GAP_MS apart), or after maxMs. Opening the computer sound the first time stalls the
+   * picture for a moment; a take started inside that stall began with its camera frozen.
+   */
+  steadyCamera(maxMs = 1000): Promise<void> {
+    const v = this.cameraVideo as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
+    if (!ready(v) || !v.requestVideoFrameCallback) return Promise.resolve();
+    return new Promise((done) => {
+      const t0 = performance.now();
+      let last = t0, good = 0, over = false;
+      const end = () => { if (!over) { over = true; done(); } };
+      setTimeout(end, maxMs);
+      const next = () => v.requestVideoFrameCallback!(() => {
+        const now = performance.now();
+        good = now - last <= STEADY_GAP_MS ? good + 1 : 0;
+        last = now;
+        if (good >= 3) end(); else if (!over) next();
+      });
+      next();
+    });
+  }
+
   cameraStream(): MediaStream | null { return getStream("camera") ?? this.fallbackCamera; }
   cameraSize() {
     const s = this.cameraStream()?.getVideoTracks()[0]?.getSettings();
@@ -255,6 +312,8 @@ class Compositor {
       else if (L.mode === "camera" && !camera) this.hint(t("record.stage.waitingCamera"));
     }
     this.overlays.drawFrame(this.ctx, W, H, k, at, () => this.background(W, H));
+    this.emitFrame();
+    frameDrawn();
   }
 
   // ---- the delayed picture ----
@@ -292,15 +351,30 @@ class Compositor {
     const box = this.boxes(L, src, now);
     const sv = this.screenVideo, cv = this.cameraVideo;
     if (src && box.screen.w) {
-      const s = storeSize({ w: src.w, h: src.h }, box.screen, this.zoom.opts.scale);
-      rings.screen.push(sv, src.x, src.y, src.w, src.h, s.w, s.h, now);
+      const s = capStore(storeSize({ w: src.w, h: src.h }, box.screen, this.zoom.opts.scale), this.ringCap.screen);
+      if (s.w) rings.screen.push(sv, src.x, src.y, src.w, src.h, s.w, s.h, now);
     }
     if (ready(cv) && box.camera.w) {
-      // the whole camera frame, enough of it for the window's crop
-      const c = coverCrop(cv.videoWidth, cv.videoHeight, box.camera.w, box.camera.h);
-      const s = storeSize({ w: cv.videoWidth, h: cv.videoHeight }, { w: box.camera.w * (cv.videoWidth / c.w), h: box.camera.h * (cv.videoHeight / c.h) });
-      rings.camera.push(cv, 0, 0, cv.videoWidth, cv.videoHeight, s.w, s.h, now);
+      const s = capStore(cameraStore(cv.videoWidth, cv.videoHeight, box.camera), this.ringCap.camera);
+      if (s.w) rings.camera.push(cv, 0, 0, cv.videoWidth, cv.videoHeight, s.w, s.h, now);
     }
+  }
+
+  /**
+   * The most a ring stores per frame over every scene this take can switch to. A camera not open
+   * yet (a take started on the screen alone) is planned at the size the camera opens at.
+   */
+  private largestStores(L: RecordLayout, src: Rect | null, zoomScale: number) {
+    const cv = this.cameraVideo;
+    const cam = ready(cv) ? { w: cv.videoWidth, h: cv.videoHeight }
+      : useRecord.getState().cameraSource === "none" ? null : { w: 1920, h: 1080 };
+    let screen = { w: 0, h: 0 }, camera = { w: 0, h: 0 };
+    for (const mode of ["screen", "screen-camera", "camera"] as const) {
+      const g = sceneGeometry({ ...L, mode }, src);
+      if (src && g.screen) screen = largerStore(screen, storeSize({ w: src.w, h: src.h }, g.screen.rect, zoomScale));
+      if (cam && g.camera) camera = largerStore(camera, cameraStore(cam.w, cam.h, g.camera.rect));
+    }
+    return { screen, camera };
   }
 
   /**
@@ -310,17 +384,16 @@ class Compositor {
   beginDelay(): { delayMs: number; reason: string | null } {
     const st = useRecord.getState();
     const L = currentLayout(st);
-    const sv = this.screenVideo, cv = this.cameraVideo;
+    const sv = this.screenVideo;
     const src = ready(sv) ? cropSource(L.crop, sv.videoWidth, sv.videoHeight) : null;
-    const box = this.boxes(L, src, Date.now());
-    const screen = src ? storeSize({ w: src.w, h: src.h }, box.screen, st.zoomScale) : { w: 0, h: 0 };
-    const camera = ready(cv) && box.camera.w ? storeSize({ w: cv.videoWidth, h: cv.videoHeight }, box.camera) : { w: 0, h: 0 };
+    const { screen, camera } = this.largestStores(L, src, L.zoom.enabled ? st.zoomScale : 1);
     const plan = planDelay({
-      zoomEnabled: L.zoom.enabled, normalized: !!st.tracking?.normalized, mode: L.mode, fps: L.fps, screen, camera,
+      zoomEnabled: L.zoom.enabled, normalized: !!st.tracking?.normalized, mode: L.mode, fps: L.fps, screen, camera, isoTracks: st.isoTracks,
       deviceMemoryGb: (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
     });
     if (!plan.delayMs || !src) return { delayMs: 0, reason: plan.reason };
     const slots = ringSlots(plan.delayMs, 1000 / L.fps);
+    this.ringCap = { screen: scaleStore(screen, plan.scale), camera: scaleStore(camera, plan.scale) };
     this.rings = { screen: new FrameRing(slots), camera: new FrameRing(slots) };
     this.delayMs = plan.delayMs;
     this.overlays.delayMs = plan.delayMs;
