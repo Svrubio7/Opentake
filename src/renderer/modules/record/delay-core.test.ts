@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DELAY_MS, RING_OVERHEAD, delayedSoundPath, History, Pending, laterQueue, pickFrame, planDelay, ringBytes, ringSlots, storeSize } from "./delay-core";
+import { DELAY_MS, MIN_STORE_SCALE, RING_BUDGET, RING_OVERHEAD, capStore, delayedSoundPath, History, Pending, laterQueue, pickFrame, planDelay, ringBytes, ringSlots, storeSize } from "./delay-core";
 
 describe("storeSize", () => {
   it("keeps a 1080p screen whole in a 1080p take at 1.8x", () => {
@@ -22,7 +22,7 @@ describe("planDelay", () => {
     expect(planDelay({ ...base, fps: 60 }).delayMs).toBe(DELAY_MS);
   });
   it("does nothing, silently, without auto zoom or on a single window", () => {
-    expect(planDelay({ ...base, zoomEnabled: false })).toEqual({ delayMs: 0, bytes: 0, reason: null });
+    expect(planDelay({ ...base, zoomEnabled: false })).toEqual({ delayMs: 0, bytes: 0, scale: 1, reason: null });
     expect(planDelay({ ...base, normalized: false }).delayMs).toBe(0);
     expect(planDelay({ ...base, mode: "camera" }).delayMs).toBe(0);
   });
@@ -36,6 +36,25 @@ describe("planDelay", () => {
     const bubble = { w: 807, h: 454 };
     expect(planDelay({ ...base, fps: 60, camera: bubble, deviceMemoryGb: 8 }).delayMs).toBe(DELAY_MS);
     expect(planDelay({ ...base, fps: 60, screen: { w: 3840, h: 2160 }, camera: bubble, deviceMemoryGb: 8 }).delayMs).toBe(0);
+  });
+  it("budgets a 4K take started on the screen alone for the camera it can switch to", () => {
+    // QA: a 4K30 take, screen-only at Record, the camera scene later: the camera ring was never counted
+    const screen = storeSize({ w: 3840, h: 2160 }, { w: 3840, h: 2160 }, 1.8);
+    const onlyScreen = planDelay({ ...base, mode: "screen", screen, camera: { w: 0, h: 0 } });
+    const withCamera = planDelay({ ...base, mode: "screen", screen, camera: { w: 1920, h: 1080 } });
+    expect(withCamera.bytes).toBeGreaterThan(onlyScreen.bytes);
+    // planned for both, the take still delays, its frames stored a little smaller, inside the budget
+    expect(withCamera.delayMs).toBe(DELAY_MS);
+    expect(withCamera.scale).toBeLessThan(1);
+    expect(withCamera.scale).toBeGreaterThanOrEqual(MIN_STORE_SCALE);
+    expect(withCamera.bytes).toBeLessThanOrEqual(RING_BUDGET);
+    // far over: given up, with the reason
+    expect(planDelay({ ...base, fps: 60, mode: "screen", screen, camera: { w: 1920, h: 1080 } }).delayMs).toBe(0);
+  });
+  it("never stores a frame past the size the budget was planned for", () => {
+    expect(capStore({ w: 3840, h: 2160 }, { w: 1920, h: 1080 })).toEqual({ w: 1920, h: 1080 });
+    expect(capStore({ w: 1280, h: 720 }, { w: 1920, h: 1080 })).toEqual({ w: 1280, h: 720 });
+    expect(capStore({ w: 640, h: 480 }, { w: 0, h: 0 })).toEqual({ w: 0, h: 0 });
   });
   it("counts the rings' bytes", () => {
     expect(ringSlots(800, 1000 / 30)).toBe(26);
