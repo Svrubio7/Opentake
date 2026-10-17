@@ -213,7 +213,7 @@ async function begin() {
     const sysAudio = systemAudioWanted(layout.mode, s) ? await takeSystemAudio(mic, cleanup, delay.delayMs) : null;
     // the first opening of the computer sound stalls the camera picture for a moment: start after it
     if (sysAudio && needsCamera(layout.mode)) await comp.steadyCamera();
-    const canvasTrack = comp.canvas.captureStream(layout.fps).getVideoTracks()[0];
+    const canvasTrack = comp.captureTrack(layout.fps);
     owned.push(canvasTrack);
     // a delayed take's composite sound is delayed inside the graph that makes it (the computer sound
     // mix, or the voice engine): one more trip between audio contexts would put it 50 ms behind

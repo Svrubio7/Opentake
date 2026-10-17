@@ -9,6 +9,8 @@ import { api, hasBridge } from "./api";
 import {
   coverCrop, cropSource, gradientLine, needsCamera, needsScreen, pxScale, resolveBackground, toCropSpace, type Rect,
 } from "./layout-core";
+import { FramePacer, TICK_MS } from "./pace-core";
+import { frameDrawn } from "@core/gpu-quiet";
 import { History, capStore, largerStore, planDelay, ringSlots, scaleStore, storeSize } from "./delay-core";
 import { FrameRing, type StoredFrame } from "./frame-ring";
 import { OverlayPainter, useOverlays } from "./overlays";
@@ -56,6 +58,7 @@ class Compositor {
   private screenStream: MediaStream | null = null;
   private ticker: Worker | null = null;
   private tickFps = 0;
+  private pacer = new FramePacer(1000 / 30);
   /** the scene on screen, and the switch animating into it */
   private shownMode: RecordMode | null = null;
   private trans: { from: SceneGeom; start: number } | null = null;
@@ -80,7 +83,9 @@ class Compositor {
     // and the recording must not freeze while you work in another app.
     const src = "let id=null;onmessage=(e)=>{clearInterval(id);id=setInterval(()=>postMessage(0),e.data)}";
     this.ticker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
-    this.ticker.onmessage = () => this.draw();
+    // the worker ticks often; a frame is drawn only when one is due, so the picture keeps an even
+    // cadence whatever the timer's granularity
+    this.ticker.onmessage = () => { if (this.pacer.due(performance.now())) this.draw(); };
     this.syncTicker();
     subscribeStreams(() => this.syncCamera());
     this.modes.push(Date.now(), useRecord.getState().mode);
@@ -123,7 +128,25 @@ class Compositor {
     const fps = useRecord.getState().fps;
     if (fps === this.tickFps || !this.ticker) return;
     this.tickFps = fps;
-    this.ticker.postMessage(1000 / fps);
+    this.pacer = new FramePacer(1000 / fps);
+    this.ticker.postMessage(TICK_MS);
+  }
+
+  /** the take's composite track, fed one frame at a time on its own clock (pace-core.ts) */
+  private capture: { track: CanvasCaptureMediaStreamTrack; pacer: FramePacer } | null = null;
+
+  /** A video track of the stage for a take's composite, at exactly `fps` frames a second. */
+  captureTrack(fps: number): MediaStreamTrack {
+    const track = this.canvas.captureStream(0).getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
+    this.capture = { track, pacer: new FramePacer(1000 / fps) };
+    return track;
+  }
+
+  private emitFrame() {
+    const c = this.capture;
+    if (!c) return;
+    if (c.track.readyState !== "live") { this.capture = null; return; }
+    if (c.pacer.due(performance.now())) c.track.requestFrame();
   }
 
   onPointer(l: PointerListener) { this.listeners.add(l); return () => { this.listeners.delete(l); }; }
@@ -289,6 +312,8 @@ class Compositor {
       else if (L.mode === "camera" && !camera) this.hint(t("record.stage.waitingCamera"));
     }
     this.overlays.drawFrame(this.ctx, W, H, k, at, () => this.background(W, H));
+    this.emitFrame();
+    frameDrawn();
   }
 
   // ---- the delayed picture ----
