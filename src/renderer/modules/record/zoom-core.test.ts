@@ -230,6 +230,29 @@ describe("LiveZoom (the recording)", () => {
   });
 });
 
+describe("LiveZoom behind real time (a delayed take)", () => {
+  it("moves exactly like the export when the picture runs leadMs behind the clicks", () => {
+    const clicks = [{ t: 1500, x: 0.25, y: 0.5 }, { t: 5200, x: 0.8, y: 0.3 }];
+    const cursor: { t: number; x: number; y: number }[] = [];
+    for (let t = 0; t <= 9000; t += 16) {
+      const u = Math.min(1, Math.max(0, (t - 1700) / 1800));
+      cursor.push({ t, x: 0.25 + 0.55 * u * u * (3 - 2 * u), y: 0.5 });
+    }
+    const D = DEFAULT_ZOOM.leadMs;
+    const z = new LiveZoom();
+    const live: CameraFrame[] = [];
+    let ci = 0;
+    for (let i = 0; i * (1000 / 30) <= 8000; i++) {
+      const t = i * (1000 / 30);
+      // a click reaches the engine at its real time, which the picture shows D later
+      while (ci < clicks.length && clicks[ci].t <= t + D) { z.click(clicks[ci], clicks[ci].t); ci++; }
+      live.push({ t, ...z.update(t, cursorAt(cursor, t), cursorAt(cursor, t + DEFAULT_ZOOM.cursorLeadMs)) });
+    }
+    const exp = simulateCamera(clicks, cursor, 8000, 30);
+    live.forEach((f, i) => { expect(f.scale).toBeCloseTo(exp[i].scale, 9); expect(f.x).toBeCloseTo(exp[i].x, 9); expect(f.y).toBeCloseTo(exp[i].y, 9); });
+  });
+});
+
 describe("estimateDwellClicks", () => {
   it("turns a travel then a rest into one click", () => {
     const s: { t: number; x: number; y: number }[] = [];
