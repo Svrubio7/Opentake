@@ -47,7 +47,7 @@ export function resolveFrame(o: ExportOutput, src: { width: number; height: numb
 
 /** Scale into the frame: the same shape scales, another shape fits with bars or fills and crops. */
 export function frameFilter(src: { width: number; height: number }, W: number, H: number, fit: "fit" | "fill"): string {
-  if (src.width === W && src.height === H) return "setsar=1";
+  // always a scale, even at the same size: ffmpeg 6.1 crashes when a cut hi-res chain goes straight to the encoder
   const same = Math.abs(src.width / src.height - W / H) < 0.01;
   if (same) return `scale=${W}:${H}:flags=lanczos,setsar=1`;
   if (fit === "fill") return `scale=${W}:${H}:force_original_aspect_ratio=increase:flags=lanczos,crop=${W}:${H},setsar=1`;

@@ -62,7 +62,8 @@ export function ExportDialog({ take, onClose }: { take: TakeInfo; onClose: () =>
           <span className="label">Frame</span>
           <div className="ed-presets">
             {PRESET_ORDER.map((id) => (
-              <button key={id} type="button" className={o.preset === id ? "ed-preset on" : "ed-preset"} onClick={() => setOut({ preset: id })} title={PRESETS[id].hint}>
+              <button key={id} type="button" className={o.preset === id ? "ed-preset on" : "ed-preset"} onClick={() => setOut({ preset: id })} title={PRESETS[id].hint}
+                aria-label={PRESETS[id].label} aria-pressed={o.preset === id}>
                 <b>{PRESETS[id].label}</b>
                 <span>{PRESETS[id].size ? `${PRESETS[id].size!.width} × ${PRESETS[id].size!.height}` : id === "original" ? "As recorded" : "Your size"}</span>
               </button>

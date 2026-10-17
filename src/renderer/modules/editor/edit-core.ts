@@ -166,7 +166,8 @@ export function redo<T>(h: History<T>): History<T> {
 
 /** 1:05.3 style, for the editor's clock and the timeline ruler. */
 export function formatTime(ms: number, tenths = true): string {
-  const t = Math.max(0, ms);
+  // whole seconds round to the nearest (6.999 s reads 0:07), tenths to the nearest tenth
+  const t = Math.max(0, tenths ? Math.round(ms / 100) * 100 : Math.round(ms / 1000) * 1000);
   const m = Math.floor(t / 60000);
   const s = (t % 60000) / 1000;
   const sec = tenths ? s.toFixed(1).padStart(4, "0") : String(Math.floor(s)).padStart(2, "0");

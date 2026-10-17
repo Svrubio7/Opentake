@@ -10,7 +10,7 @@ import { IPC } from "../shared/ipc";
 import type { EditorTake, TakePeaks } from "../shared/types";
 import { lineText, remapLines, toSrt, toVtt } from "../renderer/modules/editor/captions-core";
 import { mergeTouching } from "../renderer/modules/editor/edit-core";
-import { readCaptions, readEdit, writeCaptions, writeEdit } from "./record/editor-store";
+import { cutsSomething, readCaptions, readEdit, writeCaptions, writeEdit } from "./record/editor-store";
 import { canBurnCaptions } from "./record/export-edit";
 import { ffmpegPath } from "./record/export";
 import { computePeaks, parseDurationMs } from "./record/export-core";
@@ -157,7 +157,7 @@ export function registerEditorIpc() {
     if (!caps?.lines.some((l) => lineText(l).trim())) throw new Error("There are no captions to save");
     const meta = await readMeta(takeId);
     const edit = await readEdit(takeId, meta.durationMs);
-    const lines = remapLines(caps.lines, edit ? mergeTouching(edit.keep) : null);
+    const lines = remapLines(caps.lines, cutsSomething(edit, meta.durationMs) ? mergeTouching(edit!.keep) : null);
     const dir = takeDir(takeId);
     const srt = join(dir, "take.srt"), vtt = join(dir, "take.vtt");
     await writeFile(srt, toSrt(lines));

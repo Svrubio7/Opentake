@@ -6,13 +6,13 @@ import type { ExportOptions, TakeFiles, TimeRange } from "../../shared/types";
 import { remapLines, toAss, toSrt, toVtt } from "../../renderer/modules/editor/captions-core";
 import { clipEdited, keptDuration, mergeTouching, wholeTake } from "../../renderer/modules/editor/edit-core";
 import geistBold from "../../../node_modules/geist/dist/fonts/geist-sans/Geist-Bold.ttf?asset";
-import { readCaptions, readEdit } from "./editor-store";
+import { cutsSomething, readCaptions, readEdit } from "./editor-store";
 import {
   AUDIO_KBPS, cutAudioArgs, editExportArgs, exportFileName, parseDurationMs, parseVideoSize, resolveFrame, sizeBitrateKbps,
   type SourceGraph,
 } from "./export-core";
 import { SILENCE_FILTER, hasAudioStream, hiresGraph, loudnormFilter, parseLoudnorm, parseProgressTime, parseSilenceTrim } from "./ffmpeg-core";
-import type { TakeMeta } from "./takes";
+import { readMeta, type TakeMeta } from "./takes";
 
 type Run = (args: string[], onStdout?: (s: string) => void) => Promise<{ code: number; stderr: string }>;
 type HiresSource = (takeId: string, dir: string, meta: TakeMeta, files: TakeFiles, offsetMs: number) => Promise<Omit<Parameters<typeof hiresGraph>[0], "trim" | "audio">>;
@@ -35,7 +35,8 @@ export async function wantsEditedExport(o: ExportOptions): Promise<boolean> {
   // captions on file: the export writes its matching .srt and .vtt
   if ((await readCaptions(o.takeId))?.lines.length) return true;
   if (o.useEdit === false) return false;
-  return (await readEdit(o.takeId, null)) != null;
+  const meta = await readMeta(o.takeId);
+  return cutsSomething(await readEdit(o.takeId, meta.durationMs), meta.durationMs);
 }
 
 let burnable: boolean | null = null;
@@ -57,7 +58,8 @@ export async function exportEdited(o: ExportOptions, c: EditedContext): Promise<
   const audio = hasAudioStream(probe.stderr);
   const durationMs = meta.durationMs ?? parseDurationMs(probe.stderr);
 
-  const edit = o.useEdit === false ? null : await readEdit(o.takeId, durationMs);
+  const read = o.useEdit === false ? null : await readEdit(o.takeId, durationMs);
+  const edit = cutsSomething(read, durationMs) ? read : null;
   let keep: TimeRange[] | null = edit ? mergeTouching(edit.keep) : null;
 
   if (o.trimSilence && audio) {

@@ -91,6 +91,8 @@ describe("display", () => {
   it("formats the clock and picks ruler steps", () => {
     expect(formatTime(65300)).toBe("1:05.3");
     expect(formatTime(5000, false)).toBe("0:05");
+    expect(formatTime(6999, false)).toBe("0:07");
+    expect(formatTime(59960)).toBe("1:00.0");
     expect(rulerStep(100)).toBe(1);
     expect(rulerStep(10)).toBe(10);
   });

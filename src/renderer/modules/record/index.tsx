@@ -254,7 +254,7 @@ function TakeRow({ take }: { take: TakeInfo }) {
         </div>
         <div className="rec-take-tags">
           {take.status === "recording" && !active && <Tag tone="warn" title="This take was interrupted and recovered">Recovered</Tag>}
-          {take.files.edit && <Tag title="This take has cuts (edit.json)">Edited</Tag>}
+          {take.files.edit && <Tag title="This take has an edit (edit.json)">Edited</Tag>}
           {take.files.captions && <Tag title="This take has captions (captions.json)">Captions</Tag>}
           {take.files.mp4 && <Tag tone="good">MP4</Tag>}
         </div>

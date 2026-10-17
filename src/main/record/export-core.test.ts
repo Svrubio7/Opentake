@@ -23,7 +23,7 @@ describe("export arguments", () => {
     expect(resolveFrame(out({ preset: "youtube", format: "gif", gif: { fps: 12, width: 480 } }), { width: 1, height: 1 })).toEqual({ W: 1920, H: 1080, gifW: 480, gifH: 270 });
   });
   it("fits with bars or fills and crops when the shape differs", () => {
-    expect(frameFilter({ width: 1920, height: 1080 }, 1920, 1080, "fit")).toBe("setsar=1");
+    expect(frameFilter({ width: 1920, height: 1080 }, 1920, 1080, "fit")).toBe("scale=1920:1080:flags=lanczos,setsar=1");
     expect(frameFilter({ width: 1280, height: 720 }, 1920, 1080, "fit")).toBe("scale=1920:1080:flags=lanczos,setsar=1");
     expect(frameFilter({ width: 1920, height: 1080 }, 1080, 1920, "fit")).toContain("pad=1080:1920");
     expect(frameFilter({ width: 1920, height: 1080 }, 1080, 1920, "fill")).toContain("crop=1080:1920");
@@ -132,6 +132,20 @@ describe.skipIf(!ff)("export end to end", () => {
     expect(r.signal, r.stderr.slice(-600)).toBeNull();
     expect(r.status).toBe(0);
     expect(durationOf("hires-cut2.mp4")).toBeCloseTo(2.4, 0);
+  }, 120_000);
+
+  it("survives a 1080p hi-res render cut twice and kept at its own size (ffmpeg 6.1 crashed without a final scale)", () => {
+    make(["-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=30:d=4", "-c:v", "libvpx", "-b:v", "2M", "-deadline", "realtime", "-cpu-used", "8", "screen1080.webm"]);
+    writeFileSync(join(dir, "zoom4.cmd"), zoomCommands(simulateCamera([{ t: 1500, x: 0.3, y: 0.3 }, { t: 2800, x: 0.7, y: 0.6 }], [], 4000, 30), 1920, 1080));
+    const graph = hiresGraph({ input: "composite.webm", fps: 30, trim: { start: 0, end: null }, audio: true, screen: "screen1080.webm", screenSize: { width: 1920, height: 1080 }, cmdFile: "zoom4.cmd" });
+    const args = editExportArgs({
+      source: { kind: "hires", graph, fps: 30 }, srcSize: { width: graph.W, height: graph.H }, audio: true,
+      keep: [{ start: 1000, end: 2000 }, { start: 2600, end: 3900 }], loudness: null, output: out({ preset: "youtube", quality: { mode: "crf", crf: 30 } }), out: "hires-1080.mp4",
+    });
+    const r = spawnSync(ff!, args, { cwd: dir, encoding: "utf8", timeout: 60_000 });
+    expect(r.status, r.stderr.slice(-400)).toBe(0);
+    expect(probe("hires-1080.mp4")).toMatch(/Video: h264.*1920x1080/);
+    expect(durationOf("hires-1080.mp4")).toBeCloseTo(2.3, 0);
   }, 120_000);
 
   it("makes a GIF with a palette at its own frame rate and width", () => {
