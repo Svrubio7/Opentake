@@ -10,7 +10,7 @@ import { delayedSound } from "./delayed-sound";
 import { compositor } from "./engine";
 import { extensionFor, needsCamera, needsScreen, pickMime, videoBitrate } from "./layout-core";
 import { currentLayout, useRecord } from "./store";
-import { NAME_CARD_NOTICE, PICK_NOTICE, SAVED_NOTICE } from "./notice-core";
+
 import { useShell } from "../shell/store";
 import { muteOwnAudio, systemSound, useSystemSound, type TakeAudio } from "./system-audio";
 import { pickAudioMime, systemAudioWanted } from "./system-audio-core";
@@ -132,7 +132,7 @@ export function startRecording() {
   if (needsScreen(s.mode) && !getStream("screen")) {
     // the one fix is choosing a screen: open the picker instead of only saying so
     window.dispatchEvent(new Event("opentake:pick-screen"));
-    return s.set({ error: null, notice: PICK_NOTICE, noticeAction: null });
+    return s.set({ error: null, notice: t("record.notice.pick"), noticeAction: null });
   }
   s.set({ error: null, notice: null, noticeAction: null });
   if (!s.countdown) return void begin();
@@ -369,7 +369,7 @@ async function finishTake(s: Session) {
   } catch (e) {
     st().set({ error: s.failed ?? t("record.rec.closeFailed", { reason: e instanceof Error ? e.message : String(e) }) });
   }
-  st().set({ status: "idle", elapsedMs: 0, notice: s.failed ? null : SAVED_NOTICE, noticeAction: s.failed ? null : "takes" });
+  st().set({ status: "idle", elapsedMs: 0, notice: s.failed ? null : t("record.notice.saved"), noticeAction: s.failed ? null : "takes" });
   await refreshTakes();
   if (st().autoExport && !s.failed && !quitting) void exportTake(s.takeId, "composite");
 }
@@ -421,7 +421,7 @@ function onShortcut(a: RecordShortcut) {
   const scene = SCENE_SHORTCUTS[a];
   if (scene) return switchScene(scene);
   if (a === "lower-third" && !compositor().overlays.toggleLowerThird()) {
-    st().set({ notice: NAME_CARD_NOTICE, noticeAction: "overlays" });
+    st().set({ notice: t("record.notice.nameCard"), noticeAction: "overlays" });
   }
 }
 
