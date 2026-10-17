@@ -142,3 +142,12 @@ describe("shortPath", () => {
     expect(shortPath("/x/" + "a".repeat(60), 20).length).toBe(20);
   });
 });
+
+describe("theme setting", () => {
+  it("keeps light and dark, and reads anything else as the system's", () => {
+    expect(sanitizeSettings({ theme: "light" }).theme).toBe("light");
+    expect(sanitizeSettings({ theme: "dark" }).theme).toBe("dark");
+    expect(sanitizeSettings({ theme: "neon" }).theme).toBe("system");
+    expect(sanitizeSettings({}).theme).toBe("system");
+  });
+});

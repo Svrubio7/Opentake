@@ -1,7 +1,7 @@
 // OWNED BY: ux. The app's settings on disk (settings.json in the app's data folder): where takes are
 // recorded, where exports go and what they are called. Every path is checked here; the renderer can
 // only ask for a folder through the system picker or pick one this file already knows.
-import { app, ipcMain, systemPreferences, type BrowserWindow } from "electron";
+import { app, ipcMain, nativeTheme, systemPreferences, type BrowserWindow } from "electron";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { access, constants, mkdir, rm, stat, statfs, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -165,7 +165,13 @@ const PRIVACY_PAGES: Record<string, Record<string, string>> = {
   win32: { camera: "ms-settings:privacy-webcam", microphone: "ms-settings:privacy-microphone" },
 };
 
+/** Light, dark or the system's: every window's prefers-color-scheme follows nativeTheme at once. */
+export function applyTheme() {
+  nativeTheme.themeSource = getSettings().theme;
+}
+
 export function registerSettingsIpc(getMain: () => BrowserWindow | null) {
+  applyTheme();
   ipcMain.handle(IPC.settingsGet, () => settingsView());
 
   // only the plain choices come from the renderer; folders go through the pickers below
@@ -177,11 +183,13 @@ export function registerSettingsIpc(getMain: () => BrowserWindow | null) {
       ...(p.nameTemplate !== undefined ? { nameTemplate: p.nameTemplate } : {}),
       ...(p.afterExport !== undefined ? { afterExport: p.afterExport } : {}),
       ...(p.language !== undefined ? { language: p.language } : {}),
+      ...(p.theme !== undefined ? { theme: p.theme } : {}),
       // a fixed folder needs a folder: without one it stays next to the take
       ...(p.exportDestination !== undefined ? { exportDestination: p.exportDestination === "folder" && !s.exportDir ? s.exportDestination : p.exportDestination } : {}),
     });
     await saveSettings(next);
     if (next.language !== s.language) applyLanguage();
+    if (next.theme !== s.theme) applyTheme();
     return settingsView();
   });
 

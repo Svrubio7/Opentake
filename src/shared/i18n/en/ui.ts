@@ -30,4 +30,5 @@ export const ui = {
   "card.exports": "Exports",
   "card.help": "Help",
   "card.language": "Language",
+  "card.appearance": "Appearance",
 } as const;

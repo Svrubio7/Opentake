@@ -8,7 +8,7 @@ import { rich } from "../../i18n";
 import { Button, Card, Hint, Segmented, Tag } from "../../ui";
 import { DEFAULT_NAME_TEMPLATE, NAME_TOKENS, renderName, shortPath } from "../../../main/settings-core";
 import { useRecord } from "../record/store";
-import { applyChoice, freeLabel, refreshSettings, setLanguage, shellApi, useShell } from "./store";
+import { applyChoice, freeLabel, refreshSettings, setLanguage, setTheme, shellApi, useShell } from "./store";
 import "./shell.css";
 
 function FolderLine({ f }: { f: FolderStatus }) {
@@ -141,6 +141,18 @@ export function LanguageSwitch({ label }: { label?: string }) {
   return <Segmented fill value={value} options={options} label={label ?? t("card.language")} onChange={(language) => void setLanguage(language)} />;
 }
 
+/** Light, dark or the system's; every window switches at once. */
+function AppearanceCard() {
+  const view = useShell((s) => s.view);
+  const value: AppSettings["theme"] = view?.settings.theme ?? "system";
+  const options = (["system", "light", "dark"] as const).map((v) => ({ value: v, label: t(`set.theme.${v}`) }));
+  return (
+    <Card title={t("card.appearance")} hint={t("set.theme.hint")}>
+      <Segmented fill value={value} options={options} label={t("card.appearance")} onChange={(theme) => void setTheme(theme)} />
+    </Card>
+  );
+}
+
 function LanguageCard() {
   return (
     <Card title={t("card.language")} hint={t("set.lang.hint")}>
@@ -172,6 +184,7 @@ export function SettingsPanel() {
       <RecordingsCard />
       <ExportsCard />
       <LanguageCard />
+      <AppearanceCard />
       <HelpCard />
     </div>
   );

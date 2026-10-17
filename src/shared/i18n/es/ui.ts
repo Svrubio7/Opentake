@@ -33,4 +33,5 @@ export const ui: Shape<typeof en> = {
   "card.exports": "Exportaciones",
   "card.help": "Ayuda",
   "card.language": "Idioma",
+  "card.appearance": "Apariencia",
 };

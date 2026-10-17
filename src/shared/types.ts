@@ -283,6 +283,8 @@ export interface AppSettings {
   pastRecordingsDirs: string[];
   /** the app's language: English, Spanish, or the system's (Spanish for any es-* system) */
   language: "system" | "en" | "es";
+  /** light, dark, or the system's choice (Windows and macOS dark mode) */
+  theme: "system" | "light" | "dark";
 }
 
 /** A folder the app writes to, as the main process sees it right now. */

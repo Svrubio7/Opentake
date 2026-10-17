@@ -185,4 +185,8 @@ export const shell: Shape<typeof en> = {
   "set.lang.system": "Como el sistema",
   "set.lang.en": "English",
   "set.lang.es": "Español",
+  "set.theme.hint": "Claro, oscuro o como tu ordenador.",
+  "set.theme.system": "Como el sistema",
+  "set.theme.light": "Claro",
+  "set.theme.dark": "Oscuro",
 };

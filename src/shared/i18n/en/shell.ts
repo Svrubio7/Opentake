@@ -182,4 +182,8 @@ export const shell = {
   "set.lang.system": "Match my system",
   "set.lang.en": "English",
   "set.lang.es": "Español",
+  "set.theme.hint": "Light, dark, or the same as your computer.",
+  "set.theme.system": "Match my system",
+  "set.theme.light": "Light",
+  "set.theme.dark": "Dark",
 } as const;

@@ -84,6 +84,11 @@ export function applyChoice(r: FolderChoice) {
 }
 
 /** Saves the language; main switches every window (this one included) as soon as it is saved. */
+export async function setTheme(theme: AppSettings["theme"]) {
+  if (!bridge()) return;
+  useShell.getState().set({ view: await shellApi.set({ theme }) });
+}
+
 export async function setLanguage(language: AppSettings["language"]) {
   if (!bridge()) return;
   useShell.getState().set({ view: await shellApi.set({ language }) });
