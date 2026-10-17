@@ -15,6 +15,8 @@ export interface TakeMeta {
   /** file extension per recorded track */
   containers: Partial<Record<RecordTrack, string>>;
   fps: number;
+  sceneChanges?: number;
+  overlays?: boolean;
 }
 
 export const recordingsRoot = () => join(app.getPath("documents"), "OpenTake recordings");
@@ -70,7 +72,7 @@ export async function saveTake(id: string, final: boolean, durationMs: number, t
   const dir = takeDir(id);
   await writeFile(join(dir, "timeline.json"), JSON.stringify(timeline));
   const meta = await readMeta(id);
-  await writeMeta({ ...meta, durationMs, status: final ? "done" : meta.status });
+  await writeMeta({ ...meta, durationMs, status: final ? "done" : meta.status, sceneChanges: timeline.scenes?.length ?? 0, overlays: (timeline.overlays?.length ?? 0) > 0 });
 }
 
 export async function readTimeline(id: string): Promise<TakeTimeline | null> {
@@ -105,7 +107,7 @@ export async function listTakes(): Promise<TakeInfo[]> {
       const dir = takeDir(e.name);
       let size = 0;
       for (const f of await readdir(dir)) size += (await stat(join(dir, f))).size;
-      out.push({ id: e.name, dir, createdAt: meta.createdAt, durationMs: meta.durationMs, status: meta.status, mode: meta.mode, files: takeFiles(e.name, meta), sizeBytes: size });
+      out.push({ id: e.name, dir, createdAt: meta.createdAt, durationMs: meta.durationMs, status: meta.status, mode: meta.mode, files: takeFiles(e.name, meta), sizeBytes: size, sceneChanges: meta.sceneChanges, overlays: meta.overlays });
     } catch {
       // not a take folder
     }

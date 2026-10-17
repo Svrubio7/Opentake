@@ -107,6 +107,10 @@ export interface TakeTimeline {
   hooks: boolean;
   clicks: { t: number; x: number; y: number; button: number }[];
   cursor: { t: number; x: number; y: number }[];
+  /** scene switches during the take (it starts on layout.mode) */
+  scenes?: { t: number; scene: RecordMode }[];
+  /** what was drawn over the picture (logo, name card, keys, intro, outro, pointer); the hi-res export redraws none of it */
+  overlays?: string[];
 }
 
 export interface TakeFiles { composite?: string; screen?: string; camera?: string; mp4?: string; hires?: string }
@@ -121,6 +125,10 @@ export interface TakeInfo {
   mode: RecordMode;
   files: TakeFiles;
   sizeBytes: number;
+  /** how many times the take switched scenes (the hi-res export follows one layout only) */
+  sceneChanges?: number;
+  /** the composite carries overlays the hi-res export does not redraw */
+  overlays?: boolean;
 }
 
 export type LoudnessTarget = "off" | "-14" | "-16";
@@ -138,7 +146,6 @@ export interface RecordBeginResult { takeId: string; dir: string }
 export type RecordTrack = "composite" | "screen" | "camera";
 export interface RecordChunk { takeId: string; track: RecordTrack; data: Uint8Array }
 export interface RecordSave { takeId: string; final: boolean; durationMs: number; timeline: TakeTimeline }
-export type RecordShortcut = "toggle" | "pause";
 
 // ---- shell: updates ----
 
@@ -178,3 +185,7 @@ export interface DrawStatus {
   shortcutOk: boolean;
 }
 export type DrawCommand = "undo" | "clear";
+export type RecordShortcut = "toggle" | "pause" | "scene-camera" | "scene-screen-camera" | "scene-screen" | "lower-third";
+
+/** One key press for the keystroke overlay. `key` is a label ("P", "Enter"); the flags are the held modifiers. */
+export interface KeyPress { key: string; ctrl: boolean; alt: boolean; shift: boolean; meta: boolean; t: number }

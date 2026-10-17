@@ -17,6 +17,11 @@ export const IPC = {
   exportCancel: "take:record:export-cancel",
   takesList: "take:record:takes",
   takeDelete: "take:record:take-delete",
+  /** renderer -> main: start or stop the keystroke overlay's global key hook */
+  keysStart: "take:keys:start",
+  keysStop: "take:keys:stop",
+  /** main -> renderer: one key press for the keystroke overlay (never written to disk) */
+  keysEvent: "take:keys:event",
   takeReveal: "take:record:take-reveal",
   // teleprompter module: the second window and the state relay between windows
   prompterOpen: "take:prompter:open",

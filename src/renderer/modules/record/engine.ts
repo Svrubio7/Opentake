@@ -1,13 +1,14 @@
 // The live compositor: screen, camera bubble, frame and auto zoom drawn into one canvas.
 // The canvas IS the recording (recorder.ts captures it), so the stage shows exactly what is recorded.
 import { getStream, publishStream, subscribeStreams } from "@core/streams";
-import type { BubbleLayout, CursorSample } from "@shared/types";
+import type { CursorSample, RecordLayout, RecordMode } from "@shared/types";
 import { api, hasBridge } from "./api";
 import {
-  bubbleRadius, bubbleRect, cameraWindowRect, coverCrop, cropSource, gradientLine, needsCamera, needsScreen, pxScale,
-  resolveBackground, screenRect, toCropSpace, type Rect,
+  coverCrop, cropSource, gradientLine, needsCamera, needsScreen, pxScale, resolveBackground, toCropSpace, type Rect,
 } from "./layout-core";
-import { currentLayout, useRecord } from "./store";
+import { OverlayPainter, useOverlays } from "./overlays";
+import { SCENE_MS, blendScenes, coversFrame, easeInOutCubic, sceneGeometry, type CameraLayer, type Layer, type SceneGeom } from "./scenes-core";
+import { currentLayout, isBusy, useRecord } from "./store";
 import { DEFAULT_ZOOM, DwellDetector, LiveZoom, type Pt } from "./zoom-core";
 
 type PointerListener = { click?: (p: Pt & { t: number; button: number }) => void; cursor?: (s: CursorSample[]) => void };
@@ -30,13 +31,21 @@ class Compositor {
   private zoom = new LiveZoom({ ...DEFAULT_ZOOM });
   private dwell = new DwellDetector();
   private cursor: Pt | null = null;
-  private ripples: { x: number; y: number; t: number }[] = [];
+  /** click rings, spotlight, our own pointer, keys, logo, name card, intro and outro */
+  readonly overlays = new OverlayPainter();
   private listeners = new Set<PointerListener>();
   private fallbackCamera: MediaStream | null = null;
   private fallbackPending = false;
   private screenStream: MediaStream | null = null;
   private ticker: Worker | null = null;
   private tickFps = 0;
+  /** the scene on screen, and the switch animating into it */
+  private shownMode: RecordMode | null = null;
+  private trans: { from: SceneGeom; start: number } | null = null;
+  private lastGeom: SceneGeom | null = null;
+  private geomSize = "";
+  /** a take that used the camera keeps it open until it ends, so switching back is instant */
+  private keepCamera = false;
   /** hover feedback from the stage (bubble outline while dragging) */
   bubbleHover: "move" | "resize" | null = null;
 
@@ -51,7 +60,7 @@ class Compositor {
     subscribeStreams(() => this.syncCamera());
     useRecord.subscribe((s, prev) => {
       if (s.fps !== prev.fps) this.syncTicker();
-      if (s.mode !== prev.mode) this.syncCamera();
+      if (s.mode !== prev.mode || s.status !== prev.status) this.syncCamera();
       if (s.zoomScale !== prev.zoomScale) this.zoom.opts = { ...this.zoom.opts, scale: s.zoomScale };
     });
     this.zoom.opts = { ...this.zoom.opts, scale: useRecord.getState().zoomScale };
@@ -61,13 +70,13 @@ class Compositor {
       api.onClick((e) => {
         const p = toCropSpace(e, useRecord.getState().crop);
         this.zoom.click(p, e.t);
-        this.ripples.push({ x: p.x, y: p.y, t: e.t });
+        this.overlays.click(p, e.t);
         this.listeners.forEach((l) => l.click?.(e));
       });
       api.onCursor((samples) => {
         const crop = useRecord.getState().crop;
         const last = samples[samples.length - 1];
-        if (last) { this.cursor = toCropSpace(last, crop); this.zoom.move(last.t); }
+        if (last) { this.cursor = toCropSpace(last, crop); this.zoom.move(last.t); this.overlays.cursorTo(this.cursor); }
         if (!useRecord.getState().tracking?.hooks) {
           for (const s of samples) {
             const c = this.dwell.push(toCropSpace(s, crop));
@@ -96,6 +105,7 @@ class Compositor {
     this.screenStream = null;
     this.screenVideo.srcObject = null;
     publishStream("screen", null);
+    useOverlays.setState({ cursorHideable: false });
     if (!sourceId) {
       if (hasBridge()) await api.stopPointer();
       useRecord.getState().set({ tracking: null });
@@ -119,6 +129,10 @@ class Compositor {
       }
     });
     publishStream("screen", stream);
+    // our own pointer can only be drawn where the capture leaves the system one out. Chromium's desktop
+    // capture reports cursor "always" today (asking for "never" is ignored), so this stays false for now.
+    const cursorMode = (stream.getVideoTracks()[0]?.getSettings() as { cursor?: string } | undefined)?.cursor;
+    useOverlays.setState({ cursorHideable: cursorMode === "never" });
     if (hasBridge()) {
       const tracking = await api.trackPointer(displayId ?? undefined);
       useRecord.getState().set({ tracking });
@@ -131,10 +145,19 @@ class Compositor {
     return s?.width && s?.height ? { width: s.width, height: s.height } : undefined;
   }
 
+  /** The camera is needed by the scene on screen, or was used earlier in this take. */
+  private cameraWanted() {
+    const s = useRecord.getState();
+    const busy = isBusy(s.status);
+    if (busy && needsCamera(s.mode)) this.keepCamera = true;
+    if (!busy) this.keepCamera = false;
+    return needsCamera(s.mode) || this.keepCamera;
+  }
+
   /** Prefer the camera module's filtered stream; open the default camera only when it has none. */
   private syncCamera() {
     const published = getStream("camera");
-    const wanted = needsCamera(useRecord.getState().mode);
+    const wanted = this.cameraWanted();
     if (published) {
       this.fallbackCamera?.getTracks().forEach((t) => t.stop());
       this.fallbackCamera = null;
@@ -151,10 +174,11 @@ class Compositor {
     }
     if (this.fallbackCamera || this.fallbackPending) return;
     this.fallbackPending = true;
-    // give the camera module a moment to publish before opening the device ourselves
+    // give the camera module a moment to publish before opening the device ourselves (not mid-take:
+    // a scene switch is waiting for it, and the module would have published already)
     setTimeout(async () => {
       try {
-        if (getStream("camera") || !needsCamera(useRecord.getState().mode)) return;
+        if (getStream("camera") || !this.cameraWanted()) return;
         const s = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }, audio: false });
         if (getStream("camera")) { s.getTracks().forEach((t) => t.stop()); return; }
         this.fallbackCamera = s;
@@ -166,7 +190,7 @@ class Compositor {
       } finally {
         this.fallbackPending = false;
       }
-    }, 1500);
+    }, isBusy(useRecord.getState().status) ? 0 : 1500);
   }
 
   cameraStream(): MediaStream | null { return getStream("camera") ?? this.fallbackCamera; }
@@ -186,71 +210,119 @@ class Compositor {
     const L = currentLayout(st);
     const { width: W, height: H } = L;
     if (this.canvas.width !== W || this.canvas.height !== H) { this.canvas.width = W; this.canvas.height = H; }
-    const ctx = this.ctx;
     const now = Date.now();
     const k = pxScale(W, H);
     if (!st.tracking?.hooks) { const c = this.dwell.tick(now); if (c) this.zoom.click(c, now); }
+    this.overlays.tick(now);
 
-    if (L.mode === "camera") {
-      const cv = this.cameraVideo;
-      if (L.padding > 0 || (L.screenScale ?? 1) < 1) {
-        // the camera alone in a window over the background, styled like the screen window
-        this.paintBackground(W, H);
-        const r = cameraWindowRect(L);
-        const radius = L.cornerRadius * k;
-        this.frameShadow(r, radius, L.screenShadow ?? 0, k);
-        ctx.save();
-        this.roundRect(r.x, r.y, r.w, r.h, radius);
-        ctx.clip();
-        ctx.fillStyle = "#000";
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-        if (ready(cv)) {
-          const c = coverCrop(cv.videoWidth, cv.videoHeight, r.w, r.h);
-          ctx.drawImage(cv, c.x, c.y, c.w, c.h, r.x, r.y, r.w, r.h);
-        }
-        ctx.restore();
-        this.frameBorder(r, radius, (L.screenBorder ?? 0) * k, L.screenBorderColor);
-        if (!ready(cv)) this.hint("Waiting for the camera");
-        return;
-      }
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, W, H);
-      if (ready(cv)) {
-        const c = coverCrop(cv.videoWidth, cv.videoHeight, W, H);
-        ctx.drawImage(cv, c.x, c.y, c.w, c.h, 0, 0, W, H);
-      } else this.hint("Waiting for the camera");
-      return;
+    const sv = this.screenVideo, cv = this.cameraVideo;
+    const src = ready(sv) ? cropSource(L.crop, sv.videoWidth, sv.videoHeight) : null;
+    const g = this.sceneAt(L, src, now);
+
+    if (!(coversFrame(g.camera, W, H) && ready(cv))) this.paintBackground(W, H);
+    if (g.screen && src) this.drawScreen(g.screen, src, L, st, now, k);
+    if (g.camera) this.drawCamera(g.camera, k, !this.trans && L.mode === "screen-camera");
+    if (!this.trans) {
+      if (needsScreen(L.mode) && !src) this.hint(st.sourceId ? "Starting the screen capture" : "Pick a screen or a window to record");
+      else if (L.mode === "camera" && !ready(cv)) this.hint("Waiting for the camera");
     }
+    this.overlays.drawFrame(this.ctx, W, H, k, now, () => this.background(W, H));
+  }
 
-    this.paintBackground(W, H);
-    const sv = this.screenVideo;
-    if (needsScreen(L.mode) && ready(sv)) {
-      const vw = sv.videoWidth, vh = sv.videoHeight;
-      // the kept part of the screen, then the zoom inside it
-      const src = cropSource(L.crop, vw, vh);
-      const r = screenRect(L, src.w, src.h);
-      const f = L.zoom.enabled && st.tracking?.normalized ? this.zoom.update(now, this.cursor) : { scale: 1, x: 0.5, y: 0.5 };
-      const sw = src.w / f.scale, sh = src.h / f.scale;
-      const sx = src.x + Math.min(src.w - sw, Math.max(0, f.x * src.w - sw / 2));
-      const sy = src.y + Math.min(src.h - sh, Math.max(0, f.y * src.h - sh / 2));
-      const radius = L.cornerRadius * k;
-      this.frameShadow(r, radius, L.screenShadow ?? 0, k);
+  /** Where everything sits this frame: the scene's own layout, or part way through a switch into it. */
+  private sceneAt(L: RecordLayout, src: Rect | null, now: number): SceneGeom {
+    const target = sceneGeometry(L, src);
+    const size = `${L.width}x${L.height}`;
+    if (size !== this.geomSize) { this.geomSize = size; this.trans = null; this.lastGeom = null; this.shownMode = L.mode; }
+    if (this.shownMode !== L.mode) {
+      // from wherever the picture is now, so a switch during a switch carries on smoothly
+      if (this.lastGeom) this.trans = { from: this.lastGeom, start: now };
+      this.shownMode = L.mode;
+    }
+    let g = target;
+    if (this.trans) {
+      const t = (now - this.trans.start) / SCENE_MS;
+      if (t >= 1) this.trans = null;
+      else g = blendScenes(this.trans.from, target, easeInOutCubic(t));
+    }
+    this.lastGeom = g;
+    return g;
+  }
+
+  /** The kept part of the screen in its window, the zoom inside it, and the pointer layer on top. */
+  private drawScreen(layer: Layer, src: Rect, L: RecordLayout, st: ReturnType<typeof useRecord.getState>, now: number, k: number) {
+    const ctx = this.ctx;
+    const r = layer.rect;
+    const f = L.zoom.enabled && st.tracking?.normalized ? this.zoom.update(now, this.cursor) : { scale: 1, x: 0.5, y: 0.5 };
+    const sw = src.w / f.scale, sh = src.h / f.scale;
+    const sx = src.x + Math.min(src.w - sw, Math.max(0, f.x * src.w - sw / 2));
+    const sy = src.y + Math.min(src.h - sh, Math.max(0, f.y * src.h - sh / 2));
+    ctx.save();
+    ctx.globalAlpha = layer.alpha;
+    this.frameShadow(r, layer.radius, layer.shadow, k);
+    ctx.save();
+    this.roundRect(r.x, r.y, r.w, r.h, layer.radius);
+    ctx.clip();
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(this.screenVideo, sx, sy, sw, sh, r.x, r.y, r.w, r.h);
+    const view = { sx: (sx - src.x) / src.w, sy: (sy - src.y) / src.h, sw: sw / src.w, sh: sh / src.h };
+    this.overlays.drawScreen(ctx, r, view, k, now, f.scale, layer.alpha);
+    ctx.restore();
+    this.frameBorder(r, layer.radius, layer.border, layer.borderColor);
+    ctx.restore();
+  }
+
+  /** The camera as a bubble, a window, or the whole frame (and anything in between during a switch). */
+  private drawCamera(layer: CameraLayer, k: number, settled: boolean) {
+    const ctx = this.ctx;
+    const cv = this.cameraVideo;
+    const b = layer.rect, radius = layer.radius;
+    ctx.save();
+    ctx.globalAlpha = layer.alpha;
+    if (layer.shadow > 0 && layer.bubble) {
       ctx.save();
-      this.roundRect(r.x, r.y, r.w, r.h, radius);
-      ctx.clip();
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(sv, sx, sy, sw, sh, r.x, r.y, r.w, r.h);
-      this.drawRipples(now, r, { sx: (sx - src.x) / src.w, sy: (sy - src.y) / src.h, sw: sw / src.w, sh: sh / src.h }, k);
+      ctx.shadowColor = `rgba(0,0,0,${(0.3 + 0.3 * layer.shadow).toFixed(3)})`;
+      ctx.shadowBlur = 56 * layer.shadow * k;
+      ctx.shadowOffsetY = 16 * layer.shadow * k;
+      ctx.fillStyle = "#1b1b1e";
+      this.roundRect(b.x, b.y, b.w, b.h, radius);
+      ctx.fill();
       ctx.restore();
-      this.frameBorder(r, radius, (L.screenBorder ?? 0) * k, L.screenBorderColor);
-    } else if (needsScreen(L.mode)) {
-      this.hint(st.sourceId ? "Starting the screen capture" : "Pick a screen or a window to record");
+    } else this.frameShadow(b, radius, layer.shadow, k);
+    ctx.save();
+    this.roundRect(b.x, b.y, b.w, b.h, radius);
+    ctx.clip();
+    ctx.fillStyle = layer.bubble ? "#1b1b1e" : "#000";
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    if (ready(cv)) {
+      const c = coverCrop(cv.videoWidth, cv.videoHeight, b.w, b.h);
+      ctx.drawImage(cv, c.x, c.y, c.w, c.h, b.x, b.y, b.w, b.h);
     }
-
-    if (L.mode === "screen-camera") this.drawBubble(L.bubble, W, H, k);
+    ctx.restore();
+    if (layer.border > 0) this.frameBorder(b, radius, layer.border, layer.borderColor);
+    if (settled && layer.bubble) {
+      if (this.bubbleHover && useRecord.getState().status === "idle") {
+        // the drag outline only shows between takes
+        this.roundRect(b.x, b.y, b.w, b.h, radius);
+        ctx.lineWidth = 3 * k;
+        ctx.strokeStyle = "rgba(61,220,151,0.9)";
+        ctx.stroke();
+      } else if (layer.border <= 0) {
+        this.roundRect(b.x, b.y, b.w, b.h, radius);
+        ctx.lineWidth = 2 * k;
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   private paintBackground(W: number, H: number) {
+    this.ctx.drawImage(this.background(W, H).canvas, 0, 0);
+  }
+
+  /** The background canvas for this frame size (painted only when something about it changed). */
+  private background(W: number, H: number): { key: string; canvas: HTMLCanvasElement } {
     const st = useRecord.getState();
     const spec = resolveBackground({ id: st.backgroundId, color: st.bgColor, color2: st.bgColor2, angle: st.bgAngle, image: st.bgImage, blur: st.bgBlur });
     if (spec.kind === "image" && this.bgImage?.src !== spec.src) {
@@ -288,7 +360,7 @@ class Compositor {
       }
       this.bgCache = { key, canvas: c };
     }
-    this.ctx.drawImage(this.bgCache.canvas, 0, 0);
+    return this.bgCache;
   }
 
   private frameShadow(r: Rect, radius: number, amount: number, k: number) {
@@ -317,63 +389,7 @@ class Compositor {
     ctx.restore();
   }
 
-  private drawRipples(now: number, r: Rect, view: { sx: number; sy: number; sw: number; sh: number }, k: number) {
-    const ctx = this.ctx;
-    this.ripples = this.ripples.filter((p) => now - p.t < 600);
-    for (const p of this.ripples) {
-      const t = (now - p.t) / 600;
-      const x = r.x + ((p.x - view.sx) / view.sw) * r.w;
-      const y = r.y + ((p.y - view.sy) / view.sh) * r.h;
-      ctx.beginPath();
-      ctx.arc(x, y, (14 + 34 * t) * k, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255,255,255,${0.75 * (1 - t)})`;
-      ctx.lineWidth = 4 * k;
-      ctx.stroke();
-      ctx.fillStyle = `rgba(255,255,255,${0.18 * (1 - t)})`;
-      ctx.fill();
-    }
-  }
 
-  private drawBubble(layout: BubbleLayout, W: number, H: number, k: number) {
-    const ctx = this.ctx;
-    const b = bubbleRect(layout, W, H);
-    const radius = bubbleRadius(layout, b);
-    const shadow = layout.shadow ?? 0.6;
-    if (shadow > 0) {
-      ctx.save();
-      ctx.shadowColor = `rgba(0,0,0,${(0.3 + 0.3 * shadow).toFixed(3)})`;
-      ctx.shadowBlur = 56 * shadow * k;
-      ctx.shadowOffsetY = 16 * shadow * k;
-      ctx.fillStyle = "#1b1b1e";
-      this.roundRect(b.x, b.y, b.w, b.h, radius);
-      ctx.fill();
-      ctx.restore();
-    }
-    ctx.save();
-    this.roundRect(b.x, b.y, b.w, b.h, radius);
-    ctx.clip();
-    ctx.fillStyle = "#1b1b1e";
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    if (ready(this.cameraVideo)) {
-      const c = coverCrop(this.cameraVideo.videoWidth, this.cameraVideo.videoHeight, b.w, b.h);
-      ctx.drawImage(this.cameraVideo, c.x, c.y, c.w, c.h, b.x, b.y, b.w, b.h);
-    }
-    ctx.restore();
-    const border = (layout.border ?? 0) * k;
-    if (border > 0) this.frameBorder(b, radius, border, layout.borderColor);
-    if (this.bubbleHover && useRecord.getState().status === "idle") {
-      // the drag outline only shows between takes
-      this.roundRect(b.x, b.y, b.w, b.h, radius);
-      ctx.lineWidth = 3 * k;
-      ctx.strokeStyle = "rgba(61,220,151,0.9)";
-      ctx.stroke();
-    } else if (border <= 0) {
-      this.roundRect(b.x, b.y, b.w, b.h, radius);
-      ctx.lineWidth = 2 * k;
-      ctx.strokeStyle = "rgba(255,255,255,0.18)";
-      ctx.stroke();
-    }
-  }
 
   private roundRect(x: number, y: number, w: number, h: number, r: number) {
     const ctx = this.ctx;

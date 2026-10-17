@@ -6,6 +6,7 @@ import type {
 } from "../shared/types";
 import { cancelExport, exportTake } from "./record/export";
 import { validTakeId } from "./record/ffmpeg-core";
+import { startKeys, stopKeys } from "./record/keys";
 import { shutdownPointer, startPointer, stopPointer } from "./record/pointer";
 import { appendChunk, beginTake, forgetTake, listTakes, recordingsRoot, saveTake, takeDir } from "./record/takes";
 
@@ -14,6 +15,10 @@ import { appendChunk, beginTake, forgetTake, listTakes, recordingsRoot, saveTake
 const SHORTCUTS: Record<string, RecordShortcut> = {
   "CommandOrControl+Shift+R": "toggle",
   "CommandOrControl+Shift+P": "pause",
+  "CommandOrControl+Shift+1": "scene-camera",
+  "CommandOrControl+Shift+2": "scene-screen-camera",
+  "CommandOrControl+Shift+3": "scene-screen",
+  "CommandOrControl+Shift+L": "lower-third",
 };
 
 export function registerRecordIpc(getMain: () => BrowserWindow | null) {
@@ -35,6 +40,8 @@ export function registerRecordIpc(getMain: () => BrowserWindow | null) {
 
   ipcMain.handle(IPC.clicksStart, (e, displayId?: string) => startPointer(e.sender, typeof displayId === "string" ? displayId : undefined));
   ipcMain.handle(IPC.clicksStop, () => { stopPointer(); });
+  ipcMain.handle(IPC.keysStart, (e, opts?: { showAll?: boolean }) => startKeys(e.sender, { showAll: !!opts?.showAll }));
+  ipcMain.handle(IPC.keysStop, () => { stopKeys(); });
 
   ipcMain.handle(IPC.recordBegin, async (e, req: RecordBeginRequest) => {
     // a minimized or covered window must keep compositing while you record another app

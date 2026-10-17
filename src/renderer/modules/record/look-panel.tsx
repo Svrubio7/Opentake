@@ -29,10 +29,10 @@ export function LooksCard() {
     const next = [...looks.filter((l) => l.name !== n), { name: n, look: lookOf(useRecord.getState()) }];
     if (!storeLooks(next)) {
       // a look with a big background picture can be more than storage holds: keep it without the picture
-      const lite = next.map((l) => (l.name === n ? { ...l, look: { ...l.look, bgImage: null } } : l));
+      const lite = next.map((l) => (l.name === n ? { ...l, look: { ...l.look, bgImage: null, logoImage: null } } : l));
       if (!storeLooks(lite)) return setNote("Could not save the look.");
       setLooks(lite);
-      setNote(`Saved "${n}" without its background picture (too large to keep).`);
+      setNote(`Saved "${n}" without its pictures (too large to keep).`);
     } else {
       setLooks(next);
       setNote(`Saved "${n}".`);

@@ -114,3 +114,6 @@
 .corner-pick { display: flex; gap: 2px; margin-right: -6px; }
 .rec-tp { flex: none; color: var(--muted); }
 .rec-tp.on { color: var(--text); }
+
+/* overlays: the logo's thumbnail beside its buttons */
+.logo-thumb { width: 40px; height: 40px; object-fit: contain; border-radius: 8px; background: var(--track); padding: 4px; flex: none; }
