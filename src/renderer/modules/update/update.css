@@ -1,0 +1,22 @@
+/* The update notice (bottom right, over the panel) and the About popover (beside the rail). */
+.upd-notice, .upd-pop {
+  position: fixed; z-index: 60; display: flex; flex-direction: column; gap: 6px;
+  background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius-card);
+  box-shadow: var(--shadow-raised); padding: 14px 16px;
+  animation: upd-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.upd-notice { right: 16px; bottom: 16px; width: 340px; }
+.upd-pop { left: 84px; bottom: 14px; width: 300px; }
+.upd-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.upd-line { margin-top: 2px; }
+.upd-actions { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.upd-notes { margin-left: auto; font-size: 13px; gap: 4px; }
+.upd-notes svg { width: 13px; height: 13px; }
+.upd-repo { font-size: 13px; color: var(--muted); text-decoration: none; margin-top: 4px; }
+.upd-repo:hover { color: var(--text); }
+.upd-rail-version { color: var(--rail-muted); font-size: 13px; margin-left: 4px; }
+.upd-spin { animation: upd-spin 900ms linear infinite; }
+
+@keyframes upd-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes upd-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .upd-notice, .upd-pop, .upd-spin { animation: none; } }

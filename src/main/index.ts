@@ -2,11 +2,14 @@ import { app, BrowserWindow, nativeTheme, session, shell } from "electron";
 import { join } from "node:path";
 import { registerRecordIpc } from "./record";
 import { registerTeleprompterIpc } from "./teleprompter";
+import { registerDraw } from "./draw";
+import { registerUpdater } from "./updater";
 
-/** Loads one of the renderer pages (dev server in dev, built file in production). */
-export function loadPage(win: BrowserWindow, page: "index" | "teleprompter") {
+/** Loads one of the renderer pages (dev server in dev, built file in production). `part` picks a view inside the page. */
+export function loadPage(win: BrowserWindow, page: "index" | "teleprompter" | "draw", part?: string) {
   const dev = process.env.ELECTRON_RENDERER_URL;
-  return dev ? win.loadURL(`${dev}/${page}.html`) : win.loadFile(join(__dirname, `../renderer/${page}.html`));
+  const q = part ? `?part=${part}` : "";
+  return dev ? win.loadURL(`${dev}/${page}.html${q}`) : win.loadFile(join(__dirname, `../renderer/${page}.html`), part ? { query: { part } } : undefined);
 }
 
 export const preloadPath = () => join(__dirname, "../preload/index.mjs");
@@ -33,6 +36,8 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media" || permission === "display-capture"));
   registerRecordIpc(() => main);
   registerTeleprompterIpc(() => main);
+  registerDraw(() => main);
+  registerUpdater();
   createMain();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createMain(); });
 });

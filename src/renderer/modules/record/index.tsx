@@ -10,6 +10,7 @@ import { BackgroundCard, CameraBubbleCard, FrameCard, LooksCard, WindowCard } fr
 import { exportTake, refreshTakes, startRecording, stopRecording, togglePause, wireRecorder } from "./recorder";
 import { currentLayout, isBusy, useRecord } from "./store";
 import { PrompterToggle } from "../teleprompter/record-link";
+import { DrawCard } from "../draw";
 import "./record.css";
 
 // ---------- Stage ----------
@@ -332,6 +333,8 @@ export function RecordPanel() {
           )}
         </Card>
       )}
+
+      <DrawCard />
 
       <Card title="Recording">
         <div className="row">

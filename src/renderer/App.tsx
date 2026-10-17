@@ -5,6 +5,8 @@ import { AudioPanel } from "./modules/audio";
 import { CameraPanel } from "./modules/camera";
 import { RecordBar, RecordPanel, RecordRailStatus, Stage } from "./modules/record";
 import { PrompterOverlay, TeleprompterPanel, linkPrompterToRecorder } from "./modules/teleprompter";
+import { DrawBridge } from "./modules/draw";
+import { AboutButton, UpdateNotice } from "./modules/update";
 
 const TABS: { id: string; label: string; title: string; icon: LucideIcon; Panel: ComponentType }[] = [
   { id: "record", label: "Record", title: "Record", icon: CircleDot, Panel: RecordPanel },
@@ -37,7 +39,7 @@ export function App() {
             {id === tab && <i className="rail-dot" aria-hidden />}
           </button>
         ))}
-        <div className="rail-foot"><RecordRailStatus onOpen={() => setTab("record")} /></div>
+        <div className="rail-foot"><RecordRailStatus onOpen={() => setTab("record")} /><AboutButton /></div>
       </nav>
 
       <main className="workspace">
@@ -55,6 +57,8 @@ export function App() {
         ))}
       </aside>
       <PrompterOverlay />
+      <UpdateNotice />
+      <DrawBridge />
     </div>
   );
 }
