@@ -13,6 +13,7 @@ import { exportTake, refreshTakes, startRecording, stopRecording, switchScene, t
 import { currentLayout, isBusy, useRecord } from "./store";
 import { PrompterToggle } from "../teleprompter/record-link";
 import { DrawCard } from "../draw";
+import { SystemSoundControls } from "./system-audio-panel";
 import "./record.css";
 
 // ---------- Stage ----------
@@ -356,7 +357,8 @@ export function RecordPanel() {
           <Segmented<30 | 60> value={s.fps} options={[{ value: 30, label: "30 fps" }, { value: 60, label: "60 fps" }]} onChange={(fps) => s.set({ fps })} disabled={busy} />
         </div>
         <Switch label="3, 2, 1 countdown" checked={s.countdown} onChange={(countdown) => s.set({ countdown })} />
-        <Switch label="Separate tracks" hint="Also saves the raw screen and camera as their own files, for editing later" checked={s.isoTracks} onChange={(isoTracks) => s.set({ isoTracks })} disabled={busy} />
+        <Switch label="Separate tracks" hint="Also saves the raw screen, the camera and the computer sound as their own files, for editing later" checked={s.isoTracks} onChange={(isoTracks) => s.set({ isoTracks })} disabled={busy} />
+        <SystemSoundControls />
         <div className="rec-sources">
           <div className="row"><span className="row-label">Mic</span><Tag tone={mic.tone} title={s.micSource === "fallback" ? "The Mic tab is not ready, so the default microphone is used" : undefined}>{mic.text}</Tag></div>
           {needsCamera(s.mode) && <div className="row"><span className="row-label">Camera</span><Tag tone={cam.tone}>{cam.text}</Tag></div>}

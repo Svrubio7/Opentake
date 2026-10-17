@@ -4,10 +4,12 @@ import { IPC } from "../shared/ipc";
 import type {
   ExportOptions, RecordBeginRequest, RecordChunk, RecordSave, RecordShortcut, ScreenSource,
 } from "../shared/types";
+import { diskSpace } from "./record/disk";
 import { cancelExport, exportTake } from "./record/export";
 import { validTakeId } from "./record/ffmpeg-core";
 import { startKeys, stopKeys } from "./record/keys";
 import { shutdownPointer, startPointer, stopPointer } from "./record/pointer";
+import { registerSystemAudioIpc } from "./record/system-audio";
 import { appendChunk, beginTake, forgetTake, listTakes, recordingsRoot, saveTake, takeDir } from "./record/takes";
 
 // OWNED BY: record agent. Screen sources, global click tracking, saving, ffmpeg export.
@@ -69,6 +71,9 @@ export function registerRecordIpc(getMain: () => BrowserWindow | null) {
     await mkdir(recordingsRoot(), { recursive: true });
     await shell.openPath(recordingsRoot());
   });
+
+  ipcMain.handle(IPC.diskSpace, () => diskSpace());
+  registerSystemAudioIpc();
 
   ipcMain.handle(IPC.exportVideo, (_e, o: ExportOptions) => {
     if (!validTakeId(o?.takeId)) throw new Error("bad take id");

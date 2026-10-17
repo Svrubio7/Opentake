@@ -43,6 +43,11 @@ export interface RecordSettings extends LookSettings {
   autoExport: boolean;
   loudness: LoudnessTarget;
   trimSilence: boolean;
+  /** record the computer's own sound on screen takes, and on camera-only takes */
+  systemAudio: boolean;
+  systemAudioCamera: boolean;
+  /** computer sound level as a gain, 0 to 2 */
+  systemAudioLevel: number;
 }
 
 export type RecordStatus = "idle" | "countdown" | "recording" | "paused" | "stopping";
@@ -101,6 +106,9 @@ const DEFAULTS: RecordSettings = {
   autoExport: true,
   loudness: "-14",
   trimSilence: false,
+  systemAudio: true,
+  systemAudioCamera: false,
+  systemAudioLevel: 1,
 };
 
 const KEY = "take.record.settings";

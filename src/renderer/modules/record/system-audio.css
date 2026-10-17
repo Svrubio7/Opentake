@@ -1,0 +1,4 @@
+/* The computer sound meter beside its level slider. */
+.sys-meter { display: inline-block; width: 56px; height: 6px; margin-right: 8px; border-radius: 3px; background: var(--track); overflow: hidden; vertical-align: middle; }
+.sys-meter > span { display: block; width: 100%; height: 100%; background: var(--brand); transform: scaleX(0); transform-origin: left; transition: background var(--t) var(--ease); }
+.sys-meter > span.hot { background: var(--danger); }

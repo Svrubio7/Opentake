@@ -23,6 +23,12 @@ export const IPC = {
   /** main -> renderer: one key press for the keystroke overlay (never written to disk) */
   keysEvent: "take:keys:event",
   takeReveal: "take:record:take-reveal",
+  /** free space on the drive that holds the recordings */
+  diskSpace: "take:record:disk",
+  /** whether this system can record the computer's own sound */
+  systemAudioSupport: "take:system-audio:support",
+  /** mute this window's own playback so the computer sound capture does not record it */
+  muteOwnAudio: "take:system-audio:mute-own",
   // teleprompter module: the second window and the state relay between windows
   prompterOpen: "take:prompter:open",
   prompterClose: "take:prompter:close",

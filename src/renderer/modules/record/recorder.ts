@@ -3,11 +3,14 @@
 import { getStream } from "@core/streams";
 import type { RecordMode, RecordShortcut, RecordTrack, TakeTimeline } from "@shared/types";
 import { api, hasBridge } from "./api";
+import { AUDIO_BPS, DISK_POLL_MS, diskBeforeTake, diskWhileRecording, takeBitrate, type DiskLevel } from "./disk-core";
 import { compositor } from "./engine";
 import { extensionFor, needsCamera, needsScreen, pickMime, videoBitrate } from "./layout-core";
 import { currentLayout, useRecord } from "./store";
+import { muteOwnAudio, systemSound, useSystemSound, type TakeAudio } from "./system-audio";
+import { pickAudioMime, systemAudioWanted } from "./system-audio-core";
 
-interface Track { track: RecordTrack; rec: MediaRecorder; queue: Promise<void> }
+interface Track { track: RecordTrack; rec: MediaRecorder; queue: Promise<void>; bps: number }
 
 interface Session {
   takeId: string;
@@ -20,6 +23,11 @@ interface Session {
   unsubscribe: () => void;
   timers: ReturnType<typeof setInterval>[];
   failed: string | null;
+  /** undoes what the take took: the computer sound capture, the muted playback */
+  cleanup: (() => void)[];
+  /** what all tracks write together, bits a second */
+  bitrate: number;
+  diskLevel: DiskLevel;
 }
 
 let session: Session | null = null;
@@ -54,8 +62,8 @@ async function getMicTracks(owned: MediaStreamTrack[]): Promise<MediaStreamTrack
 }
 
 function makeTrack(s: Session, track: RecordTrack, stream: MediaStream, mime: string, bps: number): Track {
-  const rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: bps, audioBitsPerSecond: 192_000 });
-  const t: Track = { track, rec, queue: Promise.resolve() };
+  const rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: bps, audioBitsPerSecond: AUDIO_BPS });
+  const t: Track = { track, rec, queue: Promise.resolve(), bps };
   rec.ondataavailable = (e) => {
     if (!e.data.size) return;
     const blob = e.data;
@@ -96,23 +104,66 @@ function cancelCountdown() {
   st().set({ status: "idle", countdownValue: 0 });
 }
 
+/** Opens the computer sound for a take and mixes it with the mic; null when it is off or unavailable. */
+async function takeSystemAudio(mic: MediaStreamTrack[], cleanup: (() => void)[]): Promise<TakeAudio | null> {
+  const sys = systemSound();
+  const ok = await sys.acquire();
+  cleanup.push(() => sys.release());
+  const audio = ok ? sys.mix(mic) : null;
+  if (!audio) {
+    const reason = useSystemSound.getState().reason;
+    st().set({ notice: `Recording without computer sound${reason ? `: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}` : "."}` });
+    return null;
+  }
+  cleanup.push(audio.dispose);
+  // our own playback (the Listen monitor) would come back through the capture
+  await muteOwnAudio(true);
+  cleanup.push(() => void muteOwnAudio(false));
+  return audio;
+}
+
+async function checkDiskBeforeTake() {
+  try {
+    const v = diskBeforeTake((await api.diskSpace()).freeBytes);
+    if (v.message) st().set({ notice: v.message });
+  } catch { /* the drive could not be read: record anyway */ }
+}
+
+async function checkDiskWhileRecording(sess: Session) {
+  if (session !== sess) return;
+  let v;
+  try { v = diskWhileRecording((await api.diskSpace()).freeBytes, sess.bitrate); } catch { return; }
+  if (session !== sess || v.level === "ok" || v.level === sess.diskLevel) return;
+  sess.diskLevel = v.level;
+  if (v.level === "stop") {
+    await stopRecording();
+    st().set({ error: v.message ?? null });
+  } else st().set({ notice: v.message ?? null });
+}
+
 async function begin() {
   const s = st();
   const layout = currentLayout(s);
   const comp = compositor();
   const owned: MediaStreamTrack[] = [];
+  const cleanup: (() => void)[] = [];
   try {
     s.set({ status: "recording", elapsedMs: 0 });
+    await checkDiskBeforeTake();
     const mic = await getMicTracks(owned);
+    const sysAudio = systemAudioWanted(layout.mode, s) ? await takeSystemAudio(mic, cleanup) : null;
     const canvasTrack = comp.canvas.captureStream(layout.fps).getVideoTracks()[0];
     owned.push(canvasTrack);
-    const composite = new MediaStream([canvasTrack, ...mic]);
-    const mime = pickMime((m) => MediaRecorder.isTypeSupported(m), mic.length > 0);
+    const compositeAudio = sysAudio ? [sysAudio.mixed] : mic;
+    const composite = new MediaStream([canvasTrack, ...compositeAudio]);
+    const mime = pickMime((m) => MediaRecorder.isTypeSupported(m), compositeAudio.length > 0);
     const isoMime = pickMime((m) => MediaRecorder.isTypeSupported(m), false);
 
     const screen = needsScreen(layout.mode) && s.isoTracks ? getStream("screen") : null;
     const camera = needsCamera(layout.mode) && layout.mode !== "camera" && s.isoTracks ? comp.cameraStream() : null;
     const camMime = pickMime((m) => MediaRecorder.isTypeSupported(m), mic.length > 0);
+    const system = sysAudio && s.isoTracks ? sysAudio.system : null;
+    const sysMime = system ? pickAudioMime((m) => MediaRecorder.isTypeSupported(m)) : "";
 
     const { takeId } = await api.begin({
       mode: layout.mode,
@@ -122,6 +173,7 @@ async function begin() {
         composite: extensionFor(mime),
         ...(screen ? { screen: extensionFor(isoMime) } : {}),
         ...(camera ? { camera: extensionFor(camMime) } : {}),
+        ...(system ? { system: extensionFor(sysMime) } : {}),
       },
     });
 
@@ -136,7 +188,7 @@ async function begin() {
       scenes: [],
       overlays: comp.overlays.activeList(),
     };
-    const sess: Session = { takeId, tracks: [], startWall: 0, pausedTotal: 0, pauseStart: null, timeline, owned, unsubscribe: () => {}, timers: [], failed: null };
+    const sess: Session = { takeId, tracks: [], startWall: 0, pausedTotal: 0, pauseStart: null, timeline, owned, unsubscribe: () => {}, timers: [], failed: null, cleanup, bitrate: 0, diskLevel: "ok" };
 
     sess.tracks.push(makeTrack(sess, "composite", composite, mime, videoBitrate(layout.width, layout.height, layout.fps)));
     if (screen) {
@@ -147,6 +199,11 @@ async function begin() {
       const cs = comp.cameraSize() ?? { width: 1920, height: 1080 };
       sess.tracks.push(makeTrack(sess, "camera", new MediaStream([...camera.getVideoTracks(), ...mic]), camMime, videoBitrate(cs.width, cs.height, 30)));
     }
+    if (system) sess.tracks.push(makeTrack(sess, "system", new MediaStream([system]), sysMime, AUDIO_BPS));
+    sess.bitrate = takeBitrate({
+      videoBps: sess.tracks.filter((t) => t.track !== "system").map((t) => t.bps),
+      audioTracks: sess.tracks.filter((t) => t.rec.stream.getAudioTracks().length > 0).length,
+    });
 
     sess.unsubscribe = comp.onPointer({
       click: (e) => {
@@ -173,9 +230,11 @@ async function begin() {
     sess.timers.push(setInterval(() => st().set({ elapsedMs: elapsed() }), 200));
     // the click timeline is small: rewrite it every few seconds so a crash keeps it too
     sess.timers.push(setInterval(() => { void api.save({ takeId, final: false, durationMs: elapsed(), timeline: sess.timeline }); }, 5000));
+    sess.timers.push(setInterval(() => { void checkDiskWhileRecording(sess); }, DISK_POLL_MS));
     st().set({ takeId, status: "recording" });
   } catch (e) {
     owned.forEach((t) => t.stop());
+    cleanup.forEach((f) => f());
     session = null;
     st().set({ status: "idle", error: `Could not start recording: ${e instanceof Error ? e.message : e}` });
   }
@@ -231,6 +290,7 @@ async function finishTake(s: Session) {
   })));
   await Promise.all(s.tracks.map((t) => t.queue));
   s.owned.forEach((t) => t.stop());
+  s.cleanup.forEach((f) => f());
   session = null;
   try {
     await api.save({ takeId: s.takeId, final: true, durationMs, timeline: s.timeline });
