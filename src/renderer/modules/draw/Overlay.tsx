@@ -61,23 +61,25 @@ export function DrawStrokes() {
     return () => window.removeEventListener("keydown", k);
   }, [status.active]);
 
-  // fading: tick every frame while something fades, sleep until the next one starts otherwise
+  // fading: tick about 30 times a second while something fades, sleep until the next one starts otherwise.
+  // Timers, not requestAnimationFrame: Chromium stops animation frames in a window it thinks is covered,
+  // and a click-through overlay can look covered, which left strokes on screen for good.
   useEffect(() => {
     if (!status.fade) return;
     const t = Date.now();
     const fading = strokes.some((s) => s.doneAt !== undefined && t - s.doneAt >= FADE_HOLD_MS);
-    let raf = 0, timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = () => {
       const n = Date.now();
       setNow(n);
       setStrokes((l) => { const live = liveStrokes(l, n, true); return live.length === l.length ? l : live; });
     };
-    if (fading) raf = requestAnimationFrame(tick);
+    if (fading) timer = setTimeout(tick, 33);
     else {
       const left = nextExpiry(strokes, t, true);
       if (left !== null) timer = setTimeout(tick, Math.max(16, left - 600));
     }
-    return () => { cancelAnimationFrame(raf); if (timer) clearTimeout(timer); };
+    return () => { if (timer) clearTimeout(timer); };
   }, [strokes, now, status.fade]);
 
   // tell main when nothing is left, so a click-through window does not linger on the screen

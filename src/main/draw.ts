@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { IPC } from "../shared/ipc";
 import type { DrawCommand, DrawStatus, DrawTool } from "../shared/types";
+import { shapeWithHole } from "./draw-core";
 import { loadPage, preloadPath } from "./index";
 import { setClickFilter } from "./record/pointer";
 
@@ -69,8 +70,6 @@ function makeWindow(bounds: Rectangle, title: string, part: "strokes" | "toolbar
     fullscreenable: false,
     skipTaskbar: true,
     enableLargerThanScreen: true,
-    // the toolbar never takes focus, so the keys keep going to the strokes window
-    focusable: part === "strokes",
     show: false,
     title,
     webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true, backgroundThrottling: false },
@@ -79,6 +78,9 @@ function makeWindow(bounds: Rectangle, title: string, part: "strokes" | "toolbar
   win.setAlwaysOnTop(true, "screen-saver", part === "toolbar" ? 1 : 0);
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.webContents.on("did-finish-load", () => win.webContents.send(IPC.drawStatus, status));
+  // a crashed or hung drawing page must never leave a window on the screen that eats the mouse
+  win.webContents.on("render-process-gone", () => closeDrawing());
+  win.on("unresponsive", () => closeDrawing());
   getMain()?.once("closed", () => { if (!win.isDestroyed()) win.destroy(); });
   void loadPage(win, "draw", part);
   return win;
@@ -90,6 +92,9 @@ function ensureWindows() {
     overlay = makeWindow(d.bounds, "OpenTake Drawing", "strokes");
     overlay.setIgnoreMouseEvents(true, { forward: true });
     overlay.on("closed", () => { overlay = null; empty = true; setDrawing(false); });
+    // Windows raises a window it activates above every other topmost one: put the toolbar back on top
+    overlay.on("focus", raiseToolbar);
+    overlay.on("show", raiseToolbar);
   } else {
     const now = overlay.getBounds(), b = d.bounds;
     if (now.x !== b.x || now.y !== b.y || now.width !== b.width || now.height !== b.height) overlay.setBounds(b);
@@ -102,6 +107,37 @@ function ensureWindows() {
   } else toolbar.setBounds(toolbarBounds(d));
 }
 
+/** The toolbar always sits above the strokes, so its buttons are always the ones under the pointer. */
+function raiseToolbar() {
+  if (alive(toolbar) && toolbar.isVisible()) toolbar.moveTop();
+}
+
+/**
+ * Cuts the toolbar's rectangle out of the strokes window while drawing (Windows and Linux), so even if
+ * the stacking order goes wrong the clicks there can only reach the toolbar. The whole window otherwise.
+ */
+function shapeOverlay(cut: boolean) {
+  if (!alive(overlay) || process.platform === "darwin") return;
+  const o = overlay.getBounds();
+  if (!cut || !alive(toolbar)) { overlay.setShape([]); return; }
+  overlay.setShape(shapeWithHole(o, toolbar.getBounds()));
+}
+
+/** Esc works from anywhere while drawing, even when the strokes window does not have the focus. */
+function escapeKey(on: boolean) {
+  if (on) { if (!globalShortcut.isRegistered("Escape")) globalShortcut.register("Escape", () => setDrawing(false)); }
+  else globalShortcut.unregister("Escape");
+}
+
+/** Takes both drawing windows off the screen for good (quit, crash, hang). */
+export function closeDrawing() {
+  escapeKey(false);
+  for (const w of [toolbar, overlay]) if (alive(w)) w.destroy();
+  toolbar = overlay = null;
+  empty = true;
+  if (status.active) { status = { ...status, active: false }; broadcast(); }
+}
+
 const whenLoaded = (w: BrowserWindow, fn: () => void) => { if (w.webContents.isLoading()) w.webContents.once("did-finish-load", fn); else fn(); };
 
 export function setDrawing(on: boolean) {
@@ -111,10 +147,19 @@ export function setDrawing(on: boolean) {
     ensureWindows();
     const o = overlay!, t = toolbar!;
     o.setIgnoreMouseEvents(false);
-    whenLoaded(o, () => { o.show(); o.focus(); });
-    whenLoaded(t, () => t.showInactive());
+    escapeKey(true);
+    whenLoaded(o, () => {
+      if (!status.active) return;
+      shapeOverlay(true);
+      o.show();
+      o.focus();
+      // the toolbar can take the focus too: it answers the same keys
+      whenLoaded(t, () => { if (status.active) { t.showInactive(); raiseToolbar(); } });
+    });
   } else {
+    escapeKey(false);
     if (alive(toolbar)) toolbar.hide();
+    shapeOverlay(false);
     if (alive(overlay)) {
       overlay.setIgnoreMouseEvents(true, { forward: true });
       // strokes still fading (or kept) stay on screen; the window hides when they are gone
@@ -154,5 +199,6 @@ export function registerDraw(main: () => BrowserWindow | null) {
 
   status = { ...status, shortcutOk: globalShortcut.register(SHORTCUT, () => setDrawing(!status.active)) };
   if (!status.shortcutOk) console.warn(`[draw] could not register ${SHORTCUT} (another app holds it)`);
-  app.on("will-quit", () => globalShortcut.unregister(SHORTCUT));
+  app.on("will-quit", () => { globalShortcut.unregister(SHORTCUT); escapeKey(false); });
+  app.on("before-quit", closeDrawing);
 }
