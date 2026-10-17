@@ -27,10 +27,10 @@ export function ShortcutsSheet() {
   const close = () => set({ shortcutsOpen: false });
   return (
     <div className="modal-scrim sc-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="modal sc-sheet" role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
+      <div className="modal sc-sheet" role="dialog" aria-label="Keyboard shortcuts" aria-modal="true" tabIndex={-1} ref={(el) => el?.focus()}>
         <div className="row">
           <h2 className="modal-title">Keyboard shortcuts</h2>
-          <Button variant="ghost" size="icon" onClick={close} aria-label="Close" autoFocus><X /></Button>
+          <Button variant="ghost" size="icon" onClick={close} aria-label="Close"><X /></Button>
         </div>
         <div className="sc-groups">
           {SHORTCUT_GROUPS.map((g) => (

@@ -216,11 +216,14 @@ export function RecordBar() {
 
         <div className="rec-bar-side end">
           <DockLevel />
-          <span className="rec-sep" aria-hidden />
+          {/* the frame cannot change during a take, so it makes room for the take's own controls */}
+          {!busy && <span className="rec-sep" aria-hidden />}
           {/* the three common frames, plus the current one when the Record panel set another */}
-          <Segmented label="Frame" value={aspect}
-            options={(ASPECTS.includes(aspect) ? ASPECTS : [...ASPECTS, aspect]).map((a) => ({ value: a, label: aspectLabel(a, customW, customH), hint: a === "custom" ? "A custom frame (Record panel, Frame)" : `Record a ${a} frame` }))}
-            onChange={(a) => set({ aspect: a })} disabled={busy} />
+          {!busy && (
+            <Segmented label="Frame" value={aspect}
+              options={(ASPECTS.includes(aspect) ? ASPECTS : [...ASPECTS, aspect]).map((a) => ({ value: a, label: aspectLabel(a, customW, customH), hint: a === "custom" ? "A custom frame (Record panel, Frame)" : `Record a ${a} frame` }))}
+              onChange={(a) => set({ aspect: a })} />
+          )}
         </div>
       </div>
       {picking && <SourcePicker onClose={() => setPicking(false)} />}
