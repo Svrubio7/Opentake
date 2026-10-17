@@ -45,10 +45,10 @@ function existingAncestor(p: string): string | null {
   }
 }
 
-async function freeBytes(p: string): Promise<number | null> {
+async function space(p: string): Promise<{ free: number | null; total: number | null }> {
   const at = existingAncestor(p);
-  if (!at) return null;
-  try { const s = await statfs(at); return Number(s.bavail) * Number(s.bsize); } catch { return null; }
+  if (!at) return { free: null, total: null };
+  try { const s = await statfs(at); return { free: Number(s.bavail) * Number(s.bsize), total: Number(s.blocks) * Number(s.bsize) }; } catch { return { free: null, total: null }; }
 }
 
 function countTakes(dir: string): number {
@@ -63,7 +63,8 @@ function countTakes(dir: string): number {
  */
 export async function folderStatus(path: string, opts: { isDefault?: boolean; takes?: boolean } = {}): Promise<FolderStatus> {
   const p = resolve(path);
-  const base: FolderStatus = { path: p, isDefault: !!opts.isDefault, state: "ok", freeBytes: await freeBytes(p) };
+  const sp = await space(p);
+  const base: FolderStatus = { path: p, isDefault: !!opts.isDefault, state: "ok", freeBytes: sp.free, totalBytes: sp.total };
   if (opts.takes) base.takes = countTakes(p);
   try {
     const s = await stat(p);

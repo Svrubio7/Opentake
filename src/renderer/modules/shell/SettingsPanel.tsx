@@ -1,7 +1,7 @@
 // OWNED BY: ux. The Settings tab: where takes are recorded, where exports go and what they are called,
 // what happens after an export, and the way back to the first-run setup and the shortcuts.
 import { useEffect, useState } from "react";
-import { FolderOpen, Keyboard, RotateCcw, Sparkles } from "lucide-react";
+import { FolderOpen, FolderX, Keyboard, RotateCcw, Sparkles } from "lucide-react";
 import type { AfterExport, ExportDestination, FolderStatus } from "@shared/types";
 import { Button, Card, Hint, Segmented, Tag } from "../../ui";
 import { DEFAULT_NAME_TEMPLATE, NAME_TOKENS, renderName, shortPath } from "../../../main/settings-core";
@@ -11,6 +11,8 @@ import "./shell.css";
 
 function FolderLine({ f }: { f: FolderStatus }) {
   return (
+    <div className="set-well">
+    <span className="set-folder-mark" aria-hidden>{f.state === "ok" ? <FolderOpen /> : <FolderX />}</span>
     <div className="set-folder">
       <span className="set-path" title={f.path}>{shortPath(f.path)}</span>
       <span className="set-meta tnum">
@@ -18,6 +20,7 @@ function FolderLine({ f }: { f: FolderStatus }) {
         {f.state === "ok" && f.freeBytes != null && <span>{freeLabel(f.freeBytes)}</span>}
         {f.takes != null && f.state !== "missing" && <span>{f.takes === 1 ? "1 take" : `${f.takes} takes`}</span>}
       </span>
+    </div>
     </div>
   );
 }
