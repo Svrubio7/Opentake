@@ -9,6 +9,7 @@ import { IPC } from "../shared/ipc";
 import type { AppSettings, FolderChoice, FolderStatus, Permissions, PermissionState, SettingsView } from "../shared/types";
 import { openExternal, openPath, pickFolder } from "./dialogs";
 import { applyLanguage } from "./i18n";
+import { t } from "../shared/i18n";
 import { isInside, mountRoot, sanitizeSettings, withPastDir } from "./settings-core";
 
 const WIN = process.platform === "win32";
@@ -86,7 +87,7 @@ export const driveThere = (p: string) => existsSync(mountRoot(resolve(p), proces
 /** Makes the folder if needed and proves a file can be written there. Returns a plain error line, or null. */
 export async function ensureWritable(dir: string): Promise<string | null> {
   const p = resolve(dir);
-  if (!driveThere(p)) return `The drive for ${p} is not connected.`;
+  if (!driveThere(p)) return t("main.set.driveGone", { path: p });
   try {
     await mkdir(p, { recursive: true });
     const probe = join(p, `.opentake-write-test-${process.pid}`);
@@ -95,9 +96,9 @@ export async function ensureWritable(dir: string): Promise<string | null> {
     return null;
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code;
-    if (code === "EACCES" || code === "EPERM" || code === "EROFS") return `OpenTake cannot write to ${p}. Choose a folder you can save files in.`;
-    if (code === "ENOSPC") return `The drive for ${p} is full.`;
-    return `${p} cannot be used: ${(e as Error).message}`;
+    if (code === "EACCES" || code === "EPERM" || code === "EROFS") return t("main.set.cannotWrite", { path: p });
+    if (code === "ENOSPC") return t("main.set.driveFull", { path: p });
+    return t("main.set.unusable", { path: p, reason: (e as Error).message });
   }
 }
 
@@ -105,8 +106,8 @@ export async function ensureWritable(dir: string): Promise<string | null> {
 export async function recordingsProblem(): Promise<string | null> {
   const s = getSettings();
   const st = await folderStatus(recordingsDir(), { isDefault: !s.recordingsDir });
-  if (st.state === "missing") return `The recordings folder ${st.path} is not available. Is its drive plugged in? Choose another folder in Settings.`;
-  if (st.state === "readonly") return `OpenTake cannot write to the recordings folder ${st.path}. Choose another folder in Settings.`;
+  if (st.state === "missing") return t("record.notice.folderMissing", { path: st.path });
+  if (st.state === "readonly") return t("record.notice.folderReadonly", { path: st.path });
   return null;
 }
 
@@ -185,7 +186,7 @@ export function registerSettingsIpc(getMain: () => BrowserWindow | null) {
   });
 
   ipcMain.handle(IPC.settingsChooseRecordings, async (): Promise<FolderChoice> => {
-    const picked = await pickFolder(getMain(), "Record takes to", recordingsDir());
+    const picked = await pickFolder(getMain(), t("main.set.pickRecordings"), recordingsDir());
     if (!picked) return { ok: false, cancelled: true };
     return setRecordingsDir(picked);
   });
@@ -194,13 +195,13 @@ export function registerSettingsIpc(getMain: () => BrowserWindow | null) {
   ipcMain.handle(IPC.settingsUseRecordings, async (_e, which: unknown): Promise<FolderChoice> => {
     const s = getSettings();
     const target = which === "default" ? defaultRecordingsDir() : typeof which === "number" ? s.pastRecordingsDirs[which] : undefined;
-    if (!target) return { ok: false, error: "That folder is not known." };
+    if (!target) return { ok: false, error: t("main.set.unknownFolder") };
     return setRecordingsDir(target);
   });
 
   ipcMain.handle(IPC.settingsChooseExportDir, async (): Promise<FolderChoice> => {
     const s = getSettings();
-    const picked = await pickFolder(getMain(), "Save exports to", s.exportDir ?? recordingsDir());
+    const picked = await pickFolder(getMain(), t("main.set.pickExports"), s.exportDir ?? recordingsDir());
     if (!picked) return { ok: false, cancelled: true };
     const err = await ensureWritable(picked);
     if (err) return { ok: false, error: err, view: await settingsView() };
@@ -212,9 +213,9 @@ export function registerSettingsIpc(getMain: () => BrowserWindow | null) {
   ipcMain.handle(IPC.settingsOpenFolder, async (_e, which: unknown) => {
     const s = getSettings();
     const target = which === "recordings" ? recordingsDir() : which === "export" ? s.exportDir : typeof which === "number" ? s.pastRecordingsDirs[which] : null;
-    if (!target) return "That folder is not known.";
+    if (!target) return t("main.set.unknownFolder");
     if (which === "recordings") await mkdir(target, { recursive: true }).catch(() => {});
-    if (!existsSync(target)) return `${target} is not available.`;
+    if (!existsSync(target)) return t("main.set.notAvailable", { path: target });
     return openPath(target);
   });
 

@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { SHORTCUT_GROUPS, keyLabel, opensSheet, shortcutText } from "./shortcuts-core";
+import { setLang } from "../../../shared/i18n";
+import { keyLabel, opensSheet, shortcutGroups, shortcutText } from "./shortcuts-core";
 import { LONG_TAKE_MS, TIGHT_DISK_BYTES, exportSuggestion, looksLikeHeadphones, setupSuggestions, takeSuggestion, type SetupSnapshot } from "./suggestions-core";
 
 describe("shortcuts", () => {
   it("lists every global shortcut main registers", () => {
-    const global = SHORTCUT_GROUPS[0].items.map((s) => s.keys.join("+"));
+    const global = shortcutGroups()[0].items.map((s) => s.keys.join("+"));
     for (const k of ["Mod+Shift+R", "Mod+Shift+P", "Mod+Shift+1", "Mod+Shift+2", "Mod+Shift+3", "Mod+Shift+L", "Mod+Shift+D"]) expect(global).toContain(k);
   });
   it("has no shortcut twice in a group", () => {
-    for (const g of SHORTCUT_GROUPS) {
+    for (const g of shortcutGroups()) {
       const keys = g.items.map((s) => s.keys.join("+"));
       expect(new Set(keys).size).toBe(keys.length);
     }
@@ -17,6 +18,15 @@ describe("shortcuts", () => {
     expect(shortcutText(["Mod", "Shift", "R"], false)).toBe("Ctrl+Shift+R");
     expect(shortcutText(["Mod", "Alt", "T"], true)).toBe("Cmd+Option+T");
     expect(keyLabel("Esc", true)).toBe("Esc");
+  });
+  it("prints the keys as a Spanish keyboard does in Spanish", () => {
+    setLang("es");
+    expect(shortcutText(["Mod", "Shift", "R"], false)).toBe("Ctrl+Mayús+R");
+    expect(shortcutText(["Mod", "Alt", "Space"], true)).toBe("Cmd+Opción+Espacio");
+    expect(keyLabel("Delete", false)).toBe("Supr");
+    expect(shortcutGroups()[0].title).toBe("Desde cualquier app");
+    setLang("en");
+    expect(shortcutGroups()[0].title).toBe("From any app");
   });
   it("opens the sheet with ? unless typing", () => {
     const k = { key: "?", ctrlKey: false, metaKey: false, altKey: false };

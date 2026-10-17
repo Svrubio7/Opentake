@@ -6,6 +6,7 @@ import { retryCamera, startCameraEngine } from "./engine";
 import type { BgMode } from "./gl";
 import { useCamera } from "./store";
 import { ScanFace } from "lucide-react";
+import { num, t } from "@shared/i18n";
 import { Button, Card, CardMark, Field, Segmented, Slider as UiSlider, Switch, Tag } from "../../ui";
 import "./camera.css";
 
@@ -54,7 +55,7 @@ function HistogramView({ hist }: { hist: Histogram | null }) {
     // the luma line takes the theme's ink, so it reads on a light card and a dark one
     draw(hist.l, getComputedStyle(c).color, false);
   }, [hist]);
-  return <canvas ref={ref} className="cam-hist" width={640} height={120} aria-label="Histogram" />;
+  return <canvas ref={ref} className="cam-hist" width={640} height={120} aria-label={t("camera.histogram")} />;
 }
 
 function Slider({ k }: { k: AdjustKey }) {
@@ -65,10 +66,10 @@ function Slider({ k }: { k: AdjustKey }) {
   const value = useCamera((s) => (auto ? s.autoNow[k as AutoKey] : s.manual[k]));
   const setManual = useCamera((s) => s.setManual);
   const backToAuto = useCamera((s) => s.backToAuto);
-  const format = (v: number) => (k === "exposure" ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}` : `${v >= 0 && meta.min < 0 ? "+" : ""}${Math.round(v * 100)}`);
+  const format = (v: number) => (k === "exposure" ? `${v >= 0 ? "+" : ""}${num(v, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `${v >= 0 && meta.min < 0 ? "+" : ""}${Math.round(v * 100)}`);
   const side = autoAvailable ? (auto
-    ? <Tag tone="brand" title="Auto is steering this. Drag to take over.">Auto</Tag>
-    : <button type="button" className="tag cam-back" onClick={(e) => { e.preventDefault(); backToAuto(k as AutoKey); }} title="Let Auto steer this again">Back to Auto</button>) : null;
+    ? <Tag tone="brand" title={t("camera.autoTitle")}>{t("camera.auto")}</Tag>
+    : <button type="button" className="tag cam-back" onClick={(e) => { e.preventDefault(); backToAuto(k as AutoKey); }} title={t("camera.backToAutoTitle")}>{t("camera.backToAuto")}</button>) : null;
   return (
     <UiSlider label={meta.label} value={value} min={meta.min} max={meta.max} step={meta.step} format={format} side={side}
       onChange={(v) => setManual(k, v)}
@@ -95,15 +96,15 @@ function StatusCard() {
   if (status === "off") {
     return (
       <Card className="cam-status">
-        <p>Camera is off.</p>
-        <Button variant="ink" onClick={() => set({ enabled: true })}>Turn camera on</Button>
+        <p>{t("camera.off")}</p>
+        <Button variant="ink" onClick={() => set({ enabled: true })}>{t("camera.turnOn")}</Button>
       </Card>
     );
   }
   return (
     <Card className="cam-status card-danger">
       <p>{error}</p>
-      <Button variant="ink" onClick={retryCamera}>Try again</Button>
+      <Button variant="ink" onClick={retryCamera}>{t("camera.tryAgain")}</Button>
     </Card>
   );
 }
@@ -129,115 +130,112 @@ export function CameraPanel() {
   return (
     <div className="cards cam">
       <section className="card cam-hero">
-        <div className="card-head"><h3 className="card-title"><CardMark icon={ScanFace} />Preview</h3></div>
+        <div className="card-head"><h3 className="card-title"><CardMark icon={ScanFace} />{t("camera.preview")}</h3></div>
         <div className="cam-preview">
           <CameraPreview />
-          {s.status === "starting" && <div className="cam-overlay">Starting camera</div>}
+          {s.status === "starting" && <div className="cam-overlay">{t("camera.starting")}</div>}
           {live && report && (
-            <span className="cam-score"><Tag tone={LEVEL_TONE[report.level]} title="Lighting score">Light {report.score}</Tag></span>
+            <span className="cam-score"><Tag tone={LEVEL_TONE[report.level]} title={t("camera.lightScore")}>{t("camera.light", { score: report.score })}</Tag></span>
           )}
           {live && s.actual && <span className="cam-meta tnum">{resLabel(`${s.actual.w}x${s.actual.h}`)} · {s.outFps} fps</span>}
         </div>
         {live && (
           <div className="cam-light">
             <HistogramView hist={s.hist} />
-            <p className={`cam-tip ${report?.level ?? ""}`}>{report?.tip ?? "Measuring the light"}</p>
+            <p className={`cam-tip ${report?.level ?? ""}`}>{report?.tip ?? t("camera.measuring")}</p>
           </div>
         )}
       </section>
 
       <StatusCard />
 
-      <Card title="Camera">
-        <Field label="Device">
+      <Card title={t("card.camera")}>
+        <Field label={t("camera.device")}>
           <select className="select" value={s.deviceId ?? ""} onChange={(e) => s.set({ deviceId: e.target.value || null, resolution: null })} disabled={!s.devices.length}>
-            {!s.devices.length && <option value="">No camera</option>}
+            {!s.devices.length && <option value="">{t("camera.noCamera")}</option>}
             {s.devices.map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label}</option>)}
           </select>
         </Field>
         <div className="cam-row">
-          <Field label="Resolution">
+          <Field label={t("camera.resolution")}>
             <select className="select" value={resValue} onChange={(e) => s.set({ resolution: e.target.value })} disabled={!s.resOptions.length}>
               {s.resOptions.map((r) => <option key={r} value={r}>{resLabel(r)}</option>)}
             </select>
           </Field>
           {s.fpsOptions.length > 0 && (
             <div className="field">
-              <span className="label">Frame rate</span>
-              <Segmented label="Frame rate" value={s.fps} options={s.fpsOptions.map((f) => ({ value: f, label: `${f}` }))} onChange={(v) => s.set({ fps: v })} />
+              <span className="label">{t("camera.fps")}</span>
+              <Segmented label={t("camera.fps")} value={s.fps} options={s.fpsOptions.map((f) => ({ value: f, label: `${f}` }))} onChange={(v) => s.set({ fps: v })} />
             </div>
           )}
         </div>
         {live && s.sourceFps > 0 && s.sourceFps < s.fps * 0.75 ? (
-          <p className="note note-warn">
-            The camera is sending {s.sourceFps} frames a second, not {s.fps}, so movement blurs.
-            Cameras slow down in a dim room to let in more light: more light on your face fixes it. A lower resolution can help too.
-          </p>
+          <p className="note note-warn">{t("camera.slowSource", { actual: s.sourceFps, wanted: s.fps })}</p>
         ) : live && s.actual && s.fps === 60 && s.actual.fps < 50 && (
-          <p className="note note-warn">This camera gives {s.actual.fps} fps at this resolution. Try a lower resolution for 60.</p>
+          <p className="note note-warn">{t("camera.slowMode", { fps: s.actual.fps })}</p>
         )}
         {live && s.outFps > 0 && s.outFps < Math.min(s.fps, s.actual?.fps || s.fps) * 0.75 && (
-          <p className="note note-warn">Processing is behind ({s.outFps} fps). A lower resolution or less skin smoothing will help.</p>
+          <p className="note note-warn">{t("camera.behind", { fps: s.outFps })}</p>
         )}
-        <Switch label="Camera on" checked={s.enabled} onChange={(v) => s.set({ enabled: v })} />
-        <Switch label="Flip left to right" checked={s.mirrorRecording} onChange={(v) => s.set({ mirrorRecording: v })}
-          hint="Many webcams mirror the picture, which makes a face look odd. Set this so writing behind you reads the right way. Changes the recording." />
-        <Switch label="Flip upside down" checked={s.flipVertical} onChange={(v) => s.set({ flipVertical: v })}
-          hint="For a camera mounted upside down, or one looking down at a desk. Changes the recording." />
-        <Switch label="Mirror my preview" checked={s.mirrorPreview} onChange={(v) => s.set({ mirrorPreview: v })}
-          hint="Shows you like a mirror while you look at yourself here. The recording is not affected." />
+        <Switch label={t("camera.on")} checked={s.enabled} onChange={(v) => s.set({ enabled: v })} />
+        <Switch label={t("camera.flipH")} checked={s.mirrorRecording} onChange={(v) => s.set({ mirrorRecording: v })}
+          hint={t("camera.flipHHint")} />
+        <Switch label={t("camera.flipV")} checked={s.flipVertical} onChange={(v) => s.set({ flipVertical: v })}
+          hint={t("camera.flipVHint")} />
+        <Switch label={t("camera.mirrorPreview")} checked={s.mirrorPreview} onChange={(v) => s.set({ mirrorPreview: v })}
+          hint={t("camera.mirrorPreviewHint")} />
       </Card>
 
-      <Card title="Look" action={<Button variant="ghost" size="sm" onClick={s.resetLook}>Reset</Button>}>
-        <div className="cam-looks" role="radiogroup" aria-label="Look">
+      <Card title={t("card.look")} action={<Button variant="ghost" size="sm" onClick={s.resetLook}>{t("camera.reset")}</Button>}>
+        <div className="cam-looks" role="radiogroup" aria-label={t("card.look")}>
           {LOOKS.map((l) => (
             <button key={l.id} type="button" role="radio" aria-checked={s.look === l.id} className={`cam-look ${s.look === l.id ? "on" : ""}`} onClick={() => s.set({ look: l.id })}>
               <span className={`swatch ${l.id}`} />{l.label}
             </button>
           ))}
         </div>
-        <UiSlider label="Look strength" value={s.lookAmount} min={0} max={1} step={0.01} format={(v) => `${Math.round(v * 100)}`} onChange={(v) => s.set({ lookAmount: v })} />
-        <Switch label="Auto lighting" checked={s.auto} onChange={(v) => s.set({ auto: v })}
-          hint="Steers exposure, shadows, highlights and white balance toward the look, a few times a second" />
-        {s.auto && s.faceStatus === "error" && <p className="note">Face detection is unavailable, Auto meters the centre of the frame.</p>}
+        <UiSlider label={t("camera.lookStrength")} value={s.lookAmount} min={0} max={1} step={0.01} format={(v) => `${Math.round(v * 100)}`} onChange={(v) => s.set({ lookAmount: v })} />
+        <Switch label={t("camera.autoLight")} checked={s.auto} onChange={(v) => s.set({ auto: v })}
+          hint={t("camera.autoLightHint")} />
+        {s.auto && s.faceStatus === "error" && <p className="note">{t("camera.noFaceAuto")}</p>}
       </Card>
 
-      <Card title="Light and colour" hint="Double-click a slider to reset it">
+      <Card title={t("card.lightColour")} hint={t("camera.resetHint")}>
         {(["exposure", "shadows", "highlights", "temperature", "tint", "contrast", "saturation", "vibrance"] as AdjustKey[]).map((k) => <Slider key={k} k={k} />)}
       </Card>
 
-      <Card title="Detail">
+      <Card title={t("card.detail")}>
         {(["sharpen", "smoothing", "vignette"] as AdjustKey[]).map((k) => <Slider key={k} k={k} />)}
       </Card>
 
-      <Card title="Background">
-        <Segmented<BgMode> fill label="Background" value={s.bgMode} onChange={(v) => s.set({ bgMode: v })}
-          options={[{ value: "none", label: "None" }, { value: "blur", label: "Blur" }, { value: "color", label: "Colour" }, { value: "image", label: "Image" }]} />
-        {s.bgMode !== "none" && s.segStatus === "loading" && <p className="note">Loading background removal</p>}
-        {s.bgMode !== "none" && s.segStatus === "error" && <p className="note note-warn">Background removal could not start on this computer.</p>}
+      <Card title={t("card.background")}>
+        <Segmented<BgMode> fill label={t("card.background")} value={s.bgMode} onChange={(v) => s.set({ bgMode: v })}
+          options={[{ value: "none", label: t("camera.bg.none") }, { value: "blur", label: t("camera.bg.blur") }, { value: "color", label: t("camera.bg.colour") }, { value: "image", label: t("camera.bg.image") }]} />
+        {s.bgMode !== "none" && s.segStatus === "loading" && <p className="note">{t("camera.bg.loading")}</p>}
+        {s.bgMode !== "none" && s.segStatus === "error" && <p className="note note-warn">{t("camera.bg.failed")}</p>}
         {s.bgMode === "blur" && (
-          <UiSlider label="Blur strength" value={s.bgBlur} min={0} max={1} step={0.01} format={(v) => `${Math.round(v * 100)}`} onChange={(v) => s.set({ bgBlur: v })} />
+          <UiSlider label={t("camera.bg.blurStrength")} value={s.bgBlur} min={0} max={1} step={0.01} format={(v) => `${Math.round(v * 100)}`} onChange={(v) => s.set({ bgBlur: v })} />
         )}
         {s.bgMode === "color" && (
           <label className="row cam-color">
-            <span className="row-label">Colour</span>
+            <span className="row-label">{t("camera.bg.colour")}</span>
             <input type="color" value={s.bgColor} onChange={(e) => s.set({ bgColor: e.target.value })} />
           </label>
         )}
         {s.bgMode === "image" && (
           <div className="cam-bgimg">
-            {s.bgImage ? <img src={s.bgImage} alt="Background" /> : <div className="cam-bgimg-empty">No picture yet</div>}
-            <Button onClick={() => fileRef.current?.click()}>{s.bgImage ? "Change picture" : "Choose picture"}</Button>
+            {s.bgImage ? <img src={s.bgImage} alt={t("card.background")} /> : <div className="cam-bgimg-empty">{t("camera.bg.noPicture")}</div>}
+            <Button onClick={() => fileRef.current?.click()}>{s.bgImage ? t("camera.bg.change") : t("camera.bg.choose")}</Button>
           </div>
         )}
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
       </Card>
 
-      <Card title="Framing">
-        <UiSlider label="Zoom" value={s.zoom} min={1} max={3} step={0.01} format={(v) => `${v.toFixed(2)}x`} onChange={(v) => s.set({ zoom: v })} onDoubleClick={() => s.set({ zoom: 1 })} />
-        <Switch label="Auto-frame" checked={s.autoFrame} onChange={(v) => s.set({ autoFrame: v })} hint="Keeps your face centred with a slow, smooth follow" />
+      <Card title={t("card.framing")}>
+        <UiSlider label={t("camera.zoom")} value={s.zoom} min={1} max={3} step={0.01} format={(v) => `${num(v, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x`} onChange={(v) => s.set({ zoom: v })} onDoubleClick={() => s.set({ zoom: 1 })} />
+        <Switch label={t("camera.autoFrame")} checked={s.autoFrame} onChange={(v) => s.set({ autoFrame: v })} hint={t("camera.autoFrameHint")} />
         {s.autoFrame && (
-          <p className="note">{s.faceStatus === "error" ? "Face detection is unavailable on this computer." : s.faceFound ? "Following your face." : "Looking for your face."}</p>
+          <p className="note">{s.faceStatus === "error" ? t("camera.face.unavailable") : s.faceFound ? t("camera.face.following") : t("camera.face.looking")}</p>
         )}
       </Card>
     </div>

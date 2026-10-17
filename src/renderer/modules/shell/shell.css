@@ -196,6 +196,8 @@ p.tk-msg { display: block; }
 .fr-mode .note { font-size: 13px; }
 .fr-mode-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--track); }
 .fr-mode-icon svg { width: 20px; height: 20px; stroke-width: 1.6; }
+.fr-lang { display: flex; align-items: center; gap: 12px; }
+.fr-lang .seg { flex: 0 1 380px; }
 .fr-body { display: flex; flex-direction: column; gap: 16px; }
 .fr-device { display: flex; flex-direction: column; gap: 8px; }
 .fr-device .btn { align-self: flex-start; }

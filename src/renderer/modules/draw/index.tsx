@@ -6,6 +6,8 @@ import { IPC } from "@shared/ipc";
 import type { DrawStatus } from "@shared/types";
 import { Button, Card, Switch } from "../../ui";
 import { useRecord } from "../record/store";
+import { t } from "@shared/i18n";
+import { keyLabel } from "../shell/shortcuts-core";
 
 const bridge = () => (typeof window !== "undefined" ? window.take : undefined);
 
@@ -30,18 +32,19 @@ export function DrawBridge() {
 export function DrawCard() {
   const s = useDrawStatus();
   if (!s) return null;
-  const keys = s.shortcut.split("+");
+  // main sends the accelerator as typed (Ctrl+Shift+D): each key reads as the keyboard prints it here
+  const keys = s.shortcut.split("+").map((k) => keyLabel(k, false));
   return (
-    <Card title="Draw on screen" hint="Draw over anything on your screen while you record. The drawing is in the recording, the toolbar is not.">
+    <Card title={t("card.drawOnScreen")} hint={t("draw.cardHint")}>
       <div className="row">
         {s.shortcutOk
-          ? <span className="note" title="Starts and stops drawing, from any app">{keys.map((k, i) => <span key={k}>{i > 0 && " "}<kbd>{k}</kbd></span>)}</span>
-          : <span className="note note-warn">{s.shortcut} is taken by another app</span>}
+          ? <span className="note" title={t("draw.shortcutHint")}>{keys.map((k, i) => <span key={k}>{i > 0 && " "}<kbd>{k}</kbd></span>)}</span>
+          : <span className="note note-warn">{t("draw.shortcutTaken", { shortcut: keys.join("+") })}</span>}
         <Button variant={s.active ? "ink" : "outline"} size="sm" onClick={() => void bridge()?.invoke(IPC.drawToggle, !s.active)}>
-          <PenLine />{s.active ? "Stop drawing" : "Draw"}
+          <PenLine />{s.active ? t("draw.stop") : t("draw.start")}
         </Button>
       </div>
-      <Switch label="Fade strokes after 3 s" hint="Off: strokes stay until you clear them (C) or undo them" checked={s.fade}
+      <Switch label={t("draw.fade")} hint={t("draw.fadeHint")} checked={s.fade}
         onChange={(fade) => void bridge()?.invoke(IPC.drawPrefs, { fade })} />
     </Card>
   );

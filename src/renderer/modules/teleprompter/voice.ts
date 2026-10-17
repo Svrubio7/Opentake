@@ -7,6 +7,7 @@ import enModelUrl from "./models/vosk-model-small-en-us-0.15.tar.gz?url";
 import esModelUrl from "./models/vosk-model-small-es-0.3.tar.gz?url";
 import voskWorkerUrl from "./vosk/vosk-worker.js?url";
 import { rmsDb, type Lang } from "./prompter-core";
+import { t } from "@shared/i18n";
 
 export interface VoiceStatus {
   mic: "off" | "processed" | "own" | "error";
@@ -44,9 +45,9 @@ export function loadModel(lang: Lang): Promise<Model> {
       let model: Model;
       try { model = new Model(url, -1); } finally { window.Worker = NativeWorker; }
       await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("The speech model took too long to load")), 180_000);
-        model.on("load", (m) => { clearTimeout(timer); if (m.event === "load" && m.result) resolve(); else reject(new Error("The speech model did not load")); });
-        model.on("error", (m) => { clearTimeout(timer); reject(new Error(m.event === "error" ? m.error : "The speech model did not load")); });
+        const timer = setTimeout(() => reject(new Error(t("prompter.voice.modelSlow"))), 180_000);
+        model.on("load", (m) => { clearTimeout(timer); if (m.event === "load" && m.result) resolve(); else reject(new Error(t("prompter.voice.modelNotLoaded"))); });
+        model.on("error", (m) => { clearTimeout(timer); reject(new Error(m.event === "error" ? m.error : t("prompter.voice.modelNotLoaded"))); });
       });
       return model;
     })();
@@ -120,7 +121,7 @@ export class VoiceEngine {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       } catch (e) {
-        this.setStatus({ mic: "error", message: `No microphone: ${(e as Error).message}` });
+        this.setStatus({ mic: "error", message: t("prompter.voice.noMic", { error: (e as Error).message }) });
         return;
       }
       if (gen !== this.generation || !this.config) { stream.getTracks().forEach((t) => t.stop()); return; }
@@ -199,7 +200,7 @@ export class VoiceEngine {
       this.recognizer = rec;
       this.setStatus({ recognizer: "ready" });
     } catch (e) {
-      if (this.config === config) this.setStatus({ recognizer: "error", message: (e as Error)?.message || "The speech model failed to load" });
+      if (this.config === config) this.setStatus({ recognizer: "error", message: (e as Error)?.message || t("prompter.voice.modelFailed") });
     }
   }
 }

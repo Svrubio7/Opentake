@@ -21,6 +21,8 @@ export type Shape<T> = { [K in keyof T]: T[K] extends string ? string : Plural }
 type VarsIn<S> = S extends `${string}{${infer V}}${infer R}` ? V | VarsIn<R> : never;
 type VarsOf<K extends Key> = En[K] extends { one: infer A; other: infer B } ? VarsIn<A> | VarsIn<B> | "count" : VarsIn<En[K]>;
 export type Vars = Record<string, string | number>;
+/** a key whose message takes no {variables}: t(key) alone (for maps of keys) */
+export type PlainKey = { [K in Key]: [VarsOf<K>] extends [never] ? K : never }[Key];
 type Args<K extends Key> = [VarsOf<K>] extends [never] ? [] : [Record<VarsOf<K>, string | number>];
 
 const DICTS: Record<Lang, Record<string, Msg>> = { en, es };

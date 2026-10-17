@@ -6,6 +6,8 @@ import type { DrawCommand, DrawStatus, DrawTool } from "@shared/types";
 import {
   COLORS, FADE_HOLD_MS, TOOL_STYLE, addPoint, fadeOpacity, isFreehand, liveStrokes, nextExpiry, strokeAt, strokePath, type Pt, type Stroke,
 } from "./draw-core";
+import { t } from "@shared/i18n";
+import { keyLabel } from "../shell/shortcuts-core";
 import "./draw.css";
 
 const bridge = () => (typeof window !== "undefined" ? window.take : undefined);
@@ -138,12 +140,12 @@ export function DrawStrokes() {
   );
 }
 
-const TOOL_BUTTONS: { id: DrawTool; label: string; key: string; icon: LucideIcon }[] = [
-  { id: "pen", label: "Pen", key: "P", icon: Pen },
-  { id: "highlighter", label: "Highlighter", key: "H", icon: Highlighter },
-  { id: "arrow", label: "Arrow", key: "A", icon: MoveUpRight },
-  { id: "rect", label: "Rectangle", key: "R", icon: Square },
-];
+const TOOL_BUTTONS = [
+  { id: "pen", label: "draw.tool.pen", key: "P", icon: Pen },
+  { id: "highlighter", label: "draw.tool.highlighter", key: "H", icon: Highlighter },
+  { id: "arrow", label: "draw.tool.arrow", key: "A", icon: MoveUpRight },
+  { id: "rect", label: "draw.tool.rect", key: "R", icon: Square },
+] as const satisfies readonly { id: DrawTool; label: string; key: string; icon: LucideIcon }[];
 
 /** The small bar at the top centre. Its window is hidden from the recording. */
 export function DrawToolbar() {
@@ -156,25 +158,25 @@ export function DrawToolbar() {
   const mod = s.shortcut.startsWith("Cmd") ? "Cmd" : "Ctrl";
   return (
     <div className="draw-dock">
-      <div className="draw-bar" role="toolbar" aria-label="Drawing tools">
+      <div className="draw-bar" role="toolbar" aria-label={t("draw.tools")}>
         {TOOL_BUTTONS.map(({ id, label, key, icon: Icon }) => (
-          <button key={id} type="button" className={s.tool === id ? "draw-btn on" : "draw-btn"} title={`${label} (${key})`} aria-label={label}
+          <button key={id} type="button" className={s.tool === id ? "draw-btn on" : "draw-btn"} title={t("draw.withKey", { label: t(label), key })} aria-label={t(label)}
             aria-pressed={s.tool === id} onClick={() => setPrefs({ tool: id })}><Icon /></button>
         ))}
         <i className="draw-sep" />
         {COLORS.map((c) => (
-          <button key={c.id} type="button" className={s.color === c.value ? "draw-swatch on" : "draw-swatch"} title={c.label} aria-label={c.label}
+          <button key={c.id} type="button" className={s.color === c.value ? "draw-swatch on" : "draw-swatch"} title={t(c.label)} aria-label={t(c.label)}
             aria-pressed={s.color === c.value} style={{ background: c.value }} onClick={() => setPrefs({ color: c.value })} />
         ))}
         <i className="draw-sep" />
         <button type="button" className={s.fade ? "draw-btn on" : "draw-btn"} aria-pressed={s.fade} onClick={() => setPrefs({ fade: !s.fade })}
-          title={s.fade ? "Strokes fade after 3 seconds. Click to keep them" : "Strokes stay until you clear them. Click to fade them"}
-          aria-label="Fade strokes">{s.fade ? <Timer /> : <TimerOff />}</button>
-        <button type="button" className="draw-btn" title={`Undo (${mod}+Z)`} aria-label="Undo" onClick={() => command("undo")}><Undo2 /></button>
-        <button type="button" className="draw-btn" title="Clear all (C)" aria-label="Clear all" onClick={() => command("clear")}><Trash2 /></button>
-        <button type="button" className="draw-btn draw-exit" title={`Stop drawing (Esc or ${s.shortcut})`} aria-label="Stop drawing" onClick={stop}><X /></button>
+          title={s.fade ? t("draw.fadeOnHint") : t("draw.fadeOffHint")}
+          aria-label={t("draw.fadeStrokes")}>{s.fade ? <Timer /> : <TimerOff />}</button>
+        <button type="button" className="draw-btn" title={t("draw.undoHint", { keys: `${mod}+Z` })} aria-label={t("draw.undo")} onClick={() => command("undo")}><Undo2 /></button>
+        <button type="button" className="draw-btn" title={t("draw.clearAllHint")} aria-label={t("draw.clearAll")} onClick={() => command("clear")}><Trash2 /></button>
+        <button type="button" className="draw-btn draw-exit" title={t("draw.stopHint", { shortcut: s.shortcut.split("+").map((k) => keyLabel(k, false)).join("+") })} aria-label={t("draw.stop")} onClick={stop}><X /></button>
       </div>
-      <p className="draw-hint"><kbd>Esc</kbd> stop <kbd>{mod}</kbd><kbd>Z</kbd> undo <kbd>C</kbd> clear <span>Right click rubs out a stroke</span></p>
+      <p className="draw-hint"><kbd>Esc</kbd> {t("draw.hint.stop")} <kbd>{mod}</kbd><kbd>Z</kbd> {t("draw.hint.undo")} <kbd>C</kbd> {t("draw.hint.clear")} <span>{t("draw.hint.rubOut")}</span></p>
     </div>
   );
 }

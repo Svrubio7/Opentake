@@ -6,6 +6,7 @@ import { app, BrowserWindow, globalShortcut, ipcMain, screen, type Rectangle } f
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { IPC } from "../shared/ipc";
+import { t } from "../shared/i18n";
 import { loadPage, preloadPath } from "./index";
 
 export interface PrompterWindowOptions {
@@ -106,7 +107,7 @@ function openPrompter(getMain: () => BrowserWindow | null) {
     skipTaskbar: false,
     fullscreenable: false,
     backgroundColor: "#000000",
-    title: "OpenTake Prompter",
+    title: t("prompter.windowTitle"),
     show: false,
     webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true, backgroundThrottling: false },
   });

@@ -10,6 +10,7 @@ import { presetWords, renderName, uniqueName } from "../settings-core";
 import { readCaptions } from "./editor-store";
 import { exportFileName, resolveFrame } from "./export-core";
 import type { TakeMeta } from "./takes";
+import { t } from "../../shared/i18n";
 
 /** the folder the last Save dialog ended in, offered first next time */
 let lastAskedDir: string | null = null;
@@ -48,7 +49,7 @@ export async function exportTarget(o: ExportOptions, meta: TakeMeta, takeFolder:
   const folder = s.exportDestination === "folder" && s.exportDir ? s.exportDir : takeFolder;
   if (folder !== takeFolder) {
     const st = await folderStatus(folder);
-    if (st.state === "missing") throw new Error(`The export folder ${st.path} is not available. Is its drive plugged in? Choose another folder in Settings.`);
+    if (st.state === "missing") throw new Error(t("main.export.folderMissing", { path: st.path }));
     const err = await ensureWritable(folder);
     if (err) throw new Error(err);
   }

@@ -1,6 +1,7 @@
 // Captions from the take's own sound, on this computer: the main process decodes 16 kHz mono with
 // ffmpeg, and Vosk (the teleprompter's speech models, running in their own worker) times every word.
 import type { CaptionLang } from "@shared/types";
+import { t } from "@shared/i18n";
 import { loadModel } from "../teleprompter/voice";
 import { editorApi } from "./api";
 
@@ -13,10 +14,10 @@ const CHUNK = 8000;
 const IN_FLIGHT = 6;
 
 export async function transcribe(takeId: string, lang: CaptionLang, onProgress: (stage: string, ratio: number | null) => void, signal?: AbortSignal): Promise<VoskWord[]> {
-  onProgress("Reading the sound", null);
+  onProgress(t("editor.captions.readingSound"), null);
   const pcm = await editorApi.pcm(takeId);
   const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.byteLength / 2));
-  onProgress("Loading the speech model", null);
+  onProgress(t("editor.captions.loadingModel"), null);
   const model = await loadModel(lang);
   if (signal?.aborted) throw new Error("Stopped");
   const rec = new model.KaldiRecognizer(RATE);
@@ -48,13 +49,13 @@ export async function transcribe(takeId: string, lang: CaptionLang, onProgress: 
       // the same -1..1 floats the teleprompter feeds from the mic
       for (let j = 0; j < part.length; j++) f[j] = part[j] / 32768;
       rec.acceptWaveformFloat(f, RATE);
-      if (i % 20 === 0) onProgress("Listening", chunks ? answered / chunks : null);
+      if (i % 20 === 0) onProgress(t("editor.captions.listening"), chunks ? answered / chunks : null);
     }
     while (answered < chunks && !failure) await new Promise<void>((r) => { wake = r; });
     if (failure) throw new Error(failure);
     // the words still held by the recognizer
     await new Promise<void>((r) => { finalDone = r; rec.retrieveFinalResult(); setTimeout(r, 10_000); });
-    onProgress("Listening", 1);
+    onProgress(t("editor.captions.listening"), 1);
   } finally {
     try { rec.remove(); } catch { /* the worker may be gone */ }
   }

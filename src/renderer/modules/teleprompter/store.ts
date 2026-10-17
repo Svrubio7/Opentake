@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type { PrompterState } from "@shared/types";
 import { IPC } from "@shared/ipc";
+import { t } from "@shared/i18n";
 import { DEFAULT_STATE, detectLang, parseScript, reduceCommand, type Lang, type ParsedScript, type PrompterCommand } from "./prompter-core";
 import type { VoiceStatus } from "./voice";
 
@@ -87,7 +88,7 @@ type Persisted = Pick<PrompterState, (typeof PERSISTED)[number]>;
 
 export function titleOf(text: string): string {
   const first = text.split(/\r?\n/).map((l) => l.replace(/^[#>\-*\s]+/, "").trim()).find(Boolean) ?? "";
-  return first.length > 48 ? first.slice(0, 47) + "…" : first || "Untitled script";
+  return first.length > 48 ? first.slice(0, 47) + "…" : first || t("prompter.untitled");
 }
 
 const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);

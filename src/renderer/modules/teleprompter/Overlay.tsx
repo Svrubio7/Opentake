@@ -8,13 +8,14 @@ import { clampRect, moveRect, resizeRect, snapRect, toPixels, type Corner, type 
 import { keyCommand } from "./prompter-core";
 import { PrompterSurface } from "./PrompterView";
 import { hidePrompter, showPrompter, usePrompter } from "./store";
+import { t } from "@shared/i18n";
 
-const SNAPS: { id: Snap; label: string; title: string }[] = [
-  { id: "top", label: "Top", title: "Top centre, under the webcam" },
-  { id: "center", label: "Centre", title: "Centre of the window" },
-  { id: "left", label: "Left", title: "Left side" },
-  { id: "right", label: "Right", title: "Right side" },
-];
+const SNAPS = [
+  { id: "top", label: "prompter.snap.top", title: "prompter.overlay.topHint" },
+  { id: "center", label: "prompter.snap.center", title: "prompter.overlay.centerHint" },
+  { id: "left", label: "prompter.snap.left", title: "prompter.overlay.leftHint" },
+  { id: "right", label: "prompter.snap.right", title: "prompter.overlay.rightHint" },
+] as const satisfies readonly { id: Snap; label: string; title: string }[];
 const CORNERS: Corner[] = ["nw", "ne", "sw", "se"];
 
 function useViewport() {
@@ -82,14 +83,14 @@ function OverlayBox() {
     <div className={`tpo${draft ? " tpo-dragging" : ""}`} style={{ ...px, opacity }} tabIndex={-1} onKeyDown={onKeyDown}
       onPointerMove={onMove} onPointerUp={end} onPointerCancel={end} data-teleprompter-overlay="">
       <PrompterSurface state={state} embedded onPosition={reportPosition} onClose={hidePrompter} />
-      <div className="tpo-bar" onPointerDown={begin("move")} title="Drag to move">
-        <span className="tpo-title"><GripHorizontal />Prompter</span>
+      <div className="tpo-bar" onPointerDown={begin("move")} title={t("prompter.overlay.dragHint")}>
+        <span className="tpo-title"><GripHorizontal />{t("prompter.overlay.title")}</span>
         <div className="tpo-actions">
           {SNAPS.map((s) => (
-            <button key={s.id} type="button" title={s.title} onClick={() => setSettings({ overlay: snapRect(s.id, vp) })}>{s.label}</button>
+            <button key={s.id} type="button" title={t(s.title)} onClick={() => setSettings({ overlay: snapRect(s.id, vp) })}>{t(s.label)}</button>
           ))}
-          <button type="button" title="Open in its own window, always on top" aria-label="Pop out" onClick={() => showPrompter("window")}><ExternalLink /></button>
-          <button type="button" className="tpo-close" title="Hide the prompter" aria-label="Hide the prompter" onClick={hidePrompter}><X /></button>
+          <button type="button" title={t("prompter.overlay.popOutHint")} aria-label={t("prompter.popOut")} onClick={() => showPrompter("window")}><ExternalLink /></button>
+          <button type="button" className="tpo-close" title={t("prompter.overlay.hide")} aria-label={t("prompter.overlay.hide")} onClick={hidePrompter}><X /></button>
         </div>
       </div>
       {CORNERS.map((c) => <div key={c} className={`tpo-grip tpo-${c}`} onPointerDown={begin(c)} />)}

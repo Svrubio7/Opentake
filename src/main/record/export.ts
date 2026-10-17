@@ -19,6 +19,7 @@ import { exportTarget } from "./export-target";
 import { openPath, revealFile } from "../dialogs";
 import { getSettings } from "../settings";
 import { friendlyExportError } from "../settings-core";
+import { t } from "../../shared/i18n";
 
 // inside a packaged app the binary lives in app.asar.unpacked
 export const ffmpegPath = () => (ffmpegStatic ?? "ffmpeg").replace("app.asar", "app.asar.unpacked");
@@ -55,12 +56,12 @@ export function cancelExport(takeId: string) {
 
 export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => void, win: BrowserWindow | null = null): Promise<string> {
   const { takeId } = o;
-  if (running.has(takeId) || preparing.has(takeId)) throw new Error("This take is already exporting");
+  if (running.has(takeId) || preparing.has(takeId)) throw new Error(t("main.export.alreadyExporting"));
   cancelled.delete(takeId);
   const dir = takeDir(takeId);
   const meta = await readMeta(takeId);
   const files = takeFiles(takeId, meta);
-  if (!files.composite) throw new Error("This take has no recording file");
+  if (!files.composite) throw new Error(t("main.export.noRecording"));
   const progress = (stage: string, ratio: number | null) => send({ takeId, stage, ratio });
 
   let out: string | null = null;
@@ -69,23 +70,23 @@ export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => 
     out = await exportTarget(o, meta, dir, win);
     if (!out) {
       // the Save dialog was cancelled: nothing to report
-      send({ takeId, stage: "Not exported", ratio: null, done: true });
+      send({ takeId, stage: t("main.export.notExported"), ratio: null, done: true });
       return "";
     }
     if (await wantsEditedExport(o)) {
       await exportEdited(o, { dir, meta, files, out, run: (args, onStdout) => run(takeId, args, dir, onStdout), progress, hiresSource });
       await finished(o, out);
-      send({ takeId, stage: "Done", ratio: 1, done: true, output: out });
+      send({ takeId, stage: t("main.export.done"), ratio: 1, done: true, output: out });
       return out;
     }
-    progress("Reading the take", 0);
+    progress(t("main.export.reading"), 0);
     const probe = await run(takeId, ["-nostdin", "-hide_banner", "-i", files.composite], dir);
     const audio = hasAudioStream(probe.stderr);
     const durationSec = meta.durationMs != null ? meta.durationMs / 1000 : null;
 
     let trim = { start: 0, end: null as number | null };
     if (o.trimSilence && audio) {
-      progress("Finding silence", 0.02);
+      progress(t("main.export.findingSilence"), 0.02);
       const r = await run(takeId, ["-nostdin", "-hide_banner", "-i", files.composite, "-vn", "-af", SILENCE_FILTER, "-f", "null", "-"], dir);
       trim = parseSilenceTrim(r.stderr, durationSec);
     }
@@ -96,7 +97,7 @@ export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => 
 
     let loudness: string | null = null;
     if (o.loudness !== "off" && audio) {
-      progress("Measuring loudness", 0.05);
+      progress(t("main.export.measuringLoudness"), 0.05);
       const r = await run(takeId, ["-nostdin", "-hide_banner", ...trimArgs, "-i", files.composite, "-vn", "-af", loudnormFilter(o.loudness), "-f", "null", "-"], dir);
       const m = parseLoudnorm(r.stderr);
       loudness = m ? loudnormFilter(o.loudness, m) : null;
@@ -104,8 +105,8 @@ export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => 
 
     const encodeMs = (trim.end ?? durationSec ?? 0) * 1000 - trim.start * 1000;
     const onProgress = (s: string) => {
-      const t = parseProgressTime(s);
-      if (t != null) progress("Encoding MP4", encodeMs > 0 ? Math.min(0.99, 0.1 + 0.9 * (t / encodeMs)) : null);
+      const at = parseProgressTime(s);
+      if (at != null) progress(t("main.export.encoding", { format: "MP4" }), encodeMs > 0 ? Math.min(0.99, 0.1 + 0.9 * (at / encodeMs)) : null);
     };
 
     const target = out;
@@ -113,20 +114,20 @@ export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => 
       ? hiresArgs({ ...(await hiresSource(takeId, dir, meta, files, trim.start * 1000)), out: target, trim, audio, loudness, limitSec: encodeMs > 0 ? encodeMs / 1000 : null })
       : compositeArgs({ input: files.composite, out: target, fps: meta.fps || 30, trim, audio, loudness });
 
-    progress("Encoding MP4", 0.1);
+    progress(t("main.export.encoding", { format: "MP4" }), 0.1);
     const r = await run(takeId, args, dir, onProgress);
     if (r.code !== 0) {
       await rm(target, { force: true }).catch(() => {}); // no half-written file left behind
-      throw new Error(`ffmpeg failed: ${tail(r.stderr)}`);
+      throw new Error(t("main.export.ffmpegFailed", { detail: tail(r.stderr) }));
     }
     await finished(o, target);
-    send({ takeId, stage: "Done", ratio: 1, done: true, output: target });
+    send({ takeId, stage: t("main.export.done"), ratio: 1, done: true, output: target });
     return target;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (out && cancelled.has(takeId)) await rm(out, { force: true }).catch(() => {});
     if (!/cancelled/i.test(msg)) console.warn(`[export] ${takeId}: ${msg}`);
-    send({ takeId, stage: "Failed", ratio: null, done: true, error: friendlyExportError(msg) });
+    send({ takeId, stage: t("main.export.failed"), ratio: null, done: true, error: friendlyExportError(msg) });
     throw e;
   } finally {
     preparing.delete(takeId);
@@ -151,8 +152,8 @@ async function finished(o: ExportOptions, out: string) {
  */
 export async function hiresSource(takeId: string, dir: string, meta: TakeMeta, files: TakeFiles, offsetMs: number) {
   const timeline = await readTimeline(takeId);
-  if (!files.composite || !files.screen || !timeline?.screenSize) throw new Error("This take has no separate screen track to re-render");
-  if (timeline.scenes?.length) throw new Error("This take switches scenes. Hi-res follows one layout, so export the MP4 instead.");
+  if (!files.composite || !files.screen || !timeline?.screenSize) throw new Error(t("main.export.noScreenTrack"));
+  if (timeline.scenes?.length) throw new Error(t("main.export.scenesHires"));
   const fps = timeline.layout.fps;
   const durationMs = meta.durationMs ?? timeline.cursor[timeline.cursor.length - 1]?.t ?? 0;
   // the timeline holds raw display positions: the zoom is redone inside the cropped picture

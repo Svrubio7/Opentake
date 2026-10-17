@@ -24,7 +24,7 @@ export function Hint({ text }: { text: string }) {
 }
 
 /** Each card's mark by its title, so every module's cards carry one without passing it (an `icon` prop wins). */
-const CARD_MARKS: [Key, LucideIcon][] = [
+const CARD_MARKS: [Extract<Key, `card.${string}`>, LucideIcon][] = [
   ["card.look", Palette], ["card.frame", Frame], ["card.background", Image], ["card.screenWindow", AppWindow], ["card.cameraWindow", AppWindow],
   ["card.camera", Video], ["card.pointer", MousePointer2], ["card.drawOnScreen", PenLine], ["card.keystrokes", Keyboard], ["card.logo", Stamp],
   ["card.nameCard", IdCard], ["card.introOutro", Clapperboard], ["card.recording", CircleDot], ["card.autoZoom", ZoomIn], ["card.whenYouStop", FileVideo],

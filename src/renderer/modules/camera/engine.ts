@@ -7,6 +7,7 @@ import {
   generateLut, histogram, initialAutoState, initialFrameState, lookById, measureFrame, parseRes, resKey, resolutionOptions,
   segmentationInterval, smoothRect, updateAutoGoal, wbGains, type AutoState, type AutoValues, type FrameState, type Rect,
 } from "./camera-core";
+import { t } from "@shared/i18n";
 import { Renderer } from "./gl";
 import { MaskSmoother, detectFace, loadFaceDetector, loadSegmenter, segment } from "./ml";
 import { useCamera, type CameraSettings, type CameraStatus } from "./store";
@@ -34,12 +35,13 @@ function canvas2d(w: number, h: number, read: boolean) {
 function explain(e: unknown): { status: CameraStatus; error: string } {
   const name = (e as { name?: string })?.name ?? "";
   if (name === "NotAllowedError" || name === "SecurityError")
-    return { status: "denied", error: "Camera access is blocked. Allow it in Windows Settings > Privacy & security > Camera, then try again." };
+    return { status: "denied", error: t("camera.err.denied") };
   if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError")
-    return { status: "nocamera", error: "No camera found. Plug one in and it will show up here." };
+    return { status: "nocamera", error: t("camera.err.notFound") };
   if (name === "NotReadableError" || name === "TrackStartError" || name === "AbortError")
-    return { status: "busy", error: "The camera is in use by another app. Close that app and try again." };
-  return { status: "error", error: `The camera could not start${(e as Error)?.message ? `: ${(e as Error).message}` : "."}` };
+    return { status: "busy", error: t("camera.err.busy") };
+  const why = (e as Error)?.message;
+  return { status: "error", error: why ? t("camera.err.failedWhy", { reason: why }) : t("camera.err.failed") };
 }
 
 class CameraEngine {
@@ -101,7 +103,7 @@ class CameraEngine {
   private async listDevices() {
     try {
       const all = await navigator.mediaDevices.enumerateDevices();
-      const cams = all.filter((d) => d.kind === "videoinput").map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Camera ${i + 1}` }));
+      const cams = all.filter((d) => d.kind === "videoinput").map((d, i) => ({ deviceId: d.deviceId, label: d.label || t("camera.deviceN", { n: i + 1 }) }));
       useCamera.getState().setLive({ devices: cams });
       return cams;
     } catch { return []; }
@@ -129,7 +131,7 @@ class CameraEngine {
     const st = useCamera.getState();
     st.setLive({ status: "starting", error: null });
     this.stopSource();
-    if (!navigator.mediaDevices?.getUserMedia) { st.setLive({ status: "error", error: "This system has no camera support." }); return; }
+    if (!navigator.mediaDevices?.getUserMedia) { st.setLive({ status: "error", error: t("camera.err.unsupported") }); return; }
     // 1080p unless a size was picked: most webcams only reach 4K at 5-15 fps, which looks choppy
     // and smears every movement. The frame rate is a floor, so a camera can't trade it for size.
     const [w, h] = parseRes(st.resolution ?? "") ?? [1920, 1080];
@@ -166,7 +168,7 @@ class CameraEngine {
     if (set.width && set.height && !resOptions.includes(resKey(set.width, set.height))) resOptions.push(resKey(set.width, set.height));
     track.addEventListener("ended", () => {
       if (this.src !== stream) return;
-      useCamera.getState().setLive({ status: "error", error: "The camera was disconnected. Plug it back in or pick another one." });
+      useCamera.getState().setLive({ status: "error", error: t("camera.err.disconnected") });
     });
     await this.listDevices();
     useCamera.getState().setLive({
@@ -211,7 +213,7 @@ class CameraEngine {
       this.maskReady = false;
     } catch (e) {
       this.renderer = null;
-      useCamera.getState().setLive({ status: "error", error: `Graphics could not start: ${(e as Error).message}` });
+      useCamera.getState().setLive({ status: "error", error: t("camera.err.graphics", { reason: (e as Error).message }) });
     }
   }
 

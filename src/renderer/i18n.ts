@@ -1,6 +1,6 @@
 // The window's language: asked from main before the first render (so no English flashes by), then
 // followed live when Settings changes it. useLang() at a root re-renders the whole tree on a switch.
-import { useSyncExternalStore } from "react";
+import { createElement, Fragment, useSyncExternalStore, type ReactNode } from "react";
 import { IPC } from "@shared/ipc";
 import { getLang, localeFor, onLang, resolveLang, setLang, type Lang, type LangSetting } from "@shared/i18n";
 
@@ -29,3 +29,11 @@ export const useLang = () => useSyncExternalStore(onLang, getLang, getLang);
 
 /** Keeps <html lang> on the current language (screen readers, hyphenation, spell check). */
 onLang(() => { if (typeof document !== "undefined") document.documentElement.lang = getLang(); });
+
+/** A translated sentence with parts in markup: t("x", { name: "{name}" }) keeps the slot, parts.name fills it. */
+export function rich(text: string, parts: Record<string, ReactNode>): ReactNode {
+  return text.split(/(\{\w+\})/).map((bit, n) => {
+    const k = /^\{(\w+)\}$/.exec(bit)?.[1];
+    return createElement(Fragment, { key: n }, k && k in parts ? parts[k] : bit);
+  });
+}

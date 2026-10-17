@@ -57,6 +57,11 @@ describe("t", () => {
     setLang("en");
     expect(tIn("en", "card.look")).toBe("Look");
     expect(tIn("es", "card.look")).toBe("Estilo");
+    expect(tIn("en", "set.takes", { count: 1 })).toBe("1 take");
+    expect(tIn("en", "set.takes", { count: 2 })).toBe("2 takes");
+    expect(tIn("es", "set.takes", { count: 1 })).toBe("1 toma");
+    expect(tIn("es", "set.takes", { count: 0 })).toBe("0 tomas");
+    expect(tIn("es", "fr.step", { step: 2, total: 3 })).toBe("Paso 2 de 3");
   });
 
   it("follows the current language", () => {

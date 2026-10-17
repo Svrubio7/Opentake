@@ -2,6 +2,7 @@
 // screen, wait for the camera, fix it), in place of a dark frame with small text on it.
 import { useEffect, useRef } from "react";
 import { Monitor, Video, VideoOff } from "lucide-react";
+import { t } from "@shared/i18n";
 import { Button } from "../../ui";
 import { getEngine } from "../audio/engine";
 import { useAudioStore } from "../audio/store";
@@ -24,11 +25,11 @@ export function StageEmpty() {
     return (
       <div className="rec-empty">
         <span className="rec-empty-mark"><Monitor /></span>
-        <b>Choose what to record</b>
-        <p>{mode === "screen-camera" ? "A whole screen or one window, with your camera in the corner." : "A whole screen or one window."}</p>
+        <b>{t("record.picker.title")}</b>
+        <p>{mode === "screen-camera" ? t("record.empty.screenCamera") : t("record.empty.screen")}</p>
         <div className="rec-empty-actions">
-          <Button variant="ink" size="lg" onClick={pickScreen}>Choose a screen or window</Button>
-          <Button variant="ghost" onClick={() => switchScene("camera")}><Video />Camera only</Button>
+          <Button variant="ink" size="lg" onClick={pickScreen}>{t("record.bar.chooseSource")}</Button>
+          <Button variant="ghost" onClick={() => switchScene("camera")}><Video />{t("record.empty.cameraOnly")}</Button>
         </div>
       </div>
     );
@@ -36,17 +37,17 @@ export function StageEmpty() {
 
   if (mode === "camera" && cam !== "live") {
     const starting = cam === "starting" || cam === "idle";
-    const text = starting ? "Opening your camera." : cam === "busy" ? "Another app is using the camera. Close it, then try again."
-      : cam === "denied" ? "The camera is blocked for OpenTake in your system's privacy settings." : cam === "nocamera" ? "No camera is connected." : cam === "off" ? "The camera is switched off." : "The camera stopped working.";
+    const text = starting ? t("record.empty.opening") : cam === "busy" ? t("record.empty.busy")
+      : cam === "denied" ? t("record.empty.denied") : cam === "nocamera" ? t("record.empty.noCamera") : cam === "off" ? t("record.empty.off") : t("record.empty.failed");
     return (
       <div className="rec-empty">
         <span className={starting ? "rec-empty-mark busy" : "rec-empty-mark"}>{starting ? <Video /> : <VideoOff />}</span>
-        <b>{starting ? "Starting the camera" : "No camera picture"}</b>
+        <b>{starting ? t("record.empty.starting") : t("record.empty.noPicture")}</b>
         <p>{text}</p>
         {!starting && (
           <div className="rec-empty-actions">
-            {cam === "denied" || cam === "off" ? <Button variant="ink" onClick={() => goTo("camera")}>Open Camera</Button> : <Button variant="ink" onClick={retryCamera}>Try again</Button>}
-            <Button variant="ghost" onClick={() => switchScene("screen")}><Monitor />Record the screen</Button>
+            {cam === "denied" || cam === "off" ? <Button variant="ink" onClick={() => goTo("camera")}>{t("record.ready.openCamera")}</Button> : <Button variant="ink" onClick={retryCamera}>{t("record.ready.tryAgain")}</Button>}
+            <Button variant="ghost" onClick={() => switchScene("screen")}><Monitor />{t("record.empty.recordScreen")}</Button>
           </div>
         )}
       </div>
@@ -64,7 +65,7 @@ export function DockLevel() {
     if (bar.current) bar.current.style.transform = `scaleX(${v})`;
   }), []);
   return (
-    <span className={live ? "rec-level" : "rec-level off"} title={live ? "Mic level" : "The mic is not on"} aria-hidden>
+    <span className={live ? "rec-level" : "rec-level off"} title={live ? t("record.dock.micLevel") : t("record.dock.micOff")} aria-hidden>
       <span className="rec-level-track"><span ref={bar} /></span>
     </span>
   );

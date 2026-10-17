@@ -3,6 +3,7 @@
 // suggestions (shell/suggestions-core.ts).
 import { useEffect, useRef, useState } from "react";
 import { HardDrive, ListChecks, Mic, Monitor, Video, X, type LucideIcon } from "lucide-react";
+import { t } from "@shared/i18n";
 import { Button, Card, Tag } from "../../ui";
 import { shortPath } from "../../../main/settings-core";
 import { useStream } from "@core/useStream";
@@ -34,7 +35,7 @@ interface Row {
 
 export const pickScreen = () => window.dispatchEvent(new Event("opentake:pick-screen"));
 
-const STATE_WORD: Record<Tone, string> = { good: "Ready", warn: "Waiting", danger: "Needs a fix", neutral: "Off" };
+const stateWord = (tone: Tone) => (tone === "good" ? t("record.ready.ready") : tone === "warn" ? t("record.ready.waiting") : tone === "danger" ? t("record.needsFix") : t("record.ready.off"));
 
 function useRows(): Row[] {
   const mode = useRecord((s) => s.mode);
@@ -50,29 +51,29 @@ function useRows(): Row[] {
   const rows: Row[] = [];
   if (needsScreen(mode)) {
     rows.push(sourceId
-      ? { key: "screen", label: "Screen", icon: Monitor, tone: "good", value: sourceName ?? "Chosen", sub: "Captured", title: sourceName ?? undefined, action: busy ? undefined : { label: "Change", run: pickScreen } }
-      : { key: "screen", label: "Screen", icon: Monitor, tone: "warn", value: "Not chosen yet", sub: "Pick a screen or a window", action: { label: "Choose", run: pickScreen } });
+      ? { key: "screen", label: t("record.ready.screen"), icon: Monitor, tone: "good", value: sourceName ?? t("record.ready.chosen"), sub: t("record.ready.captured"), title: sourceName ?? undefined, action: busy ? undefined : { label: t("record.ready.change"), run: pickScreen } }
+      : { key: "screen", label: t("record.ready.screen"), icon: Monitor, tone: "warn", value: t("record.ready.notChosen"), sub: t("record.ready.pickScreen"), action: { label: t("record.ready.choose"), run: pickScreen } });
   }
   const micName = micLabel.replace(/^(Default|Predeterminado) - /, "");
-  rows.push(mic === "running" ? { key: "mic", label: "Mic", icon: Mic, tone: "good", value: micName || "Microphone", title: micLabel, action: { label: "Open Mic", run: () => goTo("audio") } }
-    : mic === "error" ? { key: "mic", label: "Mic", icon: Mic, tone: "danger", value: "Not working", sub: "Check the Mic tab", action: { label: "Fix", run: () => goTo("audio") } }
-      : { key: "mic", label: "Mic", icon: Mic, tone: "warn", value: "Starting", sub: "Opening the microphone" });
+  rows.push(mic === "running" ? { key: "mic", label: t("record.ready.mic"), icon: Mic, tone: "good", value: micName || t("record.ready.microphone"), title: micLabel, action: { label: t("record.ready.openMic"), run: () => goTo("audio") } }
+    : mic === "error" ? { key: "mic", label: t("record.ready.mic"), icon: Mic, tone: "danger", value: t("record.ready.notWorking"), sub: t("record.ready.checkMic"), action: { label: t("record.ready.fix"), run: () => goTo("audio") } }
+      : { key: "mic", label: t("record.ready.mic"), icon: Mic, tone: "warn", value: t("record.ready.starting"), sub: t("record.ready.openingMic") });
   if (needsCamera(mode)) {
-    const c = { key: "camera" as const, label: "Camera", icon: Video };
-    rows.push(cam === "live" ? { ...c, tone: "good", value: camLabel.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)$/i, "") || "Camera", sub: camSize ? `${camSize.h}p` : "Working", title: camLabel, action: { label: "Open Camera", run: () => goTo("camera") } }
-      : cam === "busy" ? { ...c, tone: "danger", value: "In use by another app", sub: "Close the call or recorder using it", action: { label: "Try again", run: retryCamera } }
-        : cam === "denied" ? { ...c, tone: "danger", value: "Blocked", sub: "Allow it in privacy settings", action: { label: "Fix", run: () => goTo("camera") } }
-          : cam === "nocamera" ? { ...c, tone: "danger", value: "No camera found", sub: "Plug one in, then try again", action: { label: "Try again", run: retryCamera } }
-            : cam === "error" ? { ...c, tone: "danger", value: "Not working", action: { label: "Fix", run: () => goTo("camera") } }
-              : { ...c, tone: "warn", value: "Starting", sub: "Opening the camera" });
+    const c = { key: "camera" as const, label: t("record.ready.camera"), icon: Video };
+    rows.push(cam === "live" ? { ...c, tone: "good", value: camLabel.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)$/i, "") || t("record.ready.camera"), sub: camSize ? `${camSize.h}p` : t("record.ready.working"), title: camLabel, action: { label: t("record.ready.openCamera"), run: () => goTo("camera") } }
+      : cam === "busy" ? { ...c, tone: "danger", value: t("record.ready.camBusy"), sub: t("record.ready.camBusySub"), action: { label: t("record.ready.tryAgain"), run: retryCamera } }
+        : cam === "denied" ? { ...c, tone: "danger", value: t("record.ready.blocked"), sub: t("record.ready.blockedSub"), action: { label: t("record.ready.fix"), run: () => goTo("camera") } }
+          : cam === "nocamera" ? { ...c, tone: "danger", value: t("record.ready.noCamera"), sub: t("record.ready.noCameraSub"), action: { label: t("record.ready.tryAgain"), run: retryCamera } }
+            : cam === "error" ? { ...c, tone: "danger", value: t("record.ready.notWorking"), action: { label: t("record.ready.fix"), run: () => goTo("camera") } }
+              : { ...c, tone: "warn", value: t("record.ready.starting"), sub: t("record.ready.openingCamera") });
   }
   if (view) {
     const r = view.recordings;
-    const d = { key: "disk" as const, label: "Disk", icon: HardDrive, title: r.path };
+    const d = { key: "disk" as const, label: t("record.ready.disk"), icon: HardDrive, title: r.path };
     rows.push(r.state === "ok"
-      ? { ...d, tone: r.freeBytes != null && r.freeBytes < TIGHT_DISK_BYTES ? "warn" : "good", value: r.freeBytes != null ? freeLabel(r.freeBytes) : "Ready", sub: shortPath(r.path, 34),
-        used: r.freeBytes != null && r.totalBytes ? 1 - r.freeBytes / r.totalBytes : undefined, action: { label: "Change", run: () => goTo("settings") } }
-      : { ...d, tone: "danger", value: r.state === "missing" ? "Folder not available" : "Cannot write there", sub: shortPath(r.path, 34), action: { label: "Choose", run: async () => applyChoice(await shellApi.chooseRecordings()) } });
+      ? { ...d, tone: r.freeBytes != null && r.freeBytes < TIGHT_DISK_BYTES ? "warn" : "good", value: r.freeBytes != null ? freeLabel(r.freeBytes) : t("record.ready.ready"), sub: shortPath(r.path, 34),
+        used: r.freeBytes != null && r.totalBytes ? 1 - r.freeBytes / r.totalBytes : undefined, action: { label: t("record.ready.change"), run: () => goTo("settings") } }
+      : { ...d, tone: "danger", value: r.state === "missing" ? t("record.ready.folderMissing") : t("record.ready.cannotWrite"), sub: shortPath(r.path, 34), action: { label: t("record.ready.choose"), run: async () => applyChoice(await shellApi.chooseRecordings()) } });
   }
   return rows;
 }
@@ -143,7 +144,7 @@ function StatusTile({ r }: { r: Row }) {
       <span className="st-head">
         <span className="st-mark" aria-hidden><Icon /></span>
         <span className="eyebrow">{r.label}</span>
-        <span className={`st-state ${r.tone}`} aria-label={STATE_WORD[r.tone]}><i /></span>
+        <span className={`st-state ${r.tone}`} aria-label={stateWord(r.tone)}><i /></span>
       </span>
       {media}
       <span className="st-text">
@@ -161,7 +162,7 @@ export function ReadinessCard() {
   const ready = rows.every((r) => r.tone === "good");
   const problems = rows.filter((r) => r.tone === "danger").length;
   return (
-    <Card title="Before you record" icon={ListChecks} action={<Tag tone={ready ? "good" : problems ? "danger" : "warn"}>{ready ? "Ready" : problems ? "Needs a fix" : "Almost ready"}</Tag>}>
+    <Card title={t("record.ready.title")} icon={ListChecks} action={<Tag tone={ready ? "good" : problems ? "danger" : "warn"}>{ready ? t("record.ready.ready") : problems ? t("record.needsFix") : t("record.ready.almost")}</Tag>}>
       <div className="st-grid">{rows.map((r) => <StatusTile key={r.key} r={r} />)}</div>
     </Card>
   );
@@ -199,13 +200,13 @@ export function Suggestions() {
     else if (a === "system-sound-off") s.set({ [systemAudioKey(s.mode)]: false });
   };
   return (
-    <div className="tips" aria-label="Suggestions">
-      {list.map((t) => (
-        <div key={t.id} className="tip">
-          <span>{t.text}</span>
+    <div className="tips" aria-label={t("record.suggestions")}>
+      {list.map((tip) => (
+        <div key={tip.id} className="tip">
+          <span>{tip.text}</span>
           <div className="tip-actions">
-            {t.action && <Button size="sm" onClick={() => act(t.action!.does)}>{t.action.label}</Button>}
-            <Button size="icon-sm" variant="ghost" onClick={() => dismiss(t.id)} title="Do not suggest this again" aria-label="Dismiss"><X /></Button>
+            {tip.action && <Button size="sm" onClick={() => act(tip.action!.does)}>{tip.action.label}</Button>}
+            <Button size="icon-sm" variant="ghost" onClick={() => dismiss(tip.id)} title={t("record.dontSuggest")} aria-label={t("record.dismiss")}><X /></Button>
           </div>
         </div>
       ))}
