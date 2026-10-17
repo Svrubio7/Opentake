@@ -315,7 +315,8 @@ async function begin() {
 
 export function togglePause() {
   const s = session;
-  if (!s) return;
+  // the outro plays to its end on a timer: a pause there would stop the take with the outro cut short
+  if (!s || outroTimer) return;
   const status = st().status;
   // the composite pauses and resumes when its delayed picture reaches the press
   const each = (fn: (t: Track) => void) => s.tracks.forEach((t) => (t.track === "composite" ? s.later(() => fn(t)) : fn(t)));
