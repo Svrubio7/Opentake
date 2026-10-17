@@ -66,6 +66,12 @@ describe("export arguments", () => {
     const s = new Float32Array([0.1, -0.8, 0.2, 0.3, 0, 0]);
     expect(computePeaks(s, 6, 3)).toEqual([0.8, 0.3, 0]);
   });
+  it("sets the length outright and never uses -shortest", () => {
+    const a = editExportArgs({ source: { kind: "composite", input: "c.webm", fps: 30 }, srcSize: { width: 320, height: 180 }, audio: true, keep: [{ start: 0, end: 1000 }, { start: 2000, end: 2500 }], loudness: null, output: out(), out: "o.mp4", limitSec: 1.5 });
+    expect(a).not.toContain("-shortest");
+    expect(a.join(" ")).toContain("-t 1.500");
+    expect(editExportArgs({ source: { kind: "composite", input: "c.webm", fps: 30 }, srcSize: { width: 320, height: 180 }, audio: true, keep: null, loudness: null, output: out(), out: "o.mp4", limitSec: Infinity })).not.toContain("-t");
+  });
   it("leaves the audio out of the first of two passes", () => {
     const a = editExportArgs({
       source: { kind: "composite", input: "c.webm", fps: 30 }, srcSize: { width: 320, height: 180 }, audio: true, keep: [{ start: 0, end: 1000 }],
