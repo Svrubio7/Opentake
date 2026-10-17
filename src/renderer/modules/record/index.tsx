@@ -10,10 +10,12 @@ import { IntroOutroCard, KeysCard, LogoCard, NameCard, PointerCard } from "./bra
 import { BackgroundCard, CameraBubbleCard, FrameCard, LooksCard, WindowCard } from "./look-panel";
 import { useOverlays } from "./overlays";
 import { EditorHost } from "../editor";
-import { PICK_NOTICE, startRecording, stopRecording, switchScene, togglePause, wireRecorder } from "./recorder";
-import { goTo, useShell, type RecordSection } from "../shell/store";
+import { startRecording, stopRecording, switchScene, togglePause, wireRecorder } from "./recorder";
+import { goTo, goToRecord, useShell, type RecordSection } from "../shell/store";
+import { isStale, noticeLifetimeMs } from "./notice-core";
 import { Keys } from "../shell/Shortcuts";
-import { ReadinessCard, Suggestions, pickScreen, useProblems } from "./readiness";
+import { ReadinessCard, Suggestions, useProblems } from "./readiness";
+import { DockLevel, StageEmpty } from "./stage-empty";
 import { currentLayout, isBusy, useRecord } from "./store";
 import { PrompterToggle } from "../teleprompter/record-link";
 import { DrawCard } from "../draw";
@@ -89,7 +91,7 @@ export function Stage() {
   };
 
   return (
-    <div className={mode === "screen-camera" && status === "idle" ? "rec-stage has-tip" : "rec-stage"} data-aspect={aspect}>
+    <div className={mode === "screen-camera" && status === "idle" && sourceId ? "rec-stage has-tip" : "rec-stage"} data-aspect={aspect}>
       <div
         className="rec-canvas-host"
         ref={host}
@@ -101,17 +103,39 @@ export function Stage() {
         onPointerLeave={() => { if (!drag.current) compositor().bubbleHover = null; }}
       />
       {status === "countdown" && <div className="rec-countdown" key={countdownValue}>{countdownValue}</div>}
-      {needsScreen(mode) && !sourceId && status === "idle" && (
-        <div className="rec-stage-ask">
-          <Button variant="ink" size="lg" onClick={pickScreen}><Monitor />Choose a screen or window</Button>
-        </div>
-      )}
-      {mode === "screen-camera" && status === "idle" && <div className="rec-stage-tip">Drag the camera to move it, drag its edge to resize</div>}
+      <StageEmpty />
+      {mode === "screen-camera" && status === "idle" && sourceId && <div className="rec-stage-tip">Drag the camera to move it, drag its edge to resize</div>}
     </div>
   );
 }
 
 // ---------- Control bar under the stage ----------
+
+/** Clears the bar's message the moment it stops being true, and lets information go after a while. */
+function useMessageJanitor() {
+  const folderOk = useShell((v) => (v.view ? v.view.recordings.state === "ok" : null));
+  const notice = useRecord((s) => s.notice);
+  useEffect(() => {
+    const check = () => {
+      const s = useRecord.getState();
+      const state = { mode: s.mode, sourceId: s.sourceId, status: s.status, folderOk: useShell.getState().view ? useShell.getState().view!.recordings.state === "ok" : null, nameCard: s.lowerThird.enabled };
+      const notice = s.notice && isStale(s.notice, state) ? null : s.notice;
+      const error = s.error && isStale(s.error, state) ? null : s.error;
+      if (notice === s.notice && error === s.error) return;
+      // the action belongs to the message on show; with none left it goes too
+      s.set({ notice, error, ...(notice || error ? {} : { noticeAction: null }) });
+    };
+    check();
+    return useRecord.subscribe(check);
+  }, [folderOk]);
+  // information goes by itself; errors stay until fixed or dismissed
+  useEffect(() => {
+    const ms = notice ? noticeLifetimeMs(notice) : null;
+    if (!ms) return;
+    const t = setTimeout(() => { if (useRecord.getState().notice === notice) useRecord.getState().set({ notice: null, noticeAction: null }); }, ms);
+    return () => clearTimeout(t);
+  }, [notice]);
+}
 
 // the scenes: pick one before a take, or switch live while recording (Ctrl+Shift+1, 2, 3)
 const MODES: { value: RecordMode; label: ReactNode; hint: string }[] = [
@@ -140,6 +164,7 @@ export function RecordBar() {
   const busy = isBusy(status);
   const live = status === "recording" || status === "paused";
   const bridge = hasBridge();
+  useMessageJanitor();
   // the stage, the setup and the readiness card all ask for the picker
   useEffect(() => {
     const open = () => { const s = useRecord.getState(); if (needsScreen(s.mode) && (!isBusy(s.status) || !s.sourceId)) setPicking(true); };
@@ -147,8 +172,8 @@ export function RecordBar() {
     return () => window.removeEventListener("opentake:pick-screen", open);
   }, []);
   const msgAction = noticeAction && (
-    <button type="button" className="rec-msg-action" onClick={() => { goTo(noticeAction); set({ error: null, notice: null, noticeAction: null }); }}>
-      {noticeAction === "takes" ? "Open Takes" : "Open Settings"}
+    <button type="button" className="rec-msg-action" onClick={() => { if (noticeAction === "overlays") goToRecord("overlays"); else goTo(noticeAction); set({ error: null, notice: null, noticeAction: null }); }}>
+      {noticeAction === "takes" ? "Open Takes" : noticeAction === "overlays" ? "Open Overlays" : "Open Settings"}
     </button>
   );
 
@@ -159,6 +184,7 @@ export function RecordBar() {
       <div className="rec-bar">
         <div className="rec-bar-side">
           <Segmented icon label={live ? "Scene: switch while recording" : "What to record"} value={mode} options={MODES} onChange={switchScene} disabled={status === "stopping"} />
+          <span className="rec-sep" aria-hidden />
           {needsScreen(mode) && (
             // mid-take a screen can be picked only if the take began without one (its own track is already running otherwise)
             <Button className="rec-src" disabled={(busy && (!!sourceId || status === "stopping")) || !bridge} onClick={() => setPicking(true)} title={sourceName ? `Recording ${sourceName}. Click to change.` : "Choose a screen or window"}>
@@ -189,6 +215,8 @@ export function RecordBar() {
         </div>
 
         <div className="rec-bar-side end">
+          <DockLevel />
+          <span className="rec-sep" aria-hidden />
           {/* the three common frames, plus the current one when the Record panel set another */}
           <Segmented label="Frame" value={aspect}
             options={(ASPECTS.includes(aspect) ? ASPECTS : [...ASPECTS, aspect]).map((a) => ({ value: a, label: aspectLabel(a, customW, customH), hint: a === "custom" ? "A custom frame (Record panel, Frame)" : `Record a ${a} frame` }))}
@@ -226,7 +254,7 @@ function SourcePicker({ onClose }: { onClose: () => void }) {
   }, [onClose]);
   const choose = async (s: ScreenSource) => {
     const set = useRecord.getState().set;
-    set({ sourceId: s.id, sourceName: s.name, displayId: s.displayId ?? null, error: null, ...(useRecord.getState().notice === PICK_NOTICE ? { notice: null } : {}) });
+    set({ sourceId: s.id, sourceName: s.name, displayId: s.displayId ?? null });
     onClose();
     try { await compositor().useScreen(s.id, s.displayId ?? null); } catch (e) {
       set({ sourceId: null, sourceName: null, displayId: null, error: `Could not capture ${s.name}: ${e instanceof Error ? e.message : e}` });
@@ -284,7 +312,6 @@ export function RecordPanel() {
   // a new mode that drops the screen releases the capture; one that needs it asks for a source
   // (not during a take: a camera scene keeps the screen live so switching back is instant)
   useEffect(() => {
-    if (!needsScreen(s.mode) && s.notice === PICK_NOTICE) s.set({ notice: null });
     if (!needsScreen(s.mode) && s.sourceId && !busy) {
       s.set({ sourceId: null, sourceName: null, displayId: null });
       void compositor().useScreen(null, null);

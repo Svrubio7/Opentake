@@ -31,6 +31,11 @@ const CARD_MARKS: Record<string, LucideIcon> = {
   Exports: FolderOutput, Help: LifeBuoy,
 };
 
+/** The card's mark on its own, for cards that build their header by hand. */
+export function CardMark({ icon: Icon }: { icon: LucideIcon }) {
+  return <span className="card-mark" aria-hidden><Icon /></span>;
+}
+
 export function Card({ title, hint, action, icon, className, children }: { title?: ReactNode; hint?: string; action?: ReactNode; icon?: LucideIcon | null; className?: string; children?: ReactNode }) {
   const Mark = icon === null ? null : icon ?? (typeof title === "string" ? CARD_MARKS[title] : undefined);
   return (

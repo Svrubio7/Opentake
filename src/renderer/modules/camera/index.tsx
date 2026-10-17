@@ -5,7 +5,8 @@ import { ADJUST_META, AUTO_KEYS, LOOKS, resLabel, type AdjustKey, type AutoKey, 
 import { retryCamera, startCameraEngine } from "./engine";
 import type { BgMode } from "./gl";
 import { useCamera } from "./store";
-import { Button, Card, Field, Segmented, Slider as UiSlider, Switch, Tag } from "../../ui";
+import { ScanFace } from "lucide-react";
+import { Button, Card, CardMark, Field, Segmented, Slider as UiSlider, Switch, Tag } from "../../ui";
 import "./camera.css";
 
 /** Live view of the published (filtered) camera stream. */
@@ -128,6 +129,7 @@ export function CameraPanel() {
   return (
     <div className="cards cam">
       <section className="card cam-hero">
+        <div className="card-head"><h3 className="card-title"><CardMark icon={ScanFace} />Preview</h3></div>
         <div className="cam-preview">
           <CameraPreview />
           {s.status === "starting" && <div className="cam-overlay">Starting camera</div>}
