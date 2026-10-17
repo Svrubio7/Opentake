@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme, session, shell } from "electron";
+import { app, BrowserWindow, Menu, nativeTheme, session, shell } from "electron";
 import { join } from "node:path";
 import { registerEditorIpc, registerMediaScheme } from "./editor";
 import { registerRecordIpc } from "./record";
@@ -65,6 +65,9 @@ if (process.env.OPENTAKE_TEST_OFFSCREEN === "1") {
 
 app.whenReady().then(() => {
   if (!firstCopy) return;
+  // No View menu: its Reload (Ctrl+R) would throw a running take away, and the default menu is English
+  // only. Windows and Linux get none; macOS keeps the app, edit and window menus its keys need.
+  Menu.setApplicationMenu(process.platform === "darwin" ? Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]) : null);
   // Camera, mic and screen are the whole job of this app: grant media to our own pages.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media" || permission === "display-capture"));
   registerLanguageIpc();
@@ -76,6 +79,10 @@ app.whenReady().then(() => {
   registerSettingsIpc(() => main);
   registerQuitIpc();
   createMain();
+  // the window's own colour (seen while it resizes) follows Settings > Appearance and the system
+  nativeTheme.on("updated", () => {
+    if (main && !main.isDestroyed()) main.setBackgroundColor(nativeTheme.shouldUseDarkColors ? "#0a0a0b" : "#f3f4f8");
+  });
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createMain(); });
 });
 
