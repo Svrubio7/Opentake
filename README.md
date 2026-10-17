@@ -27,6 +27,10 @@ Made by [Quetzal](https://quetzaltech.app). Free for everyone, open source under
 - The camera: a circle or a rectangle with its own width, height and corner roundness, plus shadow and border. Drag it on the stage or snap it to a corner. A camera-only take can sit as a window over the background too.
 - Looks: save the whole setup under a name and switch in one click, or go back to the standard look.
 - Auto zoom: clicks are tracked globally and the export zooms in where you click.
+- Scenes: switch live between camera, screen and camera, and screen while recording (buttons or Ctrl+Shift+1, 2, 3). The bubble grows into the full camera frame and back in one smooth move, and the take keeps a list of every switch.
+- Pointer: click rings in your colour and size, and a spotlight that dims everything but the area around the pointer.
+- Keystrokes: the shortcuts you press show as a pill near the bottom of the video. Only combos with Ctrl, Alt or Win (Cmd) show unless you turn on all keys; keys are drawn into the video and never saved anywhere else.
+- Branding: a logo watermark in any corner, a name card (lower third) with your name and title in three styles, and intro and outro title cards recorded into the take. All of it is part of a saved look.
 - A 3, 2, 1 countdown, pause, takes you can review, and separate screen and camera tracks if you want to edit elsewhere.
 - MP4 export with optional silence trimming at the start and end and loudness normalisation.
 
@@ -61,6 +65,8 @@ These work from any app while OpenTake is running (on macOS, Ctrl is Cmd).
 |---|---|
 | Ctrl+Shift+R | Start or stop recording |
 | Ctrl+Shift+P | Pause or resume recording |
+| Ctrl+Shift+1 / 2 / 3 | Scene: camera / screen and camera / screen |
+| Ctrl+Shift+L | Show or hide the name card |
 | Ctrl+Alt+Space | Teleprompter: play or pause |
 | Ctrl+Alt+Up / Down | Teleprompter: faster / slower |
 | Ctrl+Alt+Right / Left | Teleprompter: next / previous sentence |

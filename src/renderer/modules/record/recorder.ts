@@ -1,7 +1,7 @@
 // Recording: MediaRecorder on the composited canvas + the processed mic, plus ISO tracks of the raw
 // screen and the camera. Chunks go to disk every second through IPC, so a crash keeps the take.
 import { getStream } from "@core/streams";
-import type { RecordTrack, TakeTimeline } from "@shared/types";
+import type { RecordMode, RecordShortcut, RecordTrack, TakeTimeline } from "@shared/types";
 import { api, hasBridge } from "./api";
 import { compositor } from "./engine";
 import { extensionFor, needsCamera, needsScreen, pickMime, videoBitrate } from "./layout-core";
@@ -24,6 +24,7 @@ interface Session {
 
 let session: Session | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
+let outroTimer: ReturnType<typeof setTimeout> | null = null;
 
 const st = () => useRecord.getState();
 
@@ -132,6 +133,8 @@ async function begin() {
       hooks: !!s.tracking?.hooks,
       clicks: [],
       cursor: [],
+      scenes: [],
+      overlays: comp.overlays.activeList(),
     };
     const sess: Session = { takeId, tracks: [], startWall: 0, pausedTotal: 0, pauseStart: null, timeline, owned, unsubscribe: () => {}, timers: [], failed: null };
 
@@ -156,7 +159,15 @@ async function begin() {
       },
     });
 
+    // every scene switch is kept with its time, so an editor (or a later export) can follow the take
+    const unsubscribeScenes = useRecord.subscribe((now, prev) => {
+      if (now.mode !== prev.mode && session === sess) sess.timeline.scenes?.push({ t: Math.max(0, recordingClock(sess)), scene: now.mode });
+    });
+    const unsubscribePointer = sess.unsubscribe;
+    sess.unsubscribe = () => { unsubscribePointer(); unsubscribeScenes(); };
+
     sess.startWall = Date.now();
+    comp.overlays.takeStarted(sess.startWall);
     for (const t of sess.tracks) t.rec.start(1000);
     session = sess;
     sess.timers.push(setInterval(() => st().set({ elapsedMs: elapsed() }), 200));
@@ -190,7 +201,26 @@ export async function stopRecording() {
   if (st().status === "countdown") return cancelCountdown();
   const s = session;
   if (!s || st().status === "stopping") return;
+  if (outroTimer) {
+    // Stop again during the outro: end the take now
+    clearTimeout(outroTimer);
+    outroTimer = null;
+    return finishTake(s);
+  }
+  const ms = compositor().overlays.startOutro(Date.now());
+  if (ms > 0) {
+    // the outro is part of the take: keep recording (resumed if paused) until it has played
+    if (st().status === "paused") togglePause();
+    outroTimer = setTimeout(() => { outroTimer = null; void finishTake(s); }, ms);
+    return;
+  }
+  return finishTake(s);
+}
+
+async function finishTake(s: Session) {
+  if (session !== s || st().status === "stopping") return;
   st().set({ status: "stopping" });
+  compositor().overlays.takeEnded();
   const durationMs = elapsed();
   s.timers.forEach(clearInterval);
   s.unsubscribe();
@@ -234,12 +264,33 @@ export async function exportTake(takeId: string, kind: "composite" | "hires") {
   await refreshTakes();
 }
 
+const SCENE_SHORTCUTS: Partial<Record<RecordShortcut, RecordMode>> = {
+  "scene-camera": "camera", "scene-screen-camera": "screen-camera", "scene-screen": "screen",
+};
+
+/** Switches scene, before or during a take (never while it is being saved). */
+export function switchScene(mode: RecordMode) {
+  const s = st();
+  if (s.status === "stopping" || s.mode === mode) return;
+  s.set({ mode });
+}
+
+function onShortcut(a: RecordShortcut) {
+  if (a === "toggle") return toggleRecording();
+  if (a === "pause") return togglePause();
+  const scene = SCENE_SHORTCUTS[a];
+  if (scene) return switchScene(scene);
+  if (a === "lower-third" && !compositor().overlays.toggleLowerThird()) {
+    st().set({ notice: "Turn on the name card in the Record panel first (Branding)." });
+  }
+}
+
 let wired = false;
 /** Shortcut and progress listeners, once per window. */
 export function wireRecorder() {
   if (wired || !hasBridge()) return;
   wired = true;
-  api.onShortcut((a) => (a === "toggle" ? toggleRecording() : togglePause()));
+  api.onShortcut(onShortcut);
   api.onExportProgress((p) => {
     const s = st();
     s.set({ exports: { ...s.exports, [p.takeId]: p } });

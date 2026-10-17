@@ -6,8 +6,10 @@ import { Button, Card, Field, Hint, Segmented, Slider, Switch, Tag } from "../..
 import { api, hasBridge } from "./api";
 import { compositor } from "./engine";
 import { clampBubble, formatClock, hitBubble, needsCamera, needsScreen, snapBubble } from "./layout-core";
+import { IntroOutroCard, KeysCard, LogoCard, NameCard, PointerCard } from "./branding-panel";
 import { BackgroundCard, CameraBubbleCard, FrameCard, LooksCard, WindowCard } from "./look-panel";
-import { exportTake, refreshTakes, startRecording, stopRecording, togglePause, wireRecorder } from "./recorder";
+import { useOverlays } from "./overlays";
+import { exportTake, refreshTakes, startRecording, stopRecording, switchScene, togglePause, wireRecorder } from "./recorder";
 import { currentLayout, isBusy, useRecord } from "./store";
 import "./record.css";
 
@@ -96,10 +98,11 @@ export function Stage() {
 
 // ---------- Control bar under the stage ----------
 
+// the scenes: pick one before a take, or switch live while recording (Ctrl+Shift+1, 2, 3)
 const MODES: { value: RecordMode; label: ReactNode; hint: string }[] = [
-  { value: "camera", label: <Video />, hint: "Camera only" },
-  { value: "screen-camera", label: <PictureInPicture2 />, hint: "Screen and camera" },
-  { value: "screen", label: <Monitor />, hint: "Screen only" },
+  { value: "camera", label: <Video />, hint: "Camera only (Ctrl+Shift+1)" },
+  { value: "screen-camera", label: <PictureInPicture2 />, hint: "Screen and camera (Ctrl+Shift+2)" },
+  { value: "screen", label: <Monitor />, hint: "Screen only (Ctrl+Shift+3)" },
 ];
 const ASPECTS: OutputAspect[] = ["16:9", "9:16", "1:1"];
 const aspectLabel = (a: OutputAspect, w: number, h: number) => (a === "custom" ? `${w}×${h}` : a);
@@ -116,6 +119,7 @@ export function RecordBar() {
   const error = useRecord((s) => s.error);
   const notice = useRecord((s) => s.notice);
   const set = useRecord((s) => s.set);
+  const outro = useOverlays((o) => o.outroEndsAt != null);
   const [picking, setPicking] = useState(false);
   const busy = isBusy(status);
   const live = status === "recording" || status === "paused";
@@ -127,9 +131,10 @@ export function RecordBar() {
       {notice && !error && <button type="button" className="rec-msg" onClick={() => set({ notice: null })} title="Dismiss">{notice}<X /></button>}
       <div className="rec-bar">
         <div className="rec-bar-side">
-          <Segmented icon label="What to record" value={mode} options={MODES} onChange={(m) => set({ mode: m })} disabled={busy} />
+          <Segmented icon label={live ? "Scene: switch while recording" : "What to record"} value={mode} options={MODES} onChange={switchScene} disabled={status === "stopping"} />
           {needsScreen(mode) && (
-            <Button className="rec-src" disabled={busy || !bridge} onClick={() => setPicking(true)} title={sourceName ? `Recording ${sourceName}. Click to change.` : "Choose a screen or window"}>
+            // mid-take a screen can be picked only if the take began without one (its own track is already running otherwise)
+            <Button className="rec-src" disabled={(busy && (!!sourceId || status === "stopping")) || !bridge} onClick={() => setPicking(true)} title={sourceName ? `Recording ${sourceName}. Click to change.` : "Choose a screen or window"}>
               <Monitor /><span>{sourceId ? sourceName : "Choose screen"}</span>
             </Button>
           )}
@@ -148,7 +153,8 @@ export function RecordBar() {
               <Button size="icon" onClick={togglePause} title={status === "paused" ? "Resume (Ctrl+Shift+P)" : "Pause (Ctrl+Shift+P)"} aria-label={status === "paused" ? "Resume" : "Pause"}>
                 {status === "paused" ? <Play /> : <Pause />}
               </Button>
-              <Button variant="danger" size="lg" onClick={() => void stopRecording()} title="Stop (Ctrl+Shift+R)"><Square />Stop</Button>
+              {outro && <span className="note">Outro</span>}
+              <Button variant="danger" size="lg" onClick={() => void stopRecording()} title={outro ? "End the take now" : "Stop (Ctrl+Shift+R)"}><Square />{outro ? "Stop now" : "Stop"}</Button>
             </>
           )}
           {status === "stopping" && <span className="note">Saving the take</span>}
@@ -274,7 +280,9 @@ function TakeRow({ take }: { take: TakeInfo }) {
         <div className="rec-take-actions">
           <Button size="sm" disabled={running || active || !take.files.composite} onClick={() => exportTake(take.id, "composite")}>{take.files.mp4 ? "Export again" : "Export MP4"}</Button>
           {take.files.screen && (
-            <Button size="sm" disabled={running || active} title="The screen track at its native resolution, with the zoom redone from the click timeline" onClick={() => exportTake(take.id, "hires")}>Hi-res</Button>
+            <Button size="sm" disabled={running || active || !!take.sceneChanges} onClick={() => exportTake(take.id, "hires")}
+              title={take.sceneChanges ? "This take switches scenes. Hi-res follows one layout, so export the MP4 instead."
+                : `The screen track at its native resolution, with the zoom redone from the click timeline${take.overlays ? ". Overlays (logo, name card, keys, cards) are not redrawn in it." : ""}`}>Hi-res</Button>
           )}
           <Button variant="ghost" size="sm" onClick={() => api.revealTake(take.id, take.files.hires ?? take.files.mp4)}>Show</Button>
           <Button variant="ghost" size="icon-sm" className="rec-del" disabled={running || active} onClick={() => setConfirm(true)} title="Delete" aria-label="Delete"><Trash /></Button>
@@ -296,12 +304,13 @@ export function RecordPanel() {
 
   useEffect(() => { wireRecorder(); }, []);
   // a new mode that drops the screen releases the capture; one that needs it asks for a source
+  // (not during a take: a camera scene keeps the screen live so switching back is instant)
   useEffect(() => {
-    if (!needsScreen(s.mode) && s.sourceId) {
+    if (!needsScreen(s.mode) && s.sourceId && !busy) {
       s.set({ sourceId: null, sourceName: null, displayId: null });
       void compositor().useScreen(null, null);
     }
-  }, [s.mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [s.mode, busy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!hasBridge()) return <div className="cards"><Card className="card-danger"><p className="note note-danger">The recorder needs the desktop app.</p></Card></div>;
 
@@ -316,6 +325,7 @@ export function RecordPanel() {
       {(needsScreen(s.mode) || s.cameraFramed) && <BackgroundCard />}
       <WindowCard />
       {s.mode === "screen-camera" && <CameraBubbleCard />}
+      {needsScreen(s.mode) && <PointerCard />}
 
       {needsScreen(s.mode) && (
         <Card title="Auto zoom" hint="Zooms in where you click, then eases back out">
@@ -331,6 +341,11 @@ export function RecordPanel() {
         </Card>
       )}
 
+      <KeysCard />
+      <LogoCard />
+      <NameCard />
+      <IntroOutroCard />
+
       <Card title="Recording">
         <div className="row">
           <span className="row-label">Frame rate</span>
@@ -343,6 +358,7 @@ export function RecordPanel() {
           {needsCamera(s.mode) && <div className="row"><span className="row-label">Camera</span><Tag tone={cam.tone}>{cam.text}</Tag></div>}
         </div>
         <p className="note rec-keys"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>R</kbd> start or stop, <kbd>P</kbd> pause</p>
+        <p className="note rec-keys"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> switch scene, <kbd>L</kbd> name card</p>
       </Card>
 
       <Card title="Export">

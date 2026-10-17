@@ -1,7 +1,7 @@
 // Typed wrappers over the preload bridge for the record channels.
 import { IPC } from "@shared/ipc";
 import type {
-  ClickEvent, ClickTrackingStatus, CursorSample, ExportOptions, ExportProgress, RecordBeginRequest,
+  ClickEvent, ClickTrackingStatus, CursorSample, ExportOptions, ExportProgress, KeyPress, RecordBeginRequest,
   RecordBeginResult, RecordChunk, RecordSave, RecordShortcut, ScreenSource, TakeInfo,
 } from "@shared/types";
 
@@ -24,6 +24,9 @@ export const api = {
   onCursor: (cb: (s: CursorSample[]) => void) => t().on(IPC.cursorEvent, (s) => cb(s as CursorSample[])),
   onShortcut: (cb: (a: RecordShortcut) => void) => t().on(IPC.recordShortcut, (a) => cb(a as RecordShortcut)),
   onExportProgress: (cb: (p: ExportProgress) => void) => t().on(IPC.exportProgress, (p) => cb(p as ExportProgress)),
+  keysStart: (showAll: boolean) => t().invoke(IPC.keysStart, { showAll }) as Promise<{ ok: boolean; reason?: string }>,
+  keysStop: () => t().invoke(IPC.keysStop) as Promise<void>,
+  onKeys: (cb: (p: KeyPress) => void) => t().on(IPC.keysEvent, (p) => cb(p as KeyPress)),
 };
 
 /** The preload bridge is missing in a plain browser tab (and in tests). */

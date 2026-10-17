@@ -7,7 +7,13 @@ import { IPC } from "../../shared/ipc";
 import type { ClickEvent, ClickTrackingStatus, CursorSample } from "../../shared/types";
 
 interface HookMouseEvent { x: number; y: number; button: unknown }
-interface Hook { on(ev: "mousedown", cb: (e: HookMouseEvent) => void): void; start(): void; stop(): void }
+export interface HookKeyEvent { keycode: number; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }
+interface Hook {
+  on(ev: "mousedown", cb: (e: HookMouseEvent) => void): void;
+  on(ev: "keydown" | "keyup", cb: (e: HookKeyEvent) => void): void;
+  start(): void;
+  stop(): void;
+}
 
 let hook: Hook | null = null;
 let hookError: string | undefined;
@@ -59,9 +65,8 @@ function onMouseDown(e: HookMouseEvent) {
   target.send(IPC.clickEvent, ev);
 }
 
-export function startPointer(wc: WebContents, displayId?: string): ClickTrackingStatus {
-  target = wc;
-  display = findDisplay(displayId);
+/** The one global hook, started once and shared (the keystroke overlay listens to it too). Null when unavailable. */
+export function globalHook(): Hook | null {
   const h = loadHook();
   if (h && !hookStarted) {
     try {
@@ -73,6 +78,15 @@ export function startPointer(wc: WebContents, displayId?: string): ClickTracking
       hook = null;
     }
   }
+  return hookStarted ? hook : null;
+}
+
+export const globalHookError = () => hookError;
+
+export function startPointer(wc: WebContents, displayId?: string): ClickTrackingStatus {
+  target = wc;
+  display = findDisplay(displayId);
+  globalHook();
   if (!poll) {
     poll = setInterval(() => {
       const p = normalize(screen.getCursorScreenPoint());

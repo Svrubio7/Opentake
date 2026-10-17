@@ -112,3 +112,6 @@
 }
 .swatch-label svg { width: 14px; height: 14px; }
 .corner-pick { display: flex; gap: 2px; margin-right: -6px; }
+
+/* overlays: the logo's thumbnail beside its buttons */
+.logo-thumb { width: 40px; height: 40px; object-fit: contain; border-radius: 8px; background: var(--track); padding: 4px; flex: none; }

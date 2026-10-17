@@ -94,6 +94,7 @@ export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => 
     if (o.kind === "hires") {
       const timeline = await readTimeline(takeId);
       if (!files.screen || !timeline?.screenSize) throw new Error("This take has no separate screen track to re-render");
+      if (timeline.scenes?.length) throw new Error("This take switches scenes. Hi-res follows one layout, so export the MP4 instead.");
       const fps = timeline.layout.fps;
       const durationMs = meta.durationMs ?? timeline.cursor[timeline.cursor.length - 1]?.t ?? 0;
       // the timeline holds raw display positions: the zoom is redone inside the cropped picture

@@ -3,9 +3,10 @@ import type {
   BubbleLayout, ClickTrackingStatus, ExportProgress, FrameCrop, LoudnessTarget, OutputAspect, OutputQuality, RecordLayout, RecordMode, TakeInfo,
 } from "@shared/types";
 import { BACKGROUNDS, NO_CROP, isCustomBackground, normalizeCrop, outputSize } from "./layout-core";
+import { DEFAULT_OVERLAYS, mergeOverlays, type OverlayLook } from "./overlays-core";
 
-/** How a recording looks: frame, background, screen window and camera. Saved and swapped as a "look". */
-export interface LookSettings {
+/** How a recording looks: frame, background, screen window, camera and overlays. Saved and swapped as a "look". */
+export interface LookSettings extends OverlayLook {
   aspect: OutputAspect;
   quality: OutputQuality;
   customWidth: number;
@@ -82,6 +83,7 @@ export const DEFAULT_LOOK: LookSettings = {
   bgImage: null,
   bgBlur: 0,
   cameraFramed: false,
+  ...DEFAULT_OVERLAYS,
 };
 export const LOOK_KEYS = Object.keys(DEFAULT_LOOK) as (keyof LookSettings)[];
 
@@ -104,11 +106,14 @@ const DEFAULTS: RecordSettings = {
 const KEY = "take.record.settings";
 /** the background picture is big, so it is saved on its own and only when it changes */
 const IMAGE_KEY = "take.record.bgImage";
+/** the logo is kept apart for the same reason */
+const LOGO_KEY = "take.record.logoImage";
 
 function load(): RecordSettings {
   try {
     const raw = localStorage.getItem(KEY);
     const image = localStorage.getItem(IMAGE_KEY);
+    const logo = localStorage.getItem(LOGO_KEY);
     if (raw) {
       const saved = JSON.parse(raw) as Partial<RecordSettings>;
       // the source id points at a window that may be gone: pick it again each session
@@ -116,7 +121,9 @@ function load(): RecordSettings {
         ...DEFAULTS, ...saved,
         bubble: { ...DEFAULTS.bubble, ...saved.bubble },
         crop: normalizeCrop(saved.crop),
+        ...mergeOverlays(saved),
         bgImage: image || null,
+        logoImage: logo || null,
         sourceId: null, sourceName: null, displayId: null,
       };
     }
@@ -148,9 +155,15 @@ useRecord.subscribe((s, prev) => {
       else localStorage.removeItem(IMAGE_KEY);
     } catch { /* too big or unavailable: the picture lasts this session */ }
   }
+  if (s.logoImage !== prev.logoImage) {
+    try {
+      if (s.logoImage) localStorage.setItem(LOGO_KEY, s.logoImage);
+      else localStorage.removeItem(LOGO_KEY);
+    } catch { /* too big or unavailable: the logo lasts this session */ }
+  }
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const keep = Object.fromEntries(Object.keys(DEFAULTS).filter((k) => k !== "bgImage").map((k) => [k, s[k as keyof RecordSettings]]));
+    const keep = Object.fromEntries(Object.keys(DEFAULTS).filter((k) => k !== "bgImage" && k !== "logoImage").map((k) => [k, s[k as keyof RecordSettings]]));
     try { localStorage.setItem(KEY, JSON.stringify(keep)); } catch { /* storage unavailable */ }
   }, 300);
 });
@@ -182,7 +195,7 @@ export function storeLooks(list: SavedLook[]): boolean {
 /** Applies a look. The frame size only changes between takes, never while recording. */
 export function applyLook(look: Partial<LookSettings>) {
   const s = useRecord.getState();
-  const next: Partial<LookSettings> = { ...DEFAULT_LOOK, ...look, bubble: { ...DEFAULT_LOOK.bubble, ...look.bubble }, crop: normalizeCrop(look.crop) };
+  const next: Partial<LookSettings> = { ...DEFAULT_LOOK, ...look, bubble: { ...DEFAULT_LOOK.bubble, ...look.bubble }, crop: normalizeCrop(look.crop), ...mergeOverlays(look) };
   if (isBusy(s.status)) { delete next.aspect; delete next.quality; delete next.customWidth; delete next.customHeight; }
   s.set(next);
 }
