@@ -10,6 +10,7 @@ import { registerSettingsIpc } from "./settings";
 import { guardClose, registerQuitIpc } from "./quit";
 import { BACKGROUND_FLAG } from "../shared/assistant";
 import { keepRunningWithoutWindows, registerAssistant, windowShown } from "./mcp/assistant";
+import { sessionGate, type Session } from "./mcp/background-core";
 
 /** Loads one of the renderer pages (dev server in dev, built file in production). `part` picks a view inside the page. */
 export function loadPage(win: BrowserWindow, page: "index" | "teleprompter" | "draw" | "assistant", part?: string) {
@@ -23,6 +24,8 @@ export const preloadPath = () => join(__dirname, "../preload/index.mjs");
 let main: BrowserWindow | null = null;
 /** started by the assistant (the MCP server) with no window: see src/main/mcp/assistant.ts */
 const background = process.argv.includes(BACKGROUND_FLAG);
+/** shortcuts, hooks and the recording IPC: registered when a window first opens, never in a background start */
+let recordingSession: Session | null = null;
 
 // one copy at a time: a second launch brings the open window forward instead of fighting over the
 // shortcuts and the recordings folder
@@ -41,6 +44,7 @@ enableLoopbackFeatures();
 registerMediaScheme();
 
 function createMain() {
+  recordingSession?.windowOpening();
   windowShown();
   if (process.platform === "darwin") app.dock?.show();
   main = new BrowserWindow({
@@ -62,9 +66,11 @@ app.whenReady().then(() => {
   if (!firstCopy) return;
   // Camera, mic and screen are the whole job of this app: grant media to our own pages.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media" || permission === "display-capture"));
-  registerRecordIpc(() => main);
-  registerTeleprompterIpc(() => main);
-  registerDraw(() => main);
+  recordingSession = sessionGate(background, () => {
+    registerRecordIpc(() => main);
+    registerTeleprompterIpc(() => main);
+    registerDraw(() => main);
+  });
   registerUpdater();
   registerEditorIpc();
   registerSettingsIpc(() => main);

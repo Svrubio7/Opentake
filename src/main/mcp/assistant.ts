@@ -2,7 +2,7 @@
 // note it reads at start (app.json), the Settings section that connects Claude or Codex, the activity
 // list with Undo, and "Open in an editor". Started with --assistant, the app runs with no window and
 // quits by itself after 10 quiet minutes; opening OpenTake normally then shows the window.
-import { app, ipcMain, type BrowserWindow } from "electron";
+import { app, globalShortcut, ipcMain, type BrowserWindow } from "electron";
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
@@ -24,6 +24,12 @@ import { readActivity, undo } from "./activity";
 import { Jobs, startBridge, type BridgeHandle } from "./bridge-server";
 import { backupName, claudeCodeCommand, claudeDesktopConfigPaths, codexConfigPath, codexToml, isConfigured, mergeClaudeDesktop, serverLaunch, SERVER_FILE } from "./setup-core";
 import { registerTranscriber, transcribeTake } from "./transcriber";
+import { SHORTCUTS as RECORD_KEYS } from "../record";
+import { SHORTCUT as DRAW_KEY } from "../draw";
+import { SHORTCUTS as PROMPTER_KEYS } from "../teleprompter";
+
+/** Every global shortcut the app can hold, so ping can say none is held in a background start. */
+const allShortcuts = () => [...Object.keys(RECORD_KEYS), DRAW_KEY, "Escape", ...PROMPTER_KEYS.map(([k]) => k)];
 
 const IDLE_QUIT_MS = 10 * 60_000;
 
@@ -172,7 +178,7 @@ export function registerAssistant(getMain: () => BrowserWindow | null, o: { back
     userData: app.getPath("userData"),
     version: app.getVersion(),
     handlers: {
-      ping: () => ({ version: app.getVersion(), window: !!getMain() }),
+      ping: () => ({ version: app.getVersion(), window: !!getMain(), background: keepRunningWithoutWindows(), shortcutsHeld: allShortcuts().filter((k) => globalShortcut.isRegistered(k)) }),
       changed: (p) => { if (validTakeId(p.takeId)) changed(p.takeId); return true; },
       job: (p) => { const j = jobs.get(String(p.id)); if (!j) throw new Error("That job is not known (OpenTake may have restarted)."); return j; },
       cancel: (p) => { const j = jobs.get(String(p.id)); if (j?.kind === "export") cancelExport(j.takeId); return !!j; },

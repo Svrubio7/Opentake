@@ -13,7 +13,7 @@ import { shapeWithHole } from "./draw-core";
 import { loadPage, preloadPath } from "./index";
 import { setClickFilter } from "./record/pointer";
 
-const SHORTCUT = "CommandOrControl+Shift+D";
+export const SHORTCUT = "CommandOrControl+Shift+D";
 const SHORTCUT_LABEL = process.platform === "darwin" ? "Cmd+Shift+D" : "Ctrl+Shift+D";
 const TOOLS: DrawTool[] = ["pen", "highlighter", "arrow", "rect"];
 const TOOLBAR = { width: 560, height: 96, top: 14 };

@@ -19,7 +19,7 @@ export interface PrompterWindowOptions {
 }
 
 // Global shortcuts work while another app (or the recorder) has focus.
-const SHORTCUTS: [string, unknown][] = [
+export const SHORTCUTS: [string, unknown][] = [
   ["CommandOrControl+Alt+Space", { type: "toggle" }],
   ["CommandOrControl+Alt+Up", { type: "faster" }],
   ["CommandOrControl+Alt+Down", { type: "slower" }],
