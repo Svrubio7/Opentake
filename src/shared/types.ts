@@ -281,6 +281,8 @@ export interface AppSettings {
   afterExport: AfterExport;
   /** folders takes went to before a change, newest first, so they can still be opened */
   pastRecordingsDirs: string[];
+  /** the app's language: English, Spanish, or the system's (Spanish for any es-* system) */
+  language: "system" | "en" | "es";
 }
 
 /** A folder the app writes to, as the main process sees it right now. */

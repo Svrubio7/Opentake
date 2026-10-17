@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { IPC } from "../shared/ipc";
 import type { AppSettings, FolderChoice, FolderStatus, Permissions, PermissionState, SettingsView } from "../shared/types";
 import { openExternal, openPath, pickFolder } from "./dialogs";
+import { applyLanguage } from "./i18n";
 import { isInside, mountRoot, sanitizeSettings, withPastDir } from "./settings-core";
 
 const WIN = process.platform === "win32";
@@ -174,10 +175,12 @@ export function registerSettingsIpc(getMain: () => BrowserWindow | null) {
       ...s,
       ...(p.nameTemplate !== undefined ? { nameTemplate: p.nameTemplate } : {}),
       ...(p.afterExport !== undefined ? { afterExport: p.afterExport } : {}),
+      ...(p.language !== undefined ? { language: p.language } : {}),
       // a fixed folder needs a folder: without one it stays next to the take
       ...(p.exportDestination !== undefined ? { exportDestination: p.exportDestination === "folder" && !s.exportDir ? s.exportDestination : p.exportDestination } : {}),
     });
     await saveSettings(next);
+    if (next.language !== s.language) applyLanguage();
     return settingsView();
   });
 

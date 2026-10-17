@@ -1,0 +1,36 @@
+// ui: Spanish (Spain), composed natively, never translated word for word. Glossary in ../GLOSSARY.md.
+import type { Shape } from "../core";
+import type { ui as en } from "../en/ui";
+
+export const ui: Shape<typeof en> = {
+  "ui.toggle": "Activar o desactivar",
+  "card.look": "Estilo",
+  "card.frame": "Formato",
+  "card.background": "Fondo",
+  "card.screenWindow": "Ventana de la pantalla",
+  "card.cameraWindow": "Ventana de la cámara",
+  "card.camera": "Cámara",
+  "card.pointer": "Puntero",
+  "card.drawOnScreen": "Dibujar en la pantalla",
+  "card.keystrokes": "Teclas pulsadas",
+  "card.logo": "Logo",
+  "card.nameCard": "Rótulo",
+  "card.introOutro": "Intro y cierre",
+  "card.recording": "Grabación",
+  "card.autoZoom": "Zoom automático",
+  "card.whenYouStop": "Al detener",
+  "card.input": "Entrada",
+  "card.sound": "Sonido",
+  "card.lightColour": "Luz y color",
+  "card.detail": "Detalle",
+  "card.framing": "Encuadre",
+  "card.scroll": "Desplazamiento",
+  "card.script": "Guion",
+  "card.overlay": "En la ventana",
+  "card.popOut": "Ventana flotante",
+  "card.keys": "Teclas",
+  "card.recordingsFolder": "Carpeta de grabaciones",
+  "card.exports": "Exportaciones",
+  "card.help": "Ayuda",
+  "card.language": "Idioma",
+};

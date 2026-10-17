@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   nameTemplate: DEFAULT_NAME_TEMPLATE,
   afterExport: "reveal",
   pastRecordingsDirs: [],
+  language: "system",
 };
 
 /** The words a name template can use, for the Settings help line. */
@@ -42,6 +43,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     nameTemplate: template.trim() ? template : DEFAULT_NAME_TEMPLATE,
     afterExport: AFTER.includes(r.afterExport as AfterExport) ? (r.afterExport as AfterExport) : "reveal",
     pastRecordingsDirs: Array.isArray(r.pastRecordingsDirs) ? r.pastRecordingsDirs.filter(isPath).slice(0, MAX_PAST) : [],
+    language: r.language === "en" || r.language === "es" ? r.language : "system",
   };
 }
 
