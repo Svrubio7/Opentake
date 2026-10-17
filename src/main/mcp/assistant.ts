@@ -87,7 +87,7 @@ async function status(): Promise<AssistantStatus> {
     claudeCode: claudeCodeCommand(l),
     codex: codexToml(l),
     codexPath: codexConfigPath(homedir(), process.env),
-    warning: l.flavour === "portable" ? "This is the portable copy: Claude starts OpenTake from where the .exe is now. Set it up again if you move it." : undefined,
+    warning: l.flavour === "portable" ? "For Claude and Codex, use the installed OpenTake: the portable copy is not tested with them yet." : undefined,
   };
 }
 
@@ -118,7 +118,8 @@ function testConnection(): Promise<TestResult> {
   const started = Date.now();
   return new Promise((resolve) => {
     if (!existsSync(l.args[0])) return resolve({ ok: false, message: `The server file is missing: ${l.args[0]}` });
-    const p = spawn(l.command, l.args, { env: { ...process.env, ...l.env, OPENTAKE_NO_LAUNCH: "1" }, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    // the data folder is passed only here, for a test copy run with its own --user-data-dir
+    const p = spawn(l.command, l.args, { env: { ...process.env, ...l.env, OPENTAKE_USER_DATA: app.getPath("userData"), OPENTAKE_NO_LAUNCH: "1" }, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
     let buf = "";
     let tools = 0;
     const finish = (r: TestResult) => { clearTimeout(timer); p.kill(); resolve(r); };

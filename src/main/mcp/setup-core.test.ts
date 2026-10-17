@@ -10,7 +10,7 @@ describe("server launch", () => {
   it("runs the installed app's own script with its executable in Node mode", () => {
     expect(serverLaunch(win)).toEqual({
       command: win.execPath, args: ["C:\\Users\\Ana\\AppData\\Local\\Programs\\OpenTake\\resources\\mcp\\opentake-mcp.cjs"],
-      env: { ELECTRON_RUN_AS_NODE: "1", OPENTAKE_USER_DATA: win.userData }, flavour: "installed",
+      env: { ELECTRON_RUN_AS_NODE: "1" }, flavour: "installed",
     });
   });
 
@@ -64,7 +64,7 @@ describe("Claude Code and Codex", () => {
 
   it("quotes paths with spaces in the Claude Code command", () => {
     expect(claudeCodeCommand(launch)).toBe(
-      `claude mcp add opentake --scope user -e ELECTRON_RUN_AS_NODE=1 -e OPENTAKE_USER_DATA=C:\\Users\\Ana\\AppData\\Roaming\\OpenTake -- "C:\\Program Files\\OpenTake\\OpenTake.exe" "C:\\Program Files\\OpenTake\\resources\\mcp\\opentake-mcp.cjs"`,
+      `claude mcp add opentake --scope user -e ELECTRON_RUN_AS_NODE=1 -- "C:\\Program Files\\OpenTake\\OpenTake.exe" "C:\\Program Files\\OpenTake\\resources\\mcp\\opentake-mcp.cjs"`,
     );
   });
 
@@ -73,7 +73,7 @@ describe("Claude Code and Codex", () => {
       "[mcp_servers.opentake]",
       "command = 'C:\\Program Files\\OpenTake\\OpenTake.exe'",
       "args = ['C:\\Program Files\\OpenTake\\resources\\mcp\\opentake-mcp.cjs']",
-      "env = { ELECTRON_RUN_AS_NODE = '1', OPENTAKE_USER_DATA = 'C:\\Users\\Ana\\AppData\\Roaming\\OpenTake' }",
+      "env = { ELECTRON_RUN_AS_NODE = '1' }",
       "",
     ].join("\n"));
     expect(codexToml({ ...launch, command: "/Users/o'neil/OpenTake" })).toContain(`command = "/Users/o'neil/OpenTake"`);

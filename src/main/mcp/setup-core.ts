@@ -32,7 +32,8 @@ const pathOf = (platform: string) => (platform === "win32" ? win32 : posix);
  */
 export function serverLaunch(c: LaunchContext): ServerLaunch {
   const p = pathOf(c.platform);
-  const env = { ELECTRON_RUN_AS_NODE: "1", OPENTAKE_USER_DATA: c.userData };
+  // the server finds the app's data folder itself (OPENTAKE_USER_DATA is only for tests)
+  const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: "1" };
   if (!c.packaged) return { command: c.execPath, args: [p.join(c.appPath, "out", "mcp", SERVER_FILE)], env: { ...env, OPENTAKE_APP_ROOT: c.appPath }, flavour: "dev" };
   const copy = p.join(c.userData, "assistant", SERVER_FILE);
   if (c.platform === "win32" && c.portableExe) return { command: c.portableExe, args: [copy], env, flavour: "portable" };

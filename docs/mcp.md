@@ -29,13 +29,13 @@ By hand, the Claude Desktop entry looks like this on Windows:
     "opentake": {
       "command": "C:\\Users\\you\\AppData\\Local\\Programs\\OpenTake\\OpenTake.exe",
       "args": ["C:\\Users\\you\\AppData\\Local\\Programs\\OpenTake\\resources\\mcp\\opentake-mcp.cjs"],
-      "env": { "ELECTRON_RUN_AS_NODE": "1", "OPENTAKE_USER_DATA": "C:\\Users\\you\\AppData\\Roaming\\OpenTake" }
+      "env": { "ELECTRON_RUN_AS_NODE": "1" }
     }
   }
 }
 ```
 
-On macOS the command is `/Applications/OpenTake.app/Contents/MacOS/OpenTake` and the script is in `/Applications/OpenTake.app/Contents/Resources/mcp/`. The portable Windows build and the Linux AppImage unpack to a new folder each time, so for them OpenTake keeps a copy of the script in its data folder and the command is the `.exe` or `.AppImage` itself; set it up again if you move that file.
+On macOS the command is `/Applications/OpenTake.app/Contents/MacOS/OpenTake` and the script is in `/Applications/OpenTake.app/Contents/Resources/mcp/`. The portable Windows build and the Linux AppImage unpack to a new folder each time, so for them OpenTake keeps a copy of the script in its data folder and the command is the `.exe` or `.AppImage` itself; set it up again if you move that file. The portable copy is not tested with assistants yet: use the installer for this.
 
 ## Tools
 
