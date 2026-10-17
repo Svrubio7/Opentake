@@ -29,6 +29,13 @@ export const IPC = {
   systemAudioSupport: "take:system-audio:support",
   /** mute this window's own playback so the computer sound capture does not record it */
   muteOwnAudio: "take:system-audio:mute-own",
+  // editor: cuts, captions and the take's own media
+  editorOpen: "take:editor:open",
+  editorSaveEdit: "take:editor:save-edit",
+  editorSaveCaptions: "take:editor:save-captions",
+  editorPeaks: "take:editor:peaks",
+  editorPcm: "take:editor:pcm",
+  editorCaptionFiles: "take:editor:caption-files",
   // teleprompter module: the second window and the state relay between windows
   prompterOpen: "take:prompter:open",
   prompterClose: "take:prompter:close",

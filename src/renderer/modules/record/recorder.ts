@@ -1,7 +1,7 @@
 // Recording: MediaRecorder on the composited canvas + the processed mic, plus ISO tracks of the raw
 // screen and the camera. Chunks go to disk every second through IPC, so a crash keeps the take.
 import { getStream } from "@core/streams";
-import type { RecordMode, RecordShortcut, RecordTrack, TakeTimeline } from "@shared/types";
+import type { ExportOutput, RecordMode, RecordShortcut, RecordTrack, TakeTimeline } from "@shared/types";
 import { api, hasBridge } from "./api";
 import { AUDIO_BPS, DISK_POLL_MS, diskBeforeTake, diskWhileRecording, takeBitrate, type DiskLevel } from "./disk-core";
 import { compositor } from "./engine";
@@ -313,11 +313,11 @@ export async function refreshTakes() {
   try { st().set({ takes: await api.takes() }); } catch { /* folder unreadable: keep the old list */ }
 }
 
-export async function exportTake(takeId: string, kind: "composite" | "hires") {
+export async function exportTake(takeId: string, kind: "composite" | "hires", output?: ExportOutput) {
   const s = st();
   s.set({ exports: { ...s.exports, [takeId]: { takeId, stage: "Starting", ratio: 0 } } });
   try {
-    await api.exportTake({ takeId, kind, loudness: s.loudness, trimSilence: s.trimSilence });
+    await api.exportTake({ takeId, kind, loudness: s.loudness, trimSilence: s.trimSilence, output });
   } catch {
     // the failure arrives as a progress event with its message
   }

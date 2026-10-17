@@ -1,5 +1,6 @@
 import { app, BrowserWindow, nativeTheme, session, shell } from "electron";
 import { join } from "node:path";
+import { registerEditorIpc, registerMediaScheme } from "./editor";
 import { registerRecordIpc } from "./record";
 import { enableLoopbackFeatures } from "./record/system-audio";
 import { registerTeleprompterIpc } from "./teleprompter";
@@ -18,6 +19,7 @@ export const preloadPath = () => join(__dirname, "../preload/index.mjs");
 let main: BrowserWindow | null = null;
 
 enableLoopbackFeatures();
+registerMediaScheme();
 
 function createMain() {
   main = new BrowserWindow({
@@ -41,6 +43,7 @@ app.whenReady().then(() => {
   registerTeleprompterIpc(() => main);
   registerDraw(() => main);
   registerUpdater();
+  registerEditorIpc();
   createMain();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createMain(); });
 });
