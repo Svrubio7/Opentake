@@ -8,7 +8,8 @@ const part = new URLSearchParams(location.search).get("part");
 
 function Root() {
   useLang();
-  if (part === "toolbar") document.title = t("draw.toolbarWindowTitle");
+  // the page's <title> would replace the window's translated one: both parts set theirs, in the current language
+  document.title = t(part === "toolbar" ? "draw.toolbarWindowTitle" : "draw.strokesWindowTitle");
   return part === "toolbar" ? <DrawToolbar /> : <DrawStrokes />;
 }
 
