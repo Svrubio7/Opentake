@@ -56,7 +56,7 @@ export async function beginTake(req: RecordBeginRequest): Promise<{ takeId: stri
   return { takeId: id, dir };
 }
 
-const TRACKS: RecordTrack[] = ["composite", "screen", "camera"];
+const TRACKS: RecordTrack[] = ["composite", "screen", "camera", "system"];
 
 export async function appendChunk(id: string, track: RecordTrack, data: Uint8Array) {
   if (!TRACKS.includes(track)) throw new Error("bad track");
@@ -88,6 +88,7 @@ export function takeFiles(id: string, meta: TakeMeta): TakeFiles {
     composite: meta.containers.composite && f(`composite.${meta.containers.composite}`),
     screen: meta.containers.screen && f(`screen.${meta.containers.screen}`),
     camera: meta.containers.camera && f(`camera.${meta.containers.camera}`),
+    system: meta.containers.system && f(`system.${meta.containers.system}`),
     mp4: f("take.mp4"),
     hires: f("take-hires.mp4"),
   };

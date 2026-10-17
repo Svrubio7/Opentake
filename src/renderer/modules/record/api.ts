@@ -1,7 +1,7 @@
 // Typed wrappers over the preload bridge for the record channels.
 import { IPC } from "@shared/ipc";
 import type {
-  ClickEvent, ClickTrackingStatus, CursorSample, ExportOptions, ExportProgress, RecordBeginRequest,
+  ClickEvent, ClickTrackingStatus, CursorSample, DiskSpace, ExportOptions, ExportProgress, RecordBeginRequest,
   RecordBeginResult, RecordChunk, RecordSave, RecordShortcut, ScreenSource, TakeInfo,
 } from "@shared/types";
 
@@ -20,6 +20,7 @@ export const api = {
   openFolder: () => t().invoke(IPC.openRecordingsFolder) as Promise<void>,
   exportTake: (o: ExportOptions) => t().invoke(IPC.exportVideo, o) as Promise<string>,
   cancelExport: (id: string) => t().invoke(IPC.exportCancel, id) as Promise<boolean>,
+  diskSpace: () => t().invoke(IPC.diskSpace) as Promise<DiskSpace>,
   onClick: (cb: (e: ClickEvent) => void) => t().on(IPC.clickEvent, (e) => cb(e as ClickEvent)),
   onCursor: (cb: (s: CursorSample[]) => void) => t().on(IPC.cursorEvent, (s) => cb(s as CursorSample[])),
   onShortcut: (cb: (a: RecordShortcut) => void) => t().on(IPC.recordShortcut, (a) => cb(a as RecordShortcut)),

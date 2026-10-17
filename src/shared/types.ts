@@ -109,7 +109,7 @@ export interface TakeTimeline {
   cursor: { t: number; x: number; y: number }[];
 }
 
-export interface TakeFiles { composite?: string; screen?: string; camera?: string; mp4?: string; hires?: string }
+export interface TakeFiles { composite?: string; screen?: string; camera?: string; system?: string; mp4?: string; hires?: string }
 
 export interface TakeInfo {
   id: string;
@@ -133,9 +133,14 @@ export interface ExportOptions {
 }
 export interface ExportProgress { takeId: string; stage: string; ratio: number | null; done?: boolean; error?: string; output?: string }
 
-export interface RecordBeginRequest { mode: RecordMode; startedAt: number; layout: RecordLayout; containers: { composite: string; screen?: string; camera?: string } }
+export interface RecordBeginRequest { mode: RecordMode; startedAt: number; layout: RecordLayout; containers: { composite: string; screen?: string; camera?: string; system?: string } }
 export interface RecordBeginResult { takeId: string; dir: string }
-export type RecordTrack = "composite" | "screen" | "camera";
+export type RecordTrack = "composite" | "screen" | "camera" | "system";
 export interface RecordChunk { takeId: string; track: RecordTrack; data: Uint8Array }
 export interface RecordSave { takeId: string; final: boolean; durationMs: number; timeline: TakeTimeline }
 export type RecordShortcut = "toggle" | "pause";
+
+/** Free space on the recordings drive, in bytes. */
+export interface DiskSpace { freeBytes: number; totalBytes: number }
+/** Whether the computer's own sound can be recorded here; `reason` is one plain line when it cannot. */
+export interface SystemAudioSupport { supported: boolean; reason?: string }

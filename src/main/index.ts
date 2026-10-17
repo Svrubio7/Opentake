@@ -1,6 +1,7 @@
 import { app, BrowserWindow, nativeTheme, session, shell } from "electron";
 import { join } from "node:path";
 import { registerRecordIpc } from "./record";
+import { enableLoopbackFeatures } from "./record/system-audio";
 import { registerTeleprompterIpc } from "./teleprompter";
 
 /** Loads one of the renderer pages (dev server in dev, built file in production). */
@@ -12,6 +13,8 @@ export function loadPage(win: BrowserWindow, page: "index" | "teleprompter") {
 export const preloadPath = () => join(__dirname, "../preload/index.mjs");
 
 let main: BrowserWindow | null = null;
+
+enableLoopbackFeatures();
 
 function createMain() {
   main = new BrowserWindow({
