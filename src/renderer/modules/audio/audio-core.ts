@@ -449,3 +449,21 @@ export function analyseMicCheck(silence: Float32Array, speech: Float32Array, sam
 
 export const MIC_CHECK_SENTENCE =
   "Today I'm sharing six simple steps to sound clear on camera. Pick a quiet place, sit close to the mic, and keep a steady pace so every sentence is sharp and easy to follow.";
+
+// ---------------------------------------------------------------- feedback guard
+
+/**
+ * Speakers feeding back into the mic while Listen is on: the output sits near full scale and
+ * stays there. Speech has gaps and the chain keeps it far below this; a howl does not stop.
+ */
+export const FEEDBACK = { rmsDb: -10, holdMs: 400 };
+
+export interface FeedbackState { loudMs: number }
+export const initialFeedback = (): FeedbackState => ({ loudMs: 0 });
+
+/** One meter reading; `tripped` means mute the monitor now. */
+export function feedbackStep(s: FeedbackState, rmsDb: number, dtMs: number): { state: FeedbackState; tripped: boolean } {
+  const dt = Math.max(0, Math.min(dtMs, 100)); // readings come every few tens of ms; a gap is not loud time
+  const loudMs = rmsDb >= FEEDBACK.rmsDb ? s.loudMs + dt : 0;
+  return { state: { loudMs }, tripped: loudMs >= FEEDBACK.holdMs };
+}

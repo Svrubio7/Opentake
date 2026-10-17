@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  PRESETS, applyPreset, bandDb, clippedRuns, defaultSettings, detectHum, integratedLoudness, measureMic,
+  PRESETS, applyPreset, bandDb, feedbackStep, initialFeedback, clippedRuns, defaultSettings, detectHum, integratedLoudness, measureMic,
   peakDb, planFromMetrics, powerSpectrum, sanitizeSettings, type MicMetrics,
 } from "./audio-core";
 import { Agc, Biquad, Compressor, Deesser, Gate, Limiter, LoudnessMeter, VoiceChain, compressorGainDb, dbToGain, gainToDb } from "./dsp";
@@ -257,5 +257,30 @@ describe("settings", () => {
     expect(next.inputGainDb).toBe(9);
     expect(next.gate.thresholdDb).toBe(-47);
     expect(next.comp.ratio).toBe(PRESETS.broadcast.settings.comp.ratio);
+  });
+});
+
+describe("feedback guard", () => {
+  const run = (levels: number[], dt = 50) => {
+    let s = initialFeedback();
+    for (const db of levels) {
+      const r = feedbackStep(s, db, dt);
+      s = r.state;
+      if (r.tripped) return true;
+    }
+    return false;
+  };
+  it("mutes a howl that holds near full scale", () => {
+    expect(run(Array(10).fill(-4))).toBe(true);
+  });
+  it("leaves loud speech alone: it has gaps", () => {
+    const speech = Array.from({ length: 200 }, (_, i) => (i % 6 < 4 ? -9 : -30));
+    expect(run(speech)).toBe(false);
+  });
+  it("leaves normal speech alone", () => {
+    expect(run(Array(200).fill(-18))).toBe(false);
+  });
+  it("does not count a long pause between readings as loud time", () => {
+    expect(run([-4, -4], 5000)).toBe(false);
   });
 });

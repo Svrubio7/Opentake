@@ -9,7 +9,7 @@ import rnnoiseSimdWasmUrl from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wa
 import speexWasmUrl from "@sapphi-red/web-noise-suppressor/speex.wasm?url";
 import { publishStream } from "@core/streams";
 import voiceWorkletUrl from "./voice.worklet.ts?worker&url";
-import type { ChainSettings, NsMode } from "./audio-core";
+import { feedbackStep, initialFeedback, type ChainSettings, type NsMode } from "./audio-core";
 import { useAudioStore } from "./store";
 
 const SAMPLE_RATE = 48000;
@@ -171,6 +171,9 @@ class VoiceEngine {
   private tap: AudioWorkletNode | null = null;
   private dest: MediaStreamAudioDestinationNode | null = null;
   private monitor: GainNode | null = null;
+  private monitorOn = false;
+  private feedback = initialFeedback();
+  private lastMeterAt = 0;
   private source: MediaStreamAudioSourceNode | null = null;
   private stream: MediaStream | null = null;
   private booting: Promise<void> | null = null;
@@ -210,7 +213,9 @@ class VoiceEngine {
     this.chain.output.connect(this.dest);
     this.chain.output.connect(this.monitor).connect(ctx.destination);
     this.chain.output.port.onmessage = (e) => {
-      if (e.data?.type === "meter") this.outputListeners.forEach((l) => l(e.data as OutputMeter));
+      if (e.data?.type !== "meter") return;
+      this.guardFeedback((e.data as OutputMeter).rmsDb);
+      this.outputListeners.forEach((l) => l(e.data as OutputMeter));
     };
 
     this.tap = new AudioWorkletNode(ctx, "take-tap", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1, channelCountMode: "explicit" });
@@ -325,7 +330,23 @@ class VoiceEngine {
   resetAgc(gainDb: number) { this.chain?.resetAgc(gainDb); }
 
   setMonitor(on: boolean) {
+    this.monitorOn = on;
+    this.feedback = initialFeedback();
+    if (on) useAudioStore.getState().set({ monitorNotice: null });
     if (this.ctx && this.monitor) this.monitor.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.03);
+  }
+
+  /** Listen through speakers can howl: a level that holds near full scale mutes it at once. */
+  private guardFeedback(rmsDb: number) {
+    const now = performance.now();
+    const dt = this.lastMeterAt ? now - this.lastMeterAt : 0;
+    this.lastMeterAt = now;
+    if (!this.monitorOn) return;
+    const r = feedbackStep(this.feedback, rmsDb, dt);
+    this.feedback = r.state;
+    if (!r.tripped) return;
+    this.setMonitor(false);
+    useAudioStore.getState().set({ monitor: false, monitorNotice: "Listen was turned off: the speakers were feeding back into the mic. Use headphones." });
   }
 
   /** Records `seconds` of the raw mic (before any processing). */

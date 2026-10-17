@@ -19,6 +19,7 @@ export function AudioPanel() {
   const devices = useAudioStore((s) => s.devices);
   const deviceId = useAudioStore((s) => s.deviceId);
   const monitor = useAudioStore((s) => s.monitor);
+  const monitorNotice = useAudioStore((s) => s.monitorNotice);
 
   useEffect(() => { void getEngine().start(); }, []);
 
@@ -40,7 +41,8 @@ export function AudioPanel() {
             <Button size="sm" onClick={retry}>Try again</Button>
           </div>
         )}
-        <Switch label="Listen" hint="Hear the processed voice. Use headphones so the mic does not pick up the speakers." checked={monitor} onChange={(v) => setMonitor(v)} />
+        <Switch label="Listen" hint="Hear the processed voice. Use headphones so the mic does not pick up the speakers. It turns itself off if the speakers start feeding back." checked={monitor} onChange={(v) => setMonitor(v)} />
+        {monitorNotice && <p className="note note-warn">{monitorNotice}</p>}
       </Card>
 
       <Meters />

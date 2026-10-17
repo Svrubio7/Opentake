@@ -31,6 +31,8 @@ export interface AudioState {
   nsRunning: NsMode;
   nsAvailable: { rnnoise: boolean; speex: boolean };
   monitor: boolean;
+  /** why Listen was turned off by itself (feedback), shown under the switch */
+  monitorNotice: string | null;
   set: (patch: Partial<AudioState>) => void;
 }
 
@@ -46,6 +48,7 @@ export const useAudioStore = create<AudioState>((set) => ({
   nsRunning: "off",
   nsAvailable: { rnnoise: false, speex: false },
   monitor: false,
+  monitorNotice: null,
   set: (patch) => set(patch),
 }));
 
