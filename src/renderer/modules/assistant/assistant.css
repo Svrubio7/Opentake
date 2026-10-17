@@ -3,11 +3,14 @@
 .as-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
 .as-path { min-width: 0; overflow-wrap: anywhere; }
 .as-copy { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.as-copy > .btn { flex: none; }
+/* wraps only at spaces and after a path separator (wrap-core.ts); a piece longer than the line scrolls inside the block */
 .as-code {
   flex: 1; min-width: 0; margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--card-border);
-  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
-  color: var(--text); background: color-mix(in srgb, var(--text) 4%, transparent); user-select: text;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: normal; word-break: normal;
+  overflow-x: auto; color: var(--text); background: color-mix(in srgb, var(--text) 4%, transparent); user-select: text;
 }
+.as-nowrap { white-space: pre; }
 .as-activity { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--card-border); }
 .as-activity-head { display: flex; align-items: center; justify-content: space-between; }
 .as-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow: auto; }
