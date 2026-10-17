@@ -1,21 +1,26 @@
 // OWNED BY: record agent. The big preview in the middle, its control bar, and the Record panel.
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { FolderOpen, Monitor, Pause, PictureInPicture2, Play, Scissors, Square, Trash, Video, X } from "lucide-react";
-import type { OutputAspect, RecordMode, ScreenSource, TakeInfo } from "@shared/types";
-import { Button, Card, Field, Hint, Segmented, Slider, Switch, Tag } from "../../ui";
+import { Monitor, Pause, PictureInPicture2, Play, Square, Video, X } from "lucide-react";
+import type { OutputAspect, RecordMode, ScreenSource } from "@shared/types";
+import { Button, Card, Field, Hint, Segmented, Slider, Switch } from "../../ui";
 import { api, hasBridge } from "./api";
 import { compositor } from "./engine";
 import { clampBubble, formatClock, hitBubble, needsCamera, needsScreen, snapBubble } from "./layout-core";
 import { IntroOutroCard, KeysCard, LogoCard, NameCard, PointerCard } from "./branding-panel";
 import { BackgroundCard, CameraBubbleCard, FrameCard, LooksCard, WindowCard } from "./look-panel";
 import { useOverlays } from "./overlays";
-import { EditorHost, openEditor, openExport } from "../editor";
-import { refreshTakes, startRecording, stopRecording, switchScene, togglePause, wireRecorder } from "./recorder";
+import { EditorHost } from "../editor";
+import { PICK_NOTICE, startRecording, stopRecording, switchScene, togglePause, wireRecorder } from "./recorder";
+import { goTo, useShell, type RecordSection } from "../shell/store";
+import { Keys } from "../shell/Shortcuts";
+import { ReadinessCard, Suggestions, pickScreen, useProblems } from "./readiness";
 import { currentLayout, isBusy, useRecord } from "./store";
 import { PrompterToggle } from "../teleprompter/record-link";
 import { DrawCard } from "../draw";
 import { SystemSoundControls } from "./system-audio-panel";
 import "./record.css";
+
+export { TakesPanel } from "./takes-panel";
 
 // ---------- Stage ----------
 
@@ -26,6 +31,7 @@ export function Stage() {
   const countdownValue = useRecord((s) => s.countdownValue);
   const mode = useRecord((s) => s.mode);
   const aspect = useRecord((s) => s.aspect);
+  const sourceId = useRecord((s) => s.sourceId);
   const drag = useRef<{ kind: "move" | "resize"; dx: number; dy: number; startSize: number; startDist: number } | null>(null);
   const [cursor, setCursor] = useState("default");
 
@@ -95,6 +101,11 @@ export function Stage() {
         onPointerLeave={() => { if (!drag.current) compositor().bubbleHover = null; }}
       />
       {status === "countdown" && <div className="rec-countdown" key={countdownValue}>{countdownValue}</div>}
+      {needsScreen(mode) && !sourceId && status === "idle" && (
+        <div className="rec-stage-ask">
+          <Button variant="ink" size="lg" onClick={pickScreen}><Monitor />Choose a screen or window</Button>
+        </div>
+      )}
       {mode === "screen-camera" && status === "idle" && <div className="rec-stage-tip">Drag the camera to move it, drag its edge to resize</div>}
     </div>
   );
@@ -122,17 +133,29 @@ export function RecordBar() {
   const elapsedMs = useRecord((s) => s.elapsedMs);
   const error = useRecord((s) => s.error);
   const notice = useRecord((s) => s.notice);
+  const noticeAction = useRecord((s) => s.noticeAction);
   const set = useRecord((s) => s.set);
   const outro = useOverlays((o) => o.outroEndsAt != null);
   const [picking, setPicking] = useState(false);
   const busy = isBusy(status);
   const live = status === "recording" || status === "paused";
   const bridge = hasBridge();
+  // the stage, the setup and the readiness card all ask for the picker
+  useEffect(() => {
+    const open = () => { const s = useRecord.getState(); if (needsScreen(s.mode) && (!isBusy(s.status) || !s.sourceId)) setPicking(true); };
+    window.addEventListener("opentake:pick-screen", open);
+    return () => window.removeEventListener("opentake:pick-screen", open);
+  }, []);
+  const msgAction = noticeAction && (
+    <button type="button" className="rec-msg-action" onClick={() => { goTo(noticeAction); set({ error: null, notice: null, noticeAction: null }); }}>
+      {noticeAction === "takes" ? "Open Takes" : "Open Settings"}
+    </button>
+  );
 
   return (
     <div className="rec-dock">
-      {error && <button type="button" className="rec-msg danger" onClick={() => set({ error: null })} title="Dismiss">{error}<X /></button>}
-      {notice && !error && <button type="button" className="rec-msg" onClick={() => set({ notice: null })} title="Dismiss">{notice}<X /></button>}
+      {error && <div className="rec-msg danger" role="alert"><span>{error}</span>{msgAction}<button type="button" className="rec-msg-x" onClick={() => set({ error: null, noticeAction: null })} title="Dismiss" aria-label="Dismiss"><X /></button></div>}
+      {notice && !error && <div className="rec-msg" role="status"><span>{notice}</span>{msgAction}<button type="button" className="rec-msg-x" onClick={() => set({ notice: null, noticeAction: null })} title="Dismiss" aria-label="Dismiss"><X /></button></div>}
       <div className="rec-bar">
         <div className="rec-bar-side">
           <Segmented icon label={live ? "Scene: switch while recording" : "What to record"} value={mode} options={MODES} onChange={switchScene} disabled={status === "stopping"} />
@@ -203,7 +226,7 @@ function SourcePicker({ onClose }: { onClose: () => void }) {
   }, [onClose]);
   const choose = async (s: ScreenSource) => {
     const set = useRecord.getState().set;
-    set({ sourceId: s.id, sourceName: s.name, displayId: s.displayId ?? null, error: null });
+    set({ sourceId: s.id, sourceName: s.name, displayId: s.displayId ?? null, error: null, ...(useRecord.getState().notice === PICK_NOTICE ? { notice: null } : {}) });
     onClose();
     try { await compositor().useScreen(s.id, s.displayId ?? null); } catch (e) {
       set({ sourceId: null, sourceName: null, displayId: null, error: `Could not capture ${s.name}: ${e instanceof Error ? e.message : e}` });
@@ -238,78 +261,30 @@ function SourcePicker({ onClose }: { onClose: () => void }) {
   );
 }
 
-const fmtSize = (b: number) => (b > 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.max(0.1, b / 1e6).toFixed(1)} MB`);
-const fmtDate = (t: number) => new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-const MODE_LABEL: Record<RecordMode, string> = { camera: "Camera", "screen-camera": "Screen + camera", screen: "Screen" };
+const SECTIONS: { value: RecordSection; label: string; hint: string }[] = [
+  { value: "setup", label: "Setup", hint: "What is ready, the recording options and what happens when you stop" },
+  { value: "look", label: "Look", hint: "Frame, background, the screen window and the camera" },
+  { value: "overlays", label: "Overlays", hint: "Pointer, drawing, keys, logo, name card, intro and outro" },
+];
 
-function TakeRow({ take }: { take: TakeInfo }) {
-  const progress = useRecord((s) => s.exports[take.id]);
-  const recordingId = useRecord((s) => (s.status !== "idle" ? s.takeId : null));
-  const [confirm, setConfirm] = useState(false);
-  const running = progress && !progress.done;
-  const active = recordingId === take.id;
-  const del = async () => {
-    try { await api.deleteTake(take.id); } catch (e) { useRecord.getState().set({ error: `Could not delete: ${e instanceof Error ? e.message : e}` }); }
-    setConfirm(false);
-    void refreshTakes();
-  };
-  return (
-    <li className="rec-take">
-      <div className="rec-take-top">
-        <div className="rec-take-text">
-          <b>{fmtDate(take.createdAt)}</b>
-          <span className="tnum">
-            {take.durationMs != null ? formatClock(take.durationMs) : "Length unknown"} · {MODE_LABEL[take.mode]} · {fmtSize(take.sizeBytes)}
-          </span>
-        </div>
-        <div className="rec-take-tags">
-          {take.status === "recording" && !active && <Tag tone="warn" title="This take was interrupted and recovered">Recovered</Tag>}
-          {take.files.edit && <Tag title="This take has an edit (edit.json)">Edited</Tag>}
-          {take.files.captions && <Tag title="This take has captions (captions.json)">Captions</Tag>}
-          {take.files.mp4 && <Tag tone="good">MP4</Tag>}
-        </div>
-      </div>
-      {running && (
-        <div className="rec-progress">
-          <div className="progress"><i style={{ width: progress.ratio == null ? "100%" : `${Math.round(progress.ratio * 100)}%` }} className={progress.ratio == null ? "indet" : ""} /></div>
-          <span className="tnum">{progress.stage}{progress.ratio != null ? ` ${Math.round(progress.ratio * 100)}%` : ""}</span>
-          <Button variant="ghost" size="sm" onClick={() => api.cancelExport(take.id)}>Cancel</Button>
-        </div>
-      )}
-      {progress?.error && <p className="note note-danger">{progress.error}</p>}
-      {progress?.done && !progress.error && progress.output && <p className="note">Saved {progress.output.split(/[\\/]/).pop()}</p>}
-      {confirm ? (
-        <div className="rec-take-actions">
-          <span className="note">Move to the Recycle Bin?</span>
-          <Button variant="danger" size="sm" onClick={del}>Delete</Button>
-          <Button size="sm" onClick={() => setConfirm(false)}>Keep</Button>
-        </div>
-      ) : (
-        <div className="rec-take-actions">
-          <Button size="sm" disabled={running || active || !take.files.composite} title="Cut, trim and caption this take" onClick={() => openEditor(take.id)}><Scissors />Edit</Button>
-          <Button size="sm" disabled={running || active || !take.files.composite} title="Choose a frame, a format and the quality" onClick={() => openExport(take.id)}>Export</Button>
-          <Button variant="ghost" size="sm" onClick={() => api.revealTake(take.id, take.files.outputs?.[0] ?? take.files.hires ?? take.files.mp4)}>Show</Button>
-          <Button variant="ghost" size="icon-sm" className="rec-del" disabled={running || active} onClick={() => setConfirm(true)} title="Delete" aria-label="Delete"><Trash /></Button>
-        </div>
-      )}
-    </li>
-  );
+/** How many overlays are on, for the section's label. */
+function useOverlayCount(): number {
+  return useRecord((s) => [s.keys.enabled, s.logo.enabled, s.lowerThird.enabled, s.intro.enabled, s.outro.enabled, s.pointer.spotlight].filter(Boolean).length);
 }
-
-const SOURCE_TAG = {
-  processed: { tone: "good", text: "From the Mic tab" },
-  fallback: { tone: "warn", text: "Default microphone" },
-  none: { tone: "danger", text: "None found" },
-} as const;
 
 export function RecordPanel() {
   const s = useRecord();
   const busy = isBusy(s.status);
+  const section = useShell((v) => v.recordSection);
+  const setShell = useShell((v) => v.set);
+  const overlays = useOverlayCount();
+  const problems = useProblems();
 
   useEffect(() => { wireRecorder(); }, []);
   // a new mode that drops the screen releases the capture; one that needs it asks for a source
   // (not during a take: a camera scene keeps the screen live so switching back is instant)
   useEffect(() => {
+    if (!needsScreen(s.mode) && s.notice === PICK_NOTICE) s.set({ notice: null });
     if (!needsScreen(s.mode) && s.sourceId && !busy) {
       s.set({ sourceId: null, sourceName: null, displayId: null });
       void compositor().useScreen(null, null);
@@ -318,72 +293,86 @@ export function RecordPanel() {
 
   if (!hasBridge()) return <div className="cards"><Card className="card-danger"><p className="note note-danger">The recorder needs the desktop app.</p></Card></div>;
 
-  const mic = SOURCE_TAG[s.micSource === "fallback" ? "fallback" : s.micSource === "none" ? "none" : "processed"];
-  const cam = s.cameraSource === "fallback" ? { tone: "warn", text: "Default camera" } as const
-    : s.cameraSource === "none" ? { tone: "danger", text: "None found" } as const : { tone: "good", text: "From the Camera tab" } as const;
-
   return (
     <div className="cards">
-      <LooksCard />
-      <FrameCard />
-      {(needsScreen(s.mode) || s.cameraFramed) && <BackgroundCard />}
-      <WindowCard />
-      {s.mode === "screen-camera" && <CameraBubbleCard />}
-      {needsScreen(s.mode) && <PointerCard />}
+      <div className="rec-sections">
+        <Segmented fill value={section} label="Record settings"
+          options={SECTIONS.map((x) => ({
+            ...x,
+            hint: x.value === "setup" && problems ? "Something needs a fix before you record" : x.hint,
+            label: x.value === "overlays" && overlays > 0 ? <>{x.label}<span className="rec-count tnum" aria-label={`${overlays} on`}>{overlays}</span></>
+              : x.value === "setup" && problems > 0 && section !== "setup" ? <>{x.label}<i className="rec-alert" aria-label="Needs a fix" /></> : x.label,
+          }))}
+          onChange={(recordSection) => setShell({ recordSection })} />
+      </div>
 
-      {needsScreen(s.mode) && (
-        <Card title="Auto zoom" hint="Zooms in where you click, then eases back out">
-          <Switch label="Zoom into clicks" checked={s.zoomEnabled} onChange={(zoomEnabled) => s.set({ zoomEnabled })} disabled={busy} />
-          {s.zoomEnabled && <Slider label="Zoom" value={s.zoomScale} min={1.4} max={2.4} step={0.1} onChange={(zoomScale) => s.set({ zoomScale })} format={(v) => `${v.toFixed(1)}x`} />}
-          {s.tracking && (
-            <p className="note" title={s.tracking.reason ?? undefined}>
-              {!s.tracking.normalized ? "A single window is selected: zoom stays off." :
-                s.tracking.hooks ? "Clicks are tracked across the whole screen." :
-                  "Global clicks are unavailable, so the zoom follows where the cursor stops."}
-            </p>
+      {section === "setup" && (
+        <>
+          <ReadinessCard />
+          <Suggestions />
+          <Card title="Recording">
+            <div className="row">
+              <span className="row-label">Frame rate <Hint text="60 fps is smoother for fast screen movement and makes bigger files" /></span>
+              <Segmented<30 | 60> value={s.fps} options={[{ value: 30, label: "30 fps" }, { value: 60, label: "60 fps" }]} onChange={(fps) => s.set({ fps })} disabled={busy} />
+            </div>
+            <Switch label="3, 2, 1 countdown" checked={s.countdown} onChange={(countdown) => s.set({ countdown })} />
+            <Switch label="Separate tracks" hint="Also saves the raw screen, the camera and the computer sound as their own files, for editing later" checked={s.isoTracks} onChange={(isoTracks) => s.set({ isoTracks })} disabled={busy} />
+            <SystemSoundControls />
+            <div className="rec-keys-line">
+              <span className="note"><Keys keys={["Mod", "Shift", "R"]} /> starts and stops from any app</span>
+              <Button variant="link" onClick={() => setShell({ shortcutsOpen: true })} title="Or press ? anywhere in OpenTake">All shortcuts</Button>
+            </div>
+          </Card>
+
+          {needsScreen(s.mode) && (
+            <Card title="Auto zoom" hint="Zooms in where you click, then eases back out">
+              <Switch label="Zoom into clicks" checked={s.zoomEnabled} onChange={(zoomEnabled) => s.set({ zoomEnabled })} disabled={busy} />
+              {s.zoomEnabled && <Slider label="Zoom" value={s.zoomScale} min={1.4} max={2.4} step={0.1} onChange={(zoomScale) => s.set({ zoomScale })} format={(v) => `${v.toFixed(1)}x`} />}
+              {s.tracking && (
+                <p className="note" title={s.tracking.reason ?? undefined}>
+                  {!s.tracking.normalized ? "A single window is selected: zoom stays off." :
+                    s.tracking.hooks ? "Clicks are tracked across the whole screen." :
+                      "Global clicks are unavailable, so the zoom follows where the cursor stops."}
+                </p>
+              )}
+            </Card>
           )}
-        </Card>
+
+          <Card title="When you stop" hint="What happens to each take as soon as you press Stop. The Export button on a take can always make other versions.">
+            <Switch label="Export an MP4 right away" checked={s.autoExport} onChange={(autoExport) => s.set({ autoExport })} />
+            <Field label="Loudness" inline hint="Evens out the volume. -14 LUFS suits social video, -16 LUFS podcasts and YouTube.">
+              <select className="select" value={s.loudness} onChange={(e) => s.set({ loudness: e.target.value as typeof s.loudness })}>
+                <option value="off">As recorded</option>
+                <option value="-14">-14 LUFS (social)</option>
+                <option value="-16">-16 LUFS (podcast, YouTube)</option>
+              </select>
+            </Field>
+            <Switch label="Trim silence at start and end" checked={s.trimSilence} onChange={(trimSilence) => s.set({ trimSilence })} />
+            <Button variant="link" className="rec-where" onClick={() => goTo("settings")}>Where exports go and their names</Button>
+          </Card>
+        </>
       )}
 
-      <DrawCard />
-      <KeysCard />
-      <LogoCard />
-      <NameCard />
-      <IntroOutroCard />
+      {section === "look" && (
+        <>
+          <LooksCard />
+          <FrameCard />
+          {(needsScreen(s.mode) || s.cameraFramed) && <BackgroundCard />}
+          <WindowCard />
+          {s.mode === "screen-camera" && <CameraBubbleCard />}
+        </>
+      )}
 
-      <Card title="Recording">
-        <div className="row">
-          <span className="row-label">Frame rate</span>
-          <Segmented<30 | 60> value={s.fps} options={[{ value: 30, label: "30 fps" }, { value: 60, label: "60 fps" }]} onChange={(fps) => s.set({ fps })} disabled={busy} />
-        </div>
-        <Switch label="3, 2, 1 countdown" checked={s.countdown} onChange={(countdown) => s.set({ countdown })} />
-        <Switch label="Separate tracks" hint="Also saves the raw screen, the camera and the computer sound as their own files, for editing later" checked={s.isoTracks} onChange={(isoTracks) => s.set({ isoTracks })} disabled={busy} />
-        <SystemSoundControls />
-        <div className="rec-sources">
-          <div className="row"><span className="row-label">Mic</span><Tag tone={mic.tone} title={s.micSource === "fallback" ? "The Mic tab is not ready, so the default microphone is used" : undefined}>{mic.text}</Tag></div>
-          {needsCamera(s.mode) && <div className="row"><span className="row-label">Camera</span><Tag tone={cam.tone}>{cam.text}</Tag></div>}
-        </div>
-        <p className="note rec-keys"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>R</kbd> start or stop, <kbd>P</kbd> pause</p>
-        <p className="note rec-keys"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> switch scene, <kbd>L</kbd> name card</p>
-      </Card>
-
-      <Card title="Export">
-        <Field label="Loudness" inline>
-          <select className="select" value={s.loudness} onChange={(e) => s.set({ loudness: e.target.value as typeof s.loudness })}>
-            <option value="off">As recorded</option>
-            <option value="-14">-14 LUFS (social)</option>
-            <option value="-16">-16 LUFS (podcast, YouTube)</option>
-          </select>
-        </Field>
-        <Switch label="Trim silence at start and end" checked={s.trimSilence} onChange={(trimSilence) => s.set({ trimSilence })} />
-        <Switch label="Export MP4 when I stop" checked={s.autoExport} onChange={(autoExport) => s.set({ autoExport })} />
-      </Card>
-
-      <Card title="Takes" action={<Button variant="ghost" size="sm" onClick={() => api.openFolder()}><FolderOpen />Open folder</Button>}>
-        {s.takes.length === 0 ? <p className="note">Your recordings will appear here.</p> : (
-          <ul className="rec-takes">{s.takes.map((t) => <TakeRow key={t.id} take={t} />)}</ul>
-        )}
-      </Card>
+      {section === "overlays" && (
+        <>
+          {needsScreen(s.mode) && <PointerCard />}
+          <DrawCard />
+          <KeysCard />
+          <LogoCard />
+          <NameCard />
+          <IntroOutroCard />
+        </>
+      )}
       <EditorHost />
     </div>
   );

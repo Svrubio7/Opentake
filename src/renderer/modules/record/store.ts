@@ -59,6 +59,8 @@ export interface RecordRuntime {
   takeId: string | null;
   error: string | null;
   notice: string | null;
+  /** a tab the notice offers to open ("Open Takes") */
+  noticeAction: "takes" | "settings" | null;
   tracking: ClickTrackingStatus | null;
   micSource: "module" | "fallback" | "none" | null;
   cameraSource: "module" | "fallback" | "none" | null;
@@ -147,6 +149,7 @@ export const useRecord = create<RecordSettings & RecordRuntime & { set: (p: Part
   takeId: null,
   error: null,
   notice: null,
+  noticeAction: null,
   tracking: null,
   micSource: null,
   cameraSource: null,

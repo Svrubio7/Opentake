@@ -145,6 +145,8 @@ export function Editor({ takeId, onClose }: { takeId: string; onClose: () => voi
   const doRedo = useCallback(() => { setHist((h) => (h ? redo(h) : h)); setSelection(null); }, []);
 
   // ---- keys ----
+  // a field behind the editor (the takes search) must not keep the keyboard
+  useEffect(() => { (document.activeElement as HTMLElement | null)?.blur?.(); }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (useEditor.getState().exporting) return; // the export dialog is on top
@@ -232,7 +234,7 @@ export function Editor({ takeId, onClose }: { takeId: string; onClose: () => voi
   const active = lines ? activeLine(lines, playhead) : -1;
   const running = progress && !progress.done;
   const cut = duration != null && !isWhole(keep, duration);
-  const title = data ? new Date(data.take.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  const title = data ? data.take.title || new Date(data.take.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
 
   return (
     <div className="ed-scrim" role="dialog" aria-label="Edit take">
