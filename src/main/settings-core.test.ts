@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_NAME_TEMPLATE, DEFAULT_SETTINGS, cleanTitle, friendlyExportError, isInside, lastStatsTimeMs, mountRoot, presetWords, renderName,
-  sanitizeFileName, sanitizeSettings, shortPath, uniqueName, withPastDir,
+  NameReservations, sanitizeFileName, sanitizeSettings, shortPath, uniqueName, withPastDir,
 } from "./settings-core";
 
 const at = new Date(2026, 9, 17, 14, 5, 9).getTime();
@@ -94,6 +94,34 @@ describe("uniqueName", () => {
   it("also keeps the captions files beside it free", () => {
     const taken = new Set(["Demo.srt"]);
     expect(uniqueName("Demo", "mp4", (n) => taken.has(n), ["srt", "vtt"])).toBe("Demo (2).mp4");
+  });
+});
+
+describe("NameReservations", () => {
+  it("gives two exports started together different names", () => {
+    const r = new NameReservations();
+    const onDisk = new Set(["Demo QA.mp4"]);
+    const exists = (n: string) => onDisk.has(n);
+    const a = r.reserve("C:\\Out", "Demo QA", "mp4", exists, ["srt", "vtt"]);
+    const b = r.reserve("C:\\Out", "Demo QA", "mp4", exists, ["srt", "vtt"]);
+    expect(a).toBe("Demo QA (2).mp4");
+    expect(b).toBe("Demo QA (3).mp4");
+    // another folder is not affected, and case does not make a second name
+    expect(r.reserve("C:\\Other", "Demo QA", "mp4", () => false)).toBe("Demo QA.mp4");
+    expect(r.peek("c:\\out\\", "demo qa (2)", "mp4", () => false)).toBe("demo qa (2) (2).mp4");
+  });
+  it("holds the captions partners and lets everything go on release", () => {
+    const r = new NameReservations();
+    const a = r.reserve("/out", "Demo", "mp4", () => false, ["srt"]);
+    expect(r.peek("/out", "Demo", "srt", () => false)).toBe("Demo (2).srt");
+    r.release("/out", a);
+    expect(r.peek("/out", "Demo", "mp4", () => false, ["srt"])).toBe("Demo.mp4");
+  });
+  it("peek shows the name the next export gets without holding it", () => {
+    const r = new NameReservations();
+    const exists = (n: string) => n === "Demo QA.mp4";
+    expect(r.peek("/out", "Demo QA", "mp4", exists)).toBe("Demo QA (2).mp4");
+    expect(r.peek("/out", "Demo QA", "mp4", exists)).toBe("Demo QA (2).mp4");
   });
 });
 

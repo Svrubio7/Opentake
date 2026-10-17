@@ -2,11 +2,11 @@
 // folder, or a Save dialog), the name template, and a free name so nothing is ever overwritten.
 import type { BrowserWindow } from "electron";
 import { existsSync } from "node:fs";
-import { dirname, extname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import type { ExportOptions } from "../../shared/types";
 import { pickSaveFile } from "../dialogs";
 import { ensureWritable, folderStatus, getSettings } from "../settings";
-import { presetWords, renderName, uniqueName } from "../settings-core";
+import { NameReservations, presetWords, renderName } from "../settings-core";
 import { readCaptions } from "./editor-store";
 import { exportFileName, resolveFrame } from "./export-core";
 import type { TakeMeta } from "./takes";
@@ -14,6 +14,13 @@ import { t } from "../../shared/i18n";
 
 /** the folder the last Save dialog ended in, offered first next time */
 let lastAskedDir: string | null = null;
+/** names held by exports still running: two started together never share one */
+const reserved = new NameReservations();
+
+/** Lets an export's name go once it ended (done, failed or cancelled). */
+export function releaseExportName(file: string) {
+  reserved.release(dirname(file), basename(file));
+}
 
 /** The file name stem a take's export gets from the template (also shown in the export dialog). */
 export function exportStem(o: Pick<ExportOptions, "kind" | "output">, meta: Pick<TakeMeta, "createdAt" | "title">): string {
@@ -36,12 +43,13 @@ export async function exportTarget(o: ExportOptions, meta: TakeMeta, takeFolder:
 
   if (s.exportDestination === "ask" && o.manual) {
     const start = lastAskedDir && existsSync(lastAskedDir) ? lastAskedDir : s.exportDir && existsSync(s.exportDir) ? s.exportDir : takeFolder;
-    const picked = await pickSaveFile(win, join(start, uniqueName(stem, ext, (n) => existsSync(join(start, n)), also)), ext);
+    const picked = await pickSaveFile(win, join(start, reserved.peek(start, stem, ext, (n) => existsSync(join(start, n)), also)), ext);
     if (!picked) return null;
     const file = extname(picked).toLowerCase() === `.${ext}` ? picked : `${picked}.${ext}`;
     const err = await ensureWritable(dirname(file));
     if (err) throw new Error(err);
     lastAskedDir = dirname(file);
+    reserved.hold(dirname(file), basename(file), also);
     return file;
   }
 
@@ -53,5 +61,6 @@ export async function exportTarget(o: ExportOptions, meta: TakeMeta, takeFolder:
     const err = await ensureWritable(folder);
     if (err) throw new Error(err);
   }
-  return join(folder, uniqueName(stem, ext, (n) => existsSync(join(folder, n)), also));
+  // found free and held in one synchronous step: no other export can pick it in between
+  return join(folder, reserved.reserve(folder, stem, ext, (n) => existsSync(join(folder, n)), also));
 }
