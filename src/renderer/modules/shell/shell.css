@@ -37,19 +37,33 @@
 .rec-keys-line .note { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .rec-where { align-self: flex-start; font-size: 14px; }
 
-/* ---------- readiness ---------- */
-.rd-rows { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; }
-.rd-row { display: contents; }
-.rd-label { font-size: 15px; }
-.rd-status { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; color: var(--muted); }
-.rd-status > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rd-status.good { color: var(--text); }
-.rd-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--faint); }
-.rd-status.good .rd-dot { background: var(--brand); }
-.rd-status.warn .rd-dot { background: var(--warn-dot); }
-.rd-status.danger { color: var(--danger); }
-.rd-status.danger .rd-dot { background: var(--danger); }
-.rd-row .btn { justify-self: end; }
+/* ---------- readiness: status tiles (screen, mic, camera, disk) ---------- */
+.st-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.st-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+.st-tile {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px; border-radius: 12px;
+  background: var(--well); box-shadow: inset 0 0 0 1px var(--card-border);
+}
+.st-tile.danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 35%, var(--card-border)); }
+.st-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.st-head .eyebrow { flex: 1 1 auto; min-width: 0; }
+.st-mark { display: grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 7px; background: var(--card); color: var(--muted); box-shadow: inset 0 0 0 1px var(--card-border); }
+.st-mark svg { width: 13px; height: 13px; stroke-width: 2; }
+.st-state { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 12px; font-weight: 500; color: var(--muted); }
+.st-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.st-state.good i { background: var(--brand); }
+.st-state.warn i { background: var(--warn-dot); }
+.st-state.danger { color: var(--danger); }
+.st-state.danger i { background: var(--danger); }
+.st-value { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.st-tile.danger .st-value { color: var(--danger); }
+.st-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 28px; margin-top: auto; }
+.st-sub { font-size: 13px; color: var(--muted); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-act { height: 28px; padding: 0 10px; font-size: 13px; margin-left: auto; }
+.st-level, .st-bar { display: block; height: 4px; border-radius: 999px; background: var(--switch-off); overflow: hidden; }
+.st-level > span { display: block; height: 100%; width: 100%; background: var(--brand); transform-origin: left; transform: scaleX(0); transition: transform 80ms linear; border-radius: 999px; }
+.st-bar > span { display: block; height: 100%; background: var(--text); opacity: 0.55; border-radius: 999px; }
+.st-tile.warn .st-bar > span { background: var(--warn-dot); opacity: 1; }
 
 /* ---------- suggestions ---------- */
 .tips { display: flex; flex-direction: column; gap: 8px; }
@@ -173,3 +187,37 @@ p.tk-msg { display: block; }
 @media (max-width: 760px) {
   .fr-modes { grid-template-columns: 1fr; }
 }
+
+/* ---------- takes: one card, divided rows, a picture first (Quetzal's list widget) ---------- */
+.tk-row { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: start; }
+.tk-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-top: 1px; }
+.tk-meta { font-size: 13px; color: var(--muted); }
+.tk-main .rec-take-tags { justify-content: flex-start; margin-top: 4px; }
+.tk-main .rec-take-tags:empty { display: none; }
+.tk-thumb {
+  position: relative; display: grid; place-items: center; width: 112px; aspect-ratio: 16 / 9; border-radius: 9px; overflow: hidden;
+  background: var(--track); color: var(--faint); box-shadow: inset 0 0 0 1px var(--card-border);
+}
+.tk-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.tk-thumb svg { width: 20px; height: 20px; stroke-width: 1.6; }
+.tk-thumb-badge {
+  position: absolute; right: 5px; bottom: 5px; display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 6px;
+  font-size: 12px; font-weight: 600; line-height: 18px; color: #fff; background: rgba(0, 0, 0, 0.62);
+}
+.tk-thumb-badge.rec i { width: 6px; height: 6px; border-radius: 50%; background: var(--rec); animation: q-blink 1.4s ease-in-out infinite; }
+.rec-takes .rec-take { padding: 12px 8px; margin: 0 -8px; border-radius: 12px; transition: background var(--t) var(--ease); }
+.rec-takes .rec-take:hover { background: var(--well); }
+.rec-takes .rec-take + .rec-take { border-top: 0; box-shadow: 0 -1px 0 var(--card-border); }
+.rec-takes .rec-take:hover + .rec-take, .rec-takes .rec-take:hover { box-shadow: none; }
+.rec-takes .rec-take-actions { gap: 6px; }
+
+/* folders as a recessed well with a mark */
+.tk-folder-mark, .set-folder-mark {
+  display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px;
+  background: var(--track); color: var(--muted); box-shadow: inset 0 0 0 1px var(--card-border);
+}
+.tk-folder-mark svg, .set-folder-mark svg { width: 16px; height: 16px; stroke-width: 1.8; }
+.tk-folder { gap: 12px; padding-left: 12px; }
+.tk-folder-text { flex: 1 1 auto; }
+.set-well { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 12px; border-radius: 12px; background: var(--well); box-shadow: inset 0 0 0 1px var(--card-border); }
+.set-well .set-folder { flex: 1 1 auto; }

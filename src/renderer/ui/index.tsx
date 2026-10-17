@@ -1,6 +1,10 @@
 // The shared controls every module uses, so the whole app speaks one design language (styles in ui.css).
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
-import { Info } from "lucide-react";
+import {
+  AppWindow, ArrowDownUp, AudioLines, Clapperboard, CircleDot, Crop, FileText, FileVideo, FolderOpen, FolderOutput, Frame, IdCard, Image,
+  Info, Keyboard, LifeBuoy, Mic, MousePointer2, Palette, PanelTop, PenLine, PictureInPicture2, Sparkle, Stamp, SunMedium, Video, ZoomIn,
+  type LucideIcon,
+} from "lucide-react";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -18,12 +22,22 @@ export function Hint({ text }: { text: string }) {
   return <span className="hint" title={text} aria-label={text} tabIndex={0}><Info /></span>;
 }
 
-export function Card({ title, hint, action, className, children }: { title?: ReactNode; hint?: string; action?: ReactNode; className?: string; children?: ReactNode }) {
+/** Each card's mark by its title, so every module's cards carry one without passing it (an `icon` prop wins). */
+const CARD_MARKS: Record<string, LucideIcon> = {
+  Look: Palette, Frame, Background: Image, "Screen window": AppWindow, "Camera window": AppWindow, Camera: Video, Pointer: MousePointer2,
+  "Draw on screen": PenLine, Keystrokes: Keyboard, Logo: Stamp, "Name card": IdCard, "Intro and outro": Clapperboard, Recording: CircleDot,
+  "Auto zoom": ZoomIn, "When you stop": FileVideo, Input: Mic, Sound: AudioLines, "Light and colour": SunMedium, Detail: Sparkle, Framing: Crop,
+  Scroll: ArrowDownUp, Script: FileText, Overlay: PanelTop, "Pop-out window": PictureInPicture2, Keys: Keyboard, "Recordings folder": FolderOpen,
+  Exports: FolderOutput, Help: LifeBuoy,
+};
+
+export function Card({ title, hint, action, icon, className, children }: { title?: ReactNode; hint?: string; action?: ReactNode; icon?: LucideIcon | null; className?: string; children?: ReactNode }) {
+  const Mark = icon === null ? null : icon ?? (typeof title === "string" ? CARD_MARKS[title] : undefined);
   return (
     <section className={cx("card", className)}>
       {(title || action) && (
         <div className="card-head">
-          <h3 className="card-title">{title}{hint && <Hint text={hint} />}</h3>
+          <h3 className="card-title">{Mark && <span className="card-mark" aria-hidden><Mark /></span>}{title}{hint && <Hint text={hint} />}</h3>
           {action && <div className="card-actions">{action}</div>}
         </div>
       )}

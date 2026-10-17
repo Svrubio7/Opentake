@@ -13,6 +13,8 @@ describe("media protocol", () => {
     expect(parseMediaUrl("opentake-media://other/abc/preview.webm")).toBeNull();
     expect(parseMediaUrl("file:///c:/x/preview.webm")).toBeNull();
     expect(parseMediaUrl("opentake-media://take/abc/take-reels.mp4")).toEqual({ takeId: "abc", file: "take-reels.mp4" });
+    expect(parseMediaUrl("opentake-media://take/abc/thumb.jpg")).toEqual({ takeId: "abc", file: "thumb.jpg" });
+    expect(parseMediaUrl("opentake-media://take/abc/other.jpg")).toBeNull();
   });
   it("reads byte ranges", () => {
     expect(parseRange(null, 100)).toBeNull();
@@ -26,5 +28,6 @@ describe("media protocol", () => {
   it("names the type", () => {
     expect(mimeFor("preview.webm")).toBe("video/webm");
     expect(mimeFor("take.mp4")).toBe("video/mp4");
+    expect(mimeFor("thumb.jpg")).toBe("image/jpeg");
   });
 });

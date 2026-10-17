@@ -31,6 +31,8 @@
   --warn-dot: #ff9f0a;
   --switch-off: #dcdce3;
   --thumb: #ffffff;
+  --eyebrow: #24222c;
+  --well: #f7f7fa;
 
   /* the black rail (Quetzal's sidebar) */
   --rail-from: #0b0b0c;
@@ -83,6 +85,8 @@
     --warn-dot: #ffb340;
     --switch-off: #3a3a3e;
     --thumb: #2c2c2e;
+    --eyebrow: #eceaf4;
+    --well: #161618;
     --rail-from: #45454c;
     --rail-to: #3a3a40;
     --rail-muted: rgba(255, 255, 255, 0.68);
@@ -142,7 +146,16 @@ h1, h2, h3, h4 { margin: 0; }
   box-shadow: var(--shadow-card); padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0;
 }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 24px; }
-.card-title { display: flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.card-title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; }
+.card-title > .hint { margin-left: -2px; }
+/* the card's mark: a small tile in the recessed tone, the icon in muted ink (Quetzal's tile header) */
+.card-mark {
+  display: grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 8px;
+  background: var(--track); color: var(--muted); box-shadow: inset 0 0 0 1px var(--card-border);
+}
+.card-mark svg { width: 14px; height: 14px; stroke-width: 2; }
+/* the widget's name in small capitals (Quetzal's eyebrow): solid ink, never greyed out */
+.eyebrow { font-size: 12px; line-height: 1.2; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--eyebrow); }
 .card-actions { display: flex; align-items: center; gap: 2px; }
 .card-actions:has(> .btn-ghost:last-child) { margin-right: -8px; }
 .card-danger { border-color: color-mix(in srgb, var(--danger) 40%, var(--card-border)); }

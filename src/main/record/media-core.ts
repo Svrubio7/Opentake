@@ -5,7 +5,7 @@ import { validTakeId } from "./ffmpeg-core";
 export const MEDIA_SCHEME = "opentake-media";
 
 /** The files a take URL may name. */
-const SERVABLE = /^(composite|screen|camera|preview)\.(webm|mp4)$|^take(-[\w.-]+)?\.(mp4|webm|gif)$/;
+const SERVABLE = /^(composite|screen|camera|preview)\.(webm|mp4)$|^take(-[\w.-]+)?\.(mp4|webm|gif)$|^thumb\.jpg$/;
 
 export const mediaUrl = (takeId: string, file: string) => `${MEDIA_SCHEME}://take/${encodeURIComponent(takeId)}/${encodeURIComponent(file)}`;
 
@@ -43,5 +43,6 @@ export function parseRange(header: string | null | undefined, size: number): { s
 export function mimeFor(file: string): string {
   if (file.endsWith(".mp4")) return "video/mp4";
   if (file.endsWith(".gif")) return "image/gif";
+  if (file.endsWith(".jpg")) return "image/jpeg";
   return "video/webm";
 }
