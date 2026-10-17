@@ -38,6 +38,8 @@ export interface DelayInput {
    */
   screen: { w: number; h: number };
   camera: { w: number; h: number };
+  /** the screen and camera are also recorded on their own tracks (ISO) */
+  isoTracks?: boolean;
   /** navigator.deviceMemory (GB, rounded down, at most 8), when the browser says */
   deviceMemoryGb?: number;
 }
@@ -81,13 +83,24 @@ export function capStore(s: { w: number; h: number }, cap: { w: number; h: numbe
 export const largerStore = (a: { w: number; h: number }, b: { w: number; h: number }) => (a.w * a.h >= b.w * b.h ? a : b);
 
 /**
- * Whether this take draws its picture behind real time: only with auto zoom on a tracked screen,
- * and only when the rings fit in memory. `reason` says why not, for a hint (null: delay on, or
- * zoom is off and nothing needs saying).
+ * Whether this take draws its picture behind real time, when the rings fit in memory: with auto zoom
+ * on a tracked screen (the zoom arrives with each click), and in any take that also records ISO
+ * tracks. Started at the same moment as the ISO recorders, the composite lost 0.4-0.6 s of picture
+ * at the start of every take while their encoders set up; started DELAY_MS later it loses none.
+ * `reason` says why the zoom cannot run ahead, for a hint (null: delay on, or nothing to say).
  */
 export function planDelay(i: DelayInput): { delayMs: number; bytes: number; scale: number; reason: string | null } {
-  if (!i.zoomEnabled || i.mode === "camera") return { delayMs: 0, bytes: 0, scale: 1, reason: null };
-  if (!i.normalized) return { delayMs: 0, bytes: 0, scale: 1, reason: null };
+  const off = { delayMs: 0, bytes: 0, scale: 1, reason: null };
+  if (i.mode === "camera") return off;
+  const zoom = i.zoomEnabled && i.normalized;
+  if (!zoom && !i.isoTracks) return off;
+  const fit = fitRings(i);
+  // only the zoom has something to say: a staggered start that does not fit just starts together
+  if (!zoom) return fit.reason ? { ...fit, delayMs: 0, scale: 1, reason: null } : fit;
+  return fit;
+}
+
+function fitRings(i: DelayInput): { delayMs: number; bytes: number; scale: number; reason: string | null } {
   const bytes = ringBytes(i);
   // the browser reports at most 8 GB: a quarter of it (2 GB) is never the limit, the budget is
   const share = i.deviceMemoryGb ? i.deviceMemoryGb * 1024 ** 3 * 0.25 : Infinity;

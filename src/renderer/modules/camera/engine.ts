@@ -12,6 +12,7 @@ import { Renderer } from "./gl";
 import { MaskSmoother, detectFace, loadFaceDetector, loadSegmenter, segment } from "./ml";
 import { useCamera, type CameraSettings, type CameraStatus } from "./store";
 import { useRecord } from "../record/store";
+import { gpuReadbacksHeld } from "@core/gpu-quiet";
 
 const MEASURE_MS = 300;
 const FACE_MS = 200;
@@ -292,7 +293,9 @@ class CameraEngine {
     // machine learning at its own pace, on a small copy of the frame
     const needSeg = s.bgMode !== "none";
     const needFace = s.auto || s.autoFrame;
-    if (needSeg || needFace) this.runMl(now, needSeg, needFace);
+    // a take's recorders are starting: no readback now (the last mask and face stay)
+    const quiet = gpuReadbacksHeld(now);
+    if ((needSeg || needFace) && !quiet) this.runMl(now, needSeg, needFace);
     if (this.face && now - this.faceSeenAt > FACE_FORGET_MS) this.face = null;
 
     if (s.auto) this.autoNow = easeAuto(this.autoNow, this.auto.goal, dt);
@@ -318,7 +321,7 @@ class CameraEngine {
     this.frames++;
     if (now - this.fpsT0 >= 1000) { this.fps = (this.frames * 1000) / (now - this.fpsT0); this.frames = 0; this.fpsT0 = now; }
 
-    if (now - this.lastMeasure >= MEASURE_MS) {
+    if (now - this.lastMeasure >= MEASURE_MS && !quiet) {
       this.lastMeasure = now;
       this.measure(s);
     }

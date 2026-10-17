@@ -21,6 +21,15 @@ describe("planDelay", () => {
     expect(planDelay(base).delayMs).toBe(DELAY_MS);
     expect(planDelay({ ...base, fps: 60 }).delayMs).toBe(DELAY_MS);
   });
+  it("starts the composite behind the ISO tracks even without zoom, silently", () => {
+    // started with the ISO recorders, the composite lost 0.4-0.6 s of picture while their encoders set up
+    expect(planDelay({ ...base, zoomEnabled: false, isoTracks: true }).delayMs).toBe(DELAY_MS);
+    expect(planDelay({ ...base, normalized: false, isoTracks: true }).delayMs).toBe(DELAY_MS);
+    expect(planDelay({ ...base, mode: "camera", isoTracks: true }).delayMs).toBe(0);
+    // too big to stagger: starts together, with nothing to say (the zoom is off)
+    const big = planDelay({ ...base, zoomEnabled: false, isoTracks: true, fps: 60, screen: { w: 3840, h: 2160 }, camera: { w: 3840, h: 2160 } });
+    expect(big).toMatchObject({ delayMs: 0, reason: null });
+  });
   it("does nothing, silently, without auto zoom or on a single window", () => {
     expect(planDelay({ ...base, zoomEnabled: false })).toEqual({ delayMs: 0, bytes: 0, scale: 1, reason: null });
     expect(planDelay({ ...base, normalized: false }).delayMs).toBe(0);

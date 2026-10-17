@@ -37,6 +37,9 @@ function cameraStore(vw: number, vh: number, box: { w: number; h: number }) {
   return storeSize({ w: vw, h: vh }, { w: box.w * (vw / c.w), h: box.h * (vh / c.h) });
 }
 
+/** The longest wait between camera frames that still counts as a steady picture. */
+const STEADY_GAP_MS = 150;
+
 class Compositor {
   readonly canvas = document.createElement("canvas");
   private ctx = this.canvas.getContext("2d", { alpha: false, desynchronized: true })!;
@@ -220,6 +223,29 @@ class Compositor {
     }, isBusy(useRecord.getState().status) ? 0 : 1500);
   }
 
+  /**
+   * Resolves once the camera picture arrives steadily again (three frames, none more than
+   * STEADY_GAP_MS apart), or after maxMs. Opening the computer sound the first time stalls the
+   * picture for a moment; a take started inside that stall began with its camera frozen.
+   */
+  steadyCamera(maxMs = 1000): Promise<void> {
+    const v = this.cameraVideo as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
+    if (!ready(v) || !v.requestVideoFrameCallback) return Promise.resolve();
+    return new Promise((done) => {
+      const t0 = performance.now();
+      let last = t0, good = 0, over = false;
+      const end = () => { if (!over) { over = true; done(); } };
+      setTimeout(end, maxMs);
+      const next = () => v.requestVideoFrameCallback!(() => {
+        const now = performance.now();
+        good = now - last <= STEADY_GAP_MS ? good + 1 : 0;
+        last = now;
+        if (good >= 3) end(); else if (!over) next();
+      });
+      next();
+    });
+  }
+
   cameraStream(): MediaStream | null { return getStream("camera") ?? this.fallbackCamera; }
   cameraSize() {
     const s = this.cameraStream()?.getVideoTracks()[0]?.getSettings();
@@ -335,9 +361,9 @@ class Compositor {
     const L = currentLayout(st);
     const sv = this.screenVideo;
     const src = ready(sv) ? cropSource(L.crop, sv.videoWidth, sv.videoHeight) : null;
-    const { screen, camera } = this.largestStores(L, src, st.zoomScale);
+    const { screen, camera } = this.largestStores(L, src, L.zoom.enabled ? st.zoomScale : 1);
     const plan = planDelay({
-      zoomEnabled: L.zoom.enabled, normalized: !!st.tracking?.normalized, mode: L.mode, fps: L.fps, screen, camera,
+      zoomEnabled: L.zoom.enabled, normalized: !!st.tracking?.normalized, mode: L.mode, fps: L.fps, screen, camera, isoTracks: st.isoTracks,
       deviceMemoryGb: (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
     });
     if (!plan.delayMs || !src) return { delayMs: 0, reason: plan.reason };

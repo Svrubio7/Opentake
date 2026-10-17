@@ -1,6 +1,7 @@
 // Recording: MediaRecorder on the composited canvas + the processed mic, plus ISO tracks of the raw
 // screen and the camera. Chunks go to disk every second through IPC, so a crash keeps the take.
 import { getStream } from "@core/streams";
+import { holdGpuReadbacks } from "@core/gpu-quiet";
 import type { ExportOutput, RecordMode, RecordShortcut, RecordTrack, TakeTimeline } from "@shared/types";
 import { t } from "../../../shared/i18n";
 import { api, hasBridge } from "./api";
@@ -67,6 +68,8 @@ function writeFailure(track: RecordTrack, err: unknown): string {
 
 // a message from main that ends in "Settings" / "Ajustes" names its own fix
 const SETTINGS_HINT = /Settings|Ajustes/;
+/** How long GPU readbacks wait while a recorder sets up its encoder (measured stall: ~470 ms). */
+const ENCODER_START_MS = 1000;
 
 const st = () => useRecord.getState();
 
@@ -208,6 +211,8 @@ async function begin() {
     await checkDiskBeforeTake();
     const mic = await getMicTracks(owned);
     const sysAudio = systemAudioWanted(layout.mode, s) ? await takeSystemAudio(mic, cleanup, delay.delayMs) : null;
+    // the first opening of the computer sound stalls the camera picture for a moment: start after it
+    if (sysAudio && needsCamera(layout.mode)) await comp.steadyCamera();
     const canvasTrack = comp.canvas.captureStream(layout.fps).getVideoTracks()[0];
     owned.push(canvasTrack);
     // a delayed take's composite sound is delayed inside the graph that makes it (the computer sound
@@ -293,9 +298,11 @@ async function begin() {
 
     sess.startWall = Date.now();
     comp.overlays.takeStarted(sess.startWall);
-    // the composite starts when the delayed picture reaches this moment, so every file's clock is the take's
+    // the composite starts when the delayed picture reaches this moment, so every file's clock is the take's.
+    // While encoders start, a GPU readback on this thread would wait for them and freeze the picture.
+    holdGpuReadbacks(ENCODER_START_MS);
     for (const t of sess.tracks) {
-      if (t.track === "composite") sess.later(() => { if (t.rec.state === "inactive") t.rec.start(1000); });
+      if (t.track === "composite") sess.later(() => { holdGpuReadbacks(ENCODER_START_MS); if (t.rec.state === "inactive") t.rec.start(1000); });
       else t.rec.start(1000);
     }
     session = sess;
@@ -442,4 +449,43 @@ export function wireRecorder() {
     s.set({ exports: { ...s.exports, [p.takeId]: p } });
   });
   void refreshTakes();
+  setTimeout(() => void warmEncoder(), WARM_AFTER_MS);
+}
+
+/** How long after launch the video encoder is woken (the app has settled by then). */
+const WARM_AFTER_MS = 1500;
+
+/**
+ * Wakes the video encoder once, on a tiny silent canvas, and throws the result away. The first
+ * encoder of a session loads the system's codec: without this, the first take's camera track lost
+ * ~0.5 s of picture at its start while that happened. Skipped when a take is already under way.
+ */
+async function warmEncoder() {
+  if (st().status !== "idle" || typeof MediaRecorder === "undefined") return;
+  const mime = pickMime((m) => MediaRecorder.isTypeSupported(m), true);
+  const c = document.createElement("canvas");
+  c.width = 1920; c.height = 1080;
+  const ctx = c.getContext("2d");
+  if (!ctx) return;
+  // a silent sound track too (a take's files carry sound): a destination node never reaches the speakers
+  const actx = new AudioContext({ sampleRate: 48000 });
+  const quiet = new MediaStreamAudioDestinationNode(actx);
+  const stream = new MediaStream([...c.captureStream(30).getVideoTracks(), ...quiet.stream.getAudioTracks()]);
+  const draw = setInterval(() => { ctx.fillStyle = `hsl(${(performance.now() / 4) % 360} 50% 50%)`; ctx.fillRect(0, 0, 1920, 1080); }, 33);
+  try {
+    const rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: 2_000_000 });
+    await new Promise<void>((done) => {
+      rec.ondataavailable = () => {};
+      rec.onstop = () => done();
+      rec.onerror = () => done();
+      rec.start(200);
+      setTimeout(() => { if (rec.state !== "inactive") rec.stop(); }, 700);
+    });
+  } catch { /* nothing to warm: the take starts as before */ }
+  finally {
+    clearInterval(draw);
+    stream.getTracks().forEach((t) => t.stop());
+    void actx.close().catch(() => {});
+    c.width = 0; c.height = 0;
+  }
 }
