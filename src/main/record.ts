@@ -5,6 +5,7 @@ import { openPath, revealFile } from "./dialogs";
 import { recoverTakes } from "./record/recover";
 import { takeThumb } from "./record/thumbs";
 import { IPC } from "../shared/ipc";
+import { t } from "../shared/i18n";
 import type {
   ExportOptions, RecordBeginRequest, RecordChunk, RecordSave, RecordShortcut, ScreenSource,
 } from "../shared/types";
@@ -38,9 +39,12 @@ export function registerRecordIpc(getMain: () => BrowserWindow | null) {
   ipcMain.handle(IPC.screenSources, async (): Promise<ScreenSource[]> => {
     const sources = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 480, height: 270 }, fetchWindowIcons: false });
     const ownTitle = getMain()?.getTitle();
+    // Chromium names whole screens in English ("Entire screen", "Screen 2"): say it in the app's language
+    const screens = sources.filter((s) => s.id.startsWith("screen:"));
+    const screenName = (s: (typeof sources)[number]) => (screens.length === 1 ? t("main.screen.entire") : t("main.screen.n", { n: screens.indexOf(s) + 1 }));
     return sources
       .filter((s) => s.name !== ownTitle || s.id.startsWith("screen:"))
-      .map((s) => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), displayId: s.display_id || undefined }))
+      .map((s) => ({ id: s.id, name: s.id.startsWith("screen:") ? screenName(s) : s.name, thumbnail: s.thumbnail.toDataURL(), displayId: s.display_id || undefined }))
       .sort((a, b) => Number(b.id.startsWith("screen:")) - Number(a.id.startsWith("screen:")));
   });
 

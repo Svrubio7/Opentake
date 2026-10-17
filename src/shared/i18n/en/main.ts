@@ -51,4 +51,7 @@ export const main = {
   "main.quit.exporting.detail": "Quitting stops it. The take itself is safe, and you can export it again later.",
   "main.quit.exporting.stop": "Stop the export and quit",
   "main.quit.exporting.keep": "Keep exporting",
+  // ---- the screen picker: whole screens are named in the app's language (Chromium names them in English) ----
+  "main.screen.entire": "Entire screen",
+  "main.screen.n": "Screen {n}",
 } as const;

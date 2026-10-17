@@ -54,4 +54,6 @@ export const main: Shape<typeof en> = {
   "main.quit.exporting.detail": "Si sales, se detiene. La toma está a salvo y podrás volver a exportarla más tarde.",
   "main.quit.exporting.stop": "Detener la exportación y salir",
   "main.quit.exporting.keep": "Seguir exportando",
+  "main.screen.entire": "Pantalla completa",
+  "main.screen.n": "Pantalla {n}",
 };
