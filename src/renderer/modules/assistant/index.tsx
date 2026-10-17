@@ -1,6 +1,6 @@
 // The assistant in the window: the Settings card that connects Claude or Codex (with the activity list
 // and Undo), the "Open in an editor" button, and the listener that refreshes takes the assistant changed.
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Check, Clapperboard, Copy, PlugZap, RotateCcw, Undo2 } from "lucide-react";
 import type { AssistantStatus } from "@shared/assistant";
 import type { TakeInfo } from "@shared/types";
@@ -9,6 +9,7 @@ import { Button, Card, Segmented, Switch, Tag } from "../../ui";
 import type { ActivityEntry } from "../../../main/mcp/activity";
 import { refreshTakes } from "../record/recorder";
 import { assistantApi, listenForAssistant, onTakeChanged } from "./api";
+import { wrapPieces } from "./wrap-core";
 import "./assistant.css";
 
 export { onTakeChanged };
@@ -26,7 +27,9 @@ function CopyBlock({ text, label }: { text: string; label: string }) {
   };
   return (
     <div className="as-copy">
-      <pre className="as-code" aria-label={label}>{text}</pre>
+      <pre className="as-code" aria-label={label} tabIndex={0}>
+        {wrapPieces(text).map((p, i) => (p.kind === "space" ? p.text : <Fragment key={i}><span className="as-nowrap">{p.text}</span><wbr /></Fragment>))}
+      </pre>
       <Button size="sm" variant="ghost" onClick={copy} title={t("as.copy")}>{done ? <Check /> : <Copy />}{done ? t("as.copied") : t("as.copy")}</Button>
     </div>
   );
