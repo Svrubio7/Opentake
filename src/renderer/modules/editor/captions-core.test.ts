@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CaptionLine, CaptionWord } from "@shared/types";
 import {
-  activeLine, assColor, balanceRows, fromVosk, groupWords, lineText, mergeWithNext, parseCaptions, remapLines, retext, setLineEdge,
+  MIN_CLIPPED_WORD_MS, activeLine, assColor, balanceRows, fromVosk, groupWords, lineText, mergeWithNext, parseCaptions, remapLines, retext, setLineEdge,
   shiftLine, socialChunks, splitLine, toAss, toSrt, toVtt, wordIndexAtCaret, wrapRows,
 } from "./captions-core";
 
@@ -85,6 +85,19 @@ describe("captions follow the cuts", () => {
     expect(r.map(lineText)).toEqual(["Keep these words", "And the end"]);
     expect(r[1].start).toBe(3000 + 1000); // 8000 - 7000 + 3000
     for (let i = 0; i < r.length - 1; i++) expect(r[i].end).toBeLessThanOrEqual(r[i + 1].start);
+  });
+  it("drops a sliver of a word a cut leaves at its edge, and snaps a clipped word to the cut", () => {
+    // "las" 180 ms long, its middle kept but only 100 ms of it heard before the cut: it goes
+    const words: CaptionWord[] = [{ text: "Vamos", start: 0, end: 400 }, { text: "las", start: 400, end: 580 }, { text: "nada", start: 2000, end: 2400 }];
+    const lines: CaptionLine[] = [{ id: "a", start: 0, end: 2400, words }];
+    const r = remapLines(lines, [{ start: 0, end: 500 }, { start: 1900, end: 2400 }]);
+    expect(r.flatMap((l) => l.words.map((w) => w.text))).toEqual(["Vamos", "nada"]);
+    // a long word the cut runs through starts exactly at the cut, with the length still heard
+    const long: CaptionLine[] = [{ id: "b", start: 0, end: 1000, words: [{ text: "extraordinario", start: 0, end: 1000 }] }];
+    const k = remapLines(long, [{ start: 300, end: 2000 }]);
+    expect(k[0].words[0]).toMatchObject({ start: 0, end: 700 });
+    // every word left is at least the minimum long unless it was never clipped
+    for (const l of r) for (const w of l.words) expect(w.end - w.start).toBeGreaterThanOrEqual(MIN_CLIPPED_WORD_MS);
   });
   it("keeps half a line when the cut runs through it", () => {
     const lines: CaptionLine[] = [{ id: "a", start: 0, end: 2000, words: say("one two three four five six") }];

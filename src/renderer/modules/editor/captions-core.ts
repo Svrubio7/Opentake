@@ -2,7 +2,7 @@
 // lines people can read, edited by hand, moved onto the cut timeline, and written as SRT, VTT
 // and ASS (for burning in). The main process imports this for the export.
 import type { CaptionBurn, CaptionLang, CaptionLine, CaptionWord, TakeCaptions, TimeRange } from "@shared/types";
-import { toEdited } from "./edit-core";
+import { indexAt, toEdited } from "./edit-core";
 
 export interface GroupOptions {
   /** characters per row */
@@ -180,9 +180,15 @@ export const activeLine = (lines: CaptionLine[], t: number) => lines.findIndex((
 
 // ---- onto the cut timeline ----
 
+/** A word a cut clips keeps its caption only when this much of it is still heard (ms). */
+export const MIN_CLIPPED_WORD_MS = 150;
+
 /**
  * The captions of the edited take: words that were cut go, the rest move to edited time.
- * A line whose words all went is dropped. Lines stay in order and never overlap.
+ * A word a cut runs through is kept only when most of it and at least MIN_CLIPPED_WORD_MS of it
+ * is still heard, and then starts or ends exactly on the cut (a sliver of a word left at a cut
+ * edge flashed by as a caption of its own). A line whose words all went is dropped. Lines stay
+ * in order and never overlap.
  */
 export function remapLines(lines: CaptionLine[], keep: TimeRange[] | null): CaptionLine[] {
   if (!keep) return lines;
@@ -191,10 +197,14 @@ export function remapLines(lines: CaptionLine[], keep: TimeRange[] | null): Capt
     const words: CaptionWord[] = [];
     for (const w of l.words) {
       const mid = (w.start + w.end) / 2;
-      if (toEdited(mid, keep) == null) continue;
-      const s = toEdited(w.start, keep) ?? toEdited(mid, keep)!;
-      const e = toEdited(w.end, keep) ?? toEdited(mid, keep)!;
-      words.push({ ...w, start: s, end: Math.max(e, s + 1) });
+      const r = keep[indexAt(keep, mid)];
+      if (!r) continue;
+      // the part of the word inside the stretch that holds its middle, snapped to that stretch
+      const from = Math.max(w.start, r.start), to = Math.min(w.end, r.end);
+      const clipped = from > w.start || to < w.end;
+      if (clipped && to - from < MIN_CLIPPED_WORD_MS) continue;
+      const s = toEdited(from, keep)!;
+      words.push({ ...w, start: s, end: Math.max(s + (to - from), s + 1) });
     }
     if (!words.length) continue;
     const startS = toEdited(l.start, keep);
