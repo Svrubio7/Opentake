@@ -135,6 +135,8 @@ export interface HiresArgsInput extends EncodeArgsInput {
   camera?: string | null;
   bubble?: BubbleLayout | null;
   cmdFile: string;
+  /** the export's length in seconds (stops the picture and the sound together) */
+  limitSec?: number | null;
   /** the part of the screen that is kept, in source pixels (the layout's crop) */
   crop?: { x: number; y: number; w: number; h: number } | null;
 }
@@ -163,7 +165,8 @@ export function hiresArgs(o: HiresArgsInput): string[] {
     "-map", `[${last}]`, ...(o.audio ? ["-map", `${audioIdx}:a:0`] : []),
     ...VIDEO_OUT, "-fps_mode", "cfr", "-r", String(o.fps),
     ...(o.audio ? audioOut(o.loudness) : ["-an"]),
-    "-shortest",
+    // the length set outright: -shortest could deadlock at the end of a pass with this graph
+    ...(o.limitSec && Number.isFinite(o.limitSec) ? ["-t", o.limitSec.toFixed(3)] : []),
     ...TAIL, o.out,
   ];
 }
@@ -173,7 +176,8 @@ export function hiresGraph(o: Omit<HiresArgsInput, "out" | "loudness">) {
   const { c, W, H } = hiresFrame(o.screenSize, o.crop);
   const at = (v: number) => Math.max(0, Math.round(v / 2) * 2);
   const cut = c ? `crop=${W}:${H}:${at(c.x)}:${at(c.y)},` : "";
-  const parts = [`[0:v]fps=${o.fps},${cut}sendcmd=f=${o.cmdFile},crop@zoom=w=${W}:h=${H}:x=0:y=0,scale=${W}:${H}:flags=lanczos,setsar=1[base]`];
+  const parts = [`[0:v]fps=${o.fps},${cut}sendcmd=f=${o.cmdFile},crop@zoom=w=${W}:h=${H}:x=0:y=0,format=yuv420p,scale=${W}:${H}:flags=lanczos,setsar=1[base]`];
+  // format before the scale: a crop at full size scaled to the same size crashed the bundled ffmpeg 6.1 at 1080p
   const inputs = [...trimArgs(o.trim), "-i", o.screen];
   let last = "base";
   let audioIdx = 1;

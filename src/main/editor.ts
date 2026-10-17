@@ -1,7 +1,6 @@
 // The take editor's main side: the opentake-media:// protocol the player streams from, the take's
 // edit and captions on disk, waveform peaks and the 16 kHz audio the caption recognizer reads.
 import { ipcMain, protocol } from "electron";
-import { spawn } from "node:child_process";
 import { createReadStream, existsSync } from "node:fs";
 import { readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -13,9 +12,9 @@ import { mergeTouching } from "../renderer/modules/editor/edit-core";
 import { cutsSomething, readCaptions, readEdit, writeCaptions, writeEdit } from "./record/editor-store";
 import { canBurnCaptions } from "./record/export-edit";
 import { ffmpegPath } from "./record/export";
+import { runWatched } from "./record/ffmpeg-run";
 import { computePeaks, parseDurationMs } from "./record/export-core";
 import { hasAudioStream, validTakeId } from "./record/ffmpeg-core";
-import { FfmpegStalled, STALL_MS } from "./record/ffmpeg-run";
 import { MEDIA_SCHEME, mediaUrl, mimeFor, parseMediaUrl, parseRange } from "./record/media-core";
 import { listTakes, readMeta, takeDir, takeFiles } from "./record/takes";
 
@@ -24,28 +23,11 @@ export function registerMediaScheme() {
   protocol.registerSchemesAsPrivileged([{ scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }]);
 }
 
-/** The editor's own ffmpeg runs (preview copy, peaks, audio for captions): stopped when silent too long, never left hanging. */
-function ff(args: string[], cwd?: string): Promise<{ code: number; stdout: Buffer; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const p = spawn(ffmpegPath(), args, { cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-    const out: Buffer[] = [];
-    let stderr = "";
-    let lastActivity = Date.now();
-    let stalled = false;
-    const watchdog = setInterval(() => {
-      if (Date.now() - lastActivity < STALL_MS) return;
-      stalled = true;
-      p.kill("SIGKILL");
-    }, 5000);
-    p.stdout.on("data", (d: Buffer) => { lastActivity = Date.now(); out.push(d); });
-    p.stderr.on("data", (d: Buffer) => { lastActivity = Date.now(); stderr += d.toString(); if (stderr.length > 1_000_000) stderr = stderr.slice(-500_000); });
-    p.on("error", (e) => { clearInterval(watchdog); reject(e); });
-    p.on("close", (code) => {
-      clearInterval(watchdog);
-      if (stalled) reject(new FfmpegStalled(Math.round(STALL_MS / 1000)));
-      else resolve({ code: code ?? -1, stdout: Buffer.concat(out), stderr });
-    });
-  });
+/** ffmpeg for the editor (probe, preview copy, peaks, the recognizer's audio), watched like every export run. */
+async function ff(args: string[], cwd?: string): Promise<{ code: number; stdout: Buffer; stderr: string }> {
+  const out: Buffer[] = [];
+  const r = await runWatched(ffmpegPath(), args, { cwd, onData: (d) => out.push(d) });
+  return { ...r, stdout: Buffer.concat(out) };
 }
 
 async function serve(req: Request): Promise<Response> {

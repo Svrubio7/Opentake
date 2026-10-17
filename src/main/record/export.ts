@@ -91,7 +91,7 @@ export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => 
     let args: string[];
     if (o.kind === "hires") {
       out = join(dir, "take-hires.mp4");
-      args = hiresArgs({ ...(await hiresSource(takeId, dir, meta, files, trim.start * 1000)), out, trim, audio, loudness });
+      args = hiresArgs({ ...(await hiresSource(takeId, dir, meta, files, trim.start * 1000)), out, trim, audio, loudness, limitSec: encodeMs > 0 ? encodeMs / 1000 : null });
     } else {
       out = join(dir, "take.mp4");
       args = compositeArgs({ input: files.composite, out, fps: meta.fps || 30, trim, audio, loudness });
