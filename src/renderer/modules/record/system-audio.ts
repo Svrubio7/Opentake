@@ -48,6 +48,8 @@ class SystemSound {
   private block = new Float32Array(1024);
   private users = 0;
   private opening: Promise<boolean> | null = null;
+  /** when the capture last opened (performance.now()), -Infinity before */
+  openedAt = -Infinity;
   private level = useRecord.getState().systemAudioLevel;
 
   constructor() {
@@ -101,6 +103,7 @@ class SystemSound {
         this.close();
         useSystemSound.getState().set({ status: "failed", reason: t("record.sys.stopped") });
       });
+      this.openedAt = performance.now();
       st.set({ status: "on", reason: null });
       return true;
     } catch (e) {

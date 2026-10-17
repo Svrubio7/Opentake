@@ -9,7 +9,7 @@ import { api, hasBridge } from "./api";
 import {
   coverCrop, cropSource, gradientLine, needsCamera, needsScreen, pxScale, resolveBackground, toCropSpace, type Rect,
 } from "./layout-core";
-import { FramePacer, TICK_MS } from "./pace-core";
+import { FramePacer, SteadyFrames, TICK_MS, captureEarlyMs } from "./pace-core";
 import { frameDrawn } from "@core/gpu-quiet";
 import { History, capStore, largerStore, planDelay, ringSlots, scaleStore, storeSize } from "./delay-core";
 import { FrameRing, type StoredFrame } from "./frame-ring";
@@ -133,18 +133,35 @@ class Compositor {
   }
 
   /** the take's composite track, fed one frame at a time on its own clock (pace-core.ts) */
-  private capture: { track: CanvasCaptureMediaStreamTrack; pacer: FramePacer } | null = null;
+  private capture: { track: CanvasCaptureMediaStreamTrack; pacer: FramePacer; on: boolean } | null = null;
 
-  /** A video track of the stage for a take's composite, at exactly `fps` frames a second. */
+  /**
+   * A video track of the stage for a take's composite, at exactly `fps` frames a second. It carries
+   * no frame until startCapture(): frames asked for before its recorder starts queued up behind the
+   * encoders that were starting, and the file began with up to ~0.2 s of picture from before the take
+   * (the composite ran long and sat that far off the screen and camera tracks).
+   */
   captureTrack(fps: number): MediaStreamTrack {
     const track = this.canvas.captureStream(0).getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
-    this.capture = { track, pacer: new FramePacer(1000 / fps) };
+    const period = 1000 / fps;
+    this.capture = { track, pacer: new FramePacer(period, captureEarlyMs(period)), on: false };
     return track;
+  }
+
+  /** The composite's recorder has started: frames flow from the next one drawn. */
+  startCapture() {
+    const c = this.capture;
+    if (!c || c.track.readyState !== "live") return;
+    c.on = true;
+    // the stage as it is now opens the file (waiting for the next drawn frame started it up to a
+    // frame late), and the next one is due a period after it
+    c.pacer.due(performance.now());
+    c.track.requestFrame();
   }
 
   private emitFrame() {
     const c = this.capture;
-    if (!c) return;
+    if (!c?.on) return;
     if (c.track.readyState !== "live") { this.capture = null; return; }
     if (c.pacer.due(performance.now())) c.track.requestFrame();
   }
@@ -250,22 +267,24 @@ class Compositor {
    * Resolves once the camera picture arrives steadily again (three frames, none more than
    * STEADY_GAP_MS apart), or after maxMs. Opening the computer sound the first time stalls the
    * picture for a moment; a take started inside that stall began with its camera frozen.
+   * The frames are counted on the video itself, on the compositor's worker tick: a
+   * requestVideoFrameCallback never fires while the window paints nothing (minimized, covered),
+   * which held every such take's start for the whole maxMs.
    */
   steadyCamera(maxMs = 1000): Promise<void> {
-    const v = this.cameraVideo as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
-    if (!ready(v) || !v.requestVideoFrameCallback) return Promise.resolve();
+    const v = this.cameraVideo as HTMLVideoElement & { webkitDecodedFrameCount?: number };
+    const count = () => v.webkitDecodedFrameCount ?? v.getVideoPlaybackQuality?.().totalVideoFrames;
+    const ticker = this.ticker;
+    if (!ready(v) || count() == null || !ticker) return Promise.resolve();
     return new Promise((done) => {
       const t0 = performance.now();
-      let last = t0, good = 0, over = false;
-      const end = () => { if (!over) { over = true; done(); } };
+      const steady = new SteadyFrames(STEADY_GAP_MS);
+      let over = false;
+      const end = () => { if (over) return; over = true; ticker.removeEventListener("message", tick); done(); };
+      const tick = () => { const now = performance.now(); if (now - t0 >= maxMs || steady.sample(now, count() ?? 0)) end(); };
       setTimeout(end, maxMs);
-      const next = () => v.requestVideoFrameCallback!(() => {
-        const now = performance.now();
-        good = now - last <= STEADY_GAP_MS ? good + 1 : 0;
-        last = now;
-        if (good >= 3) end(); else if (!over) next();
-      });
-      next();
+      ticker.addEventListener("message", tick);
+      tick();
     });
   }
 
