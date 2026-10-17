@@ -1,5 +1,7 @@
 // Live meters drawn straight from engine messages (no React state per frame).
 import { useEffect, useRef } from "react";
+import { Gauge } from "lucide-react";
+import { CardMark } from "../../ui";
 import { getEngine } from "./engine";
 import { useAudioStore } from "./store";
 
@@ -74,7 +76,7 @@ export function Meters() {
 
   return (
     <section className="card au-meters">
-      <div className="card-head"><h3 className="card-title">Levels</h3><span className="au-clip" ref={clip}>Clipping. Turn the mic gain down.</span></div>
+      <div className="card-head"><h3 className="card-title"><CardMark icon={Gauge} />Levels</h3><span className="au-clip" ref={clip}>Clipping. Turn the mic gain down.</span></div>
       <Bar label="Input" refs={input} />
       <Bar label="Output" refs={output} />
       <div className="au-gr">

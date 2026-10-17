@@ -41,29 +41,60 @@
 .st-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .st-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 .st-tile {
-  display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px; border-radius: 12px;
-  background: var(--well); box-shadow: inset 0 0 0 1px var(--card-border);
+  display: flex; flex-direction: column; gap: 9px; min-width: 0; padding: 11px 12px 12px; border: 0; border-radius: 12px; text-align: left;
+  background: var(--well); box-shadow: inset 0 0 0 1px var(--card-border); color: var(--text);
+  transition: box-shadow var(--t) var(--ease), background var(--t) var(--ease);
 }
-.st-tile.danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 35%, var(--card-border)); }
+.st-tile:hover:not(:disabled) { background: var(--card); box-shadow: inset 0 0 0 1px var(--border), var(--shadow-card); }
+.st-tile:disabled { cursor: default; opacity: 1; }
+.st-tile.danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 38%, var(--card-border)); }
+.st-tile.warn { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn-dot) 45%, var(--card-border)); }
 .st-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .st-head .eyebrow { flex: 1 1 auto; min-width: 0; }
-.st-mark { display: grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 7px; background: var(--card); color: var(--muted); box-shadow: inset 0 0 0 1px var(--card-border); }
-.st-mark svg { width: 13px; height: 13px; stroke-width: 2; }
-.st-state { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 12px; font-weight: 500; color: var(--muted); }
-.st-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
-.st-state.good i { background: var(--brand); }
+.st-mark { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 7px; background: var(--card); color: var(--muted); box-shadow: inset 0 0 0 1px var(--card-border); }
+.st-mark svg { width: 12px; height: 12px; stroke-width: 2; }
+.st-state { display: inline-flex; flex: none; }
+.st-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); transition: background var(--t) var(--ease); }
+.st-state.good i { background: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 16%, transparent); }
 .st-state.warn i { background: var(--warn-dot); }
-.st-state.danger { color: var(--danger); }
 .st-state.danger i { background: var(--danger); }
+.st-body { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.st-thumb { position: relative; width: 52px; height: 32px; flex: none; border-radius: 6px; overflow: hidden; background: #000; box-shadow: inset 0 0 0 1px var(--card-border); }
+.st-thumb video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.st-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .st-value { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .st-tile.danger .st-value { color: var(--danger); }
-.st-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 28px; margin-top: auto; }
 .st-sub { font-size: 13px; color: var(--muted); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.st-act { height: 28px; padding: 0 10px; font-size: 13px; margin-left: auto; }
+.st-fix {
+  align-self: flex-start; display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; background: var(--text); color: var(--bg);
+}
 .st-level, .st-bar { display: block; height: 4px; border-radius: 999px; background: var(--switch-off); overflow: hidden; }
 .st-level > span { display: block; height: 100%; width: 100%; background: var(--brand); transform-origin: left; transform: scaleX(0); transition: transform 80ms linear; border-radius: 999px; }
-.st-bar > span { display: block; height: 100%; background: var(--text); opacity: 0.55; border-radius: 999px; }
+.st-bar > span { display: block; height: 100%; background: var(--text); opacity: 0.5; border-radius: 999px; }
 .st-tile.warn .st-bar > span { background: var(--warn-dot); opacity: 1; }
+
+/* ---------- the stage when there is nothing to show yet ---------- */
+.rec-empty {
+  position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  padding: 24px; text-align: center; background: var(--stage); animation: q-fade 200ms var(--ease);
+}
+.rec-empty b { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+.rec-empty p { font-size: 15px; color: var(--muted); max-width: 340px; }
+.rec-empty-mark {
+  display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 6px; border-radius: 16px;
+  background: var(--card); color: var(--text); box-shadow: inset 0 0 0 1px var(--card-border), var(--shadow-card);
+}
+.rec-empty-mark svg { width: 24px; height: 24px; stroke-width: 1.6; }
+.rec-empty-mark.busy svg { animation: q-blink 1.6s ease-in-out infinite; }
+.rec-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+
+/* ---------- the dock: grouped controls, the mic level ---------- */
+.rec-sep { width: 1px; height: 24px; flex: none; background: var(--card-border); }
+.rec-level { display: inline-flex; align-items: center; flex: 0 1 64px; min-width: 36px; height: 36px; }
+.rec-level-track { position: relative; display: block; width: 100%; height: 6px; border-radius: 999px; background: var(--track); box-shadow: inset 0 0 0 1px var(--card-border); overflow: hidden; }
+.rec-level-track > span { position: absolute; inset: 0; background: var(--brand); transform-origin: left; transform: scaleX(0); transition: transform 80ms linear; border-radius: 999px; }
+.rec-level.off { opacity: 0.4; }
 
 /* ---------- suggestions ---------- */
 .tips { display: flex; flex-direction: column; gap: 8px; }
@@ -127,8 +158,6 @@ p.tk-msg { display: block; }
 .rec-msg-x { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; margin: -4px -6px -4px 0; padding: 0; border: 0; border-radius: 8px; background: none; }
 .rec-msg-x:hover { background: var(--hover); }
 .rec-msg-x svg { margin-left: 0 !important; }
-.rec-stage-ask { position: absolute; left: 50%; top: 50%; transform: translate(-50%, calc(-50% + 44px)); z-index: 2; }
-.rec-stage.has-tip .rec-stage-ask { transform: translate(-50%, calc(-50% + 14px)); }
 
 /* the rail's new-take dot and settings */
 .rail-dot.new { background: var(--rail-fg); }
@@ -221,3 +250,7 @@ p.tk-msg { display: block; }
 .tk-folder-text { flex: 1 1 auto; }
 .set-well { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 12px; border-radius: 12px; background: var(--well); box-shadow: inset 0 0 0 1px var(--card-border); }
 .set-well .set-folder { flex: 1 1 auto; }
+
+/* messages arrive with the same short settle as panels */
+.rec-msg { animation: q-settle 180ms cubic-bezier(0.23, 1, 0.32, 1); }
+.tip { animation: q-settle 180ms cubic-bezier(0.23, 1, 0.32, 1); }

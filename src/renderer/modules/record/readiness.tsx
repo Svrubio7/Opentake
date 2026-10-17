@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { HardDrive, ListChecks, Mic, Monitor, Video, X, type LucideIcon } from "lucide-react";
 import { Button, Card, Tag } from "../../ui";
 import { shortPath } from "../../../main/settings-core";
+import { useStream } from "@core/useStream";
 import { getEngine } from "../audio/engine";
 import { useAudioStore } from "../audio/store";
 import { retryCamera } from "../camera/engine";
@@ -53,12 +54,12 @@ function useRows(): Row[] {
       : { key: "screen", label: "Screen", icon: Monitor, tone: "warn", value: "Not chosen yet", sub: "Pick a screen or a window", action: { label: "Choose", run: pickScreen } });
   }
   const micName = micLabel.replace(/^(Default|Predeterminado) - /, "");
-  rows.push(mic === "running" ? { key: "mic", label: "Mic", icon: Mic, tone: "good", value: micName || "Microphone", title: micLabel }
+  rows.push(mic === "running" ? { key: "mic", label: "Mic", icon: Mic, tone: "good", value: micName || "Microphone", title: micLabel, action: { label: "Open Mic", run: () => goTo("audio") } }
     : mic === "error" ? { key: "mic", label: "Mic", icon: Mic, tone: "danger", value: "Not working", sub: "Check the Mic tab", action: { label: "Fix", run: () => goTo("audio") } }
       : { key: "mic", label: "Mic", icon: Mic, tone: "warn", value: "Starting", sub: "Opening the microphone" });
   if (needsCamera(mode)) {
     const c = { key: "camera" as const, label: "Camera", icon: Video };
-    rows.push(cam === "live" ? { ...c, tone: "good", value: camLabel.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)$/i, "") || "Camera", sub: camSize ? `${camSize.h}p, ${camSize.fps} fps` : "Working", title: camLabel }
+    rows.push(cam === "live" ? { ...c, tone: "good", value: camLabel.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)$/i, "") || "Camera", sub: camSize ? `${camSize.h}p` : "Working", title: camLabel, action: { label: "Open Camera", run: () => goTo("camera") } }
       : cam === "busy" ? { ...c, tone: "danger", value: "In use by another app", sub: "Close the call or recorder using it", action: { label: "Try again", run: retryCamera } }
         : cam === "denied" ? { ...c, tone: "danger", value: "Blocked", sub: "Allow it in privacy settings", action: { label: "Fix", run: () => goTo("camera") } }
           : cam === "nocamera" ? { ...c, tone: "danger", value: "No camera found", sub: "Plug one in, then try again", action: { label: "Try again", run: retryCamera } }
@@ -84,29 +85,47 @@ export function useProblems(): number {
 /** The processed voice's level, drawn straight from the engine (no React render per frame). */
 function MicLevel() {
   const bar = useRef<HTMLSpanElement>(null);
-  useEffect(() => getEngine().onOutput((m) => {
+  useEffect(() => getEngine().onInput((m) => {
     if (bar.current) bar.current.style.transform = `scaleX(${Math.max(0, Math.min(1, (m.rmsDb + 60) / 60))})`;
   }), []);
   return <span className="st-level" aria-hidden><span ref={bar} /></span>;
 }
 
+/** A tiny live picture of a stream (the chosen screen, the camera), muted and never focusable. */
+function LiveThumb({ kind }: { kind: "screen" | "camera" }) {
+  const stream = useStream(kind);
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    v.srcObject = stream;
+    if (stream) void v.play().catch(() => {});
+  }, [stream]);
+  return <span className="st-thumb" aria-hidden>{stream ? <video ref={ref} muted playsInline /> : null}</span>;
+}
+
 function StatusTile({ r }: { r: Row }) {
   const Icon = r.icon;
+  const run = r.action?.run;
+  const thumb = r.tone === "good" && (r.key === "screen" || r.key === "camera") ? <LiveThumb kind={r.key} /> : null;
   return (
-    <div className={`st-tile ${r.tone}`} title={r.title}>
-      <div className="st-head">
+    <button type="button" className={`st-tile ${r.tone}`} title={r.title ? `${r.title}${r.action ? ` (${r.action.label})` : ""}` : r.action?.label} onClick={run} disabled={!run}>
+      <span className="st-head">
         <span className="st-mark" aria-hidden><Icon /></span>
         <span className="eyebrow">{r.label}</span>
-        <span className={`st-state ${r.tone}`} title={STATE_WORD[r.tone]} aria-label={STATE_WORD[r.tone]}><i /></span>
-      </div>
-      <b className="st-value">{r.value}</b>
+        <span className={`st-state ${r.tone}`} aria-label={STATE_WORD[r.tone]}><i /></span>
+      </span>
+      <span className="st-body">
+        {thumb}
+        <span className="st-text">
+          <b className="st-value">{r.value}</b>
+          {r.sub && <span className="st-sub">{r.sub}</span>}
+        </span>
+      </span>
       {r.key === "mic" && r.tone === "good" ? <MicLevel />
-        : r.used != null ? <span className="st-bar" aria-label={`${Math.round(r.used * 100)}% of the drive used`}><span style={{ width: `${Math.round(r.used * 100)}%` }} /></span> : null}
-      <div className="st-foot">
-        {r.sub && <span className="st-sub">{r.sub}</span>}
-        {r.action && <Button size="sm" variant={r.tone === "good" ? "ghost" : "outline"} className="st-act" onClick={r.action.run}>{r.action.label}</Button>}
-      </div>
-    </div>
+        : r.used != null ? <span className="st-bar"><span style={{ width: `${Math.round(r.used * 100)}%` }} /></span> : null}
+      {r.action && r.tone !== "good" && <span className="st-fix">{r.action.label}</span>}
+    </button>
   );
 }
 

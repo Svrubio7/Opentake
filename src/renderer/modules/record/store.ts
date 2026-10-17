@@ -60,7 +60,7 @@ export interface RecordRuntime {
   error: string | null;
   notice: string | null;
   /** a tab the notice offers to open ("Open Takes") */
-  noticeAction: "takes" | "settings" | null;
+  noticeAction: "takes" | "settings" | "overlays" | null;
   tracking: ClickTrackingStatus | null;
   micSource: "module" | "fallback" | "none" | null;
   cameraSource: "module" | "fallback" | "none" | null;
