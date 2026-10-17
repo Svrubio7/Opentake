@@ -36,6 +36,8 @@ type Content = { type: "text"; text: string } | { type: "image"; data: string; m
 interface Done { text: string; data?: unknown; image?: Buffer; summary: string; takeId?: string; snap?: Awaited<ReturnType<typeof snapshot>> }
 
 const MAX_TEXT = 100_000;
+/** the longest one call waits: assistants give up on a tool call after about a minute */
+const CALL_BUDGET_MS = 50_000;
 const sec = (ms: number) => Math.round(ms / 10) / 100;
 const fmt = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const ranges = (rs: TimeRange[]) => rs.map((r) => ({ start: sec(r.start), end: sec(r.end) }));
@@ -173,10 +175,12 @@ export function registerTools(server: McpServer, ctx: Context) {
     const { s, id, dir } = await open(take);
     let caps = await s.captions(id);
     if (!caps?.lines.length || remake) {
+      // one tool call stays under a minute (clients give up around there): what is left waits for get_job
+      const t0 = Date.now();
       await ctx.bridge.ensure();
       const snap = await snapshot(id, dir, ["captions.json"]);
       const job = await ctx.bridge.call<AssistantJob>("transcribe", { takeId: id, lang: lang ?? caps?.lang ?? "en" });
-      const done = await waitJob(ctx, job.id, 50_000);
+      const done = await waitJob(ctx, job.id, Math.max(1000, CALL_BUDGET_MS - (Date.now() - t0)));
       if (!done.done) {
         pendingCaptions.set(job.id, snap);
         return { text: `Making captions for ${id}: ${done.stage}${done.ratio != null ? ` (${Math.round(done.ratio * 100)}%)` : ""}. Call get_transcript again in a minute, or get_job with job_id ${job.id}.`, summary: "Started making captions", takeId: id };
@@ -202,11 +206,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     ms = Math.min(ms, Math.max(0, durationMs - 50));
     const composite = s.track(id, meta, "composite");
     if (!composite) throw new Error("This take has no recording file");
-    // the editor's preview copy has an index, so seeking is quick
-    const ext = composite.endsWith(".mp4") ? "mp4" : "webm";
-    const preview = s.file(id, `preview.${ext}`);
-    const seekableFile = existsSync(preview) ? preview : composite;
-    const png = await ctx.ff.frame(seekableFile, ms, width, seekableFile === preview || ext === "mp4");
+    const png = await ctx.ff.frame(await seekableCopy(ctx, s.dir(id), composite, meta), ms, width, true);
     return { text: `Frame of ${id} at ${sec(ms)} s on the take's clock.`, image: png, summary: `Looked at ${sec(ms)} s`, takeId: id };
   });
 
@@ -424,7 +424,7 @@ export function registerTools(server: McpServer, ctx: Context) {
       use_cuts: z.boolean().default(true),
       gif_fps: z.number().int().min(5).max(30).default(15),
       gif_width: z.number().int().min(160).max(1280).default(480),
-      wait_s: z.number().min(0).max(50).default(20).describe("wait up to this long for it to finish before returning the job"),
+      wait_s: z.number().min(0).max(45).default(20).describe("wait up to this long for it to finish before returning the job"),
     },
   }, async (a) => {
     const { s, id } = await open(a.take);
@@ -443,9 +443,10 @@ export function registerTools(server: McpServer, ctx: Context) {
       captions: burn,
     };
     const options: ExportOptions = { takeId: id, kind: a.kind, loudness: a.loudness, trimSilence: a.trim_silence, useEdit: a.use_cuts, output, manual: false };
+    const t0 = Date.now();
     await ctx.bridge.ensure();
     const job = await ctx.bridge.call<AssistantJob>("export", { options });
-    const now = a.wait_s > 0 ? await waitJob(ctx, job.id, a.wait_s * 1000) : job;
+    const now = a.wait_s > 0 ? await waitJob(ctx, job.id, Math.min(a.wait_s * 1000, Math.max(0, CALL_BUDGET_MS - (Date.now() - t0)))) : job;
     if (now.done && now.error) throw new Error(now.error);
     return {
       text: now.done ? `Exported: ${now.output?.join(", ")}` : `Exporting ${id} (${now.stage}${now.ratio != null ? `, ${Math.round(now.ratio * 100)}%` : ""}). Call get_job with job_id ${job.id} to follow it.`,
@@ -456,7 +457,7 @@ export function registerTools(server: McpServer, ctx: Context) {
   tool("get_job", {
     title: "Follow a job",
     description: "How an export, a caption job, an import or a timeline export is doing: stage, progress, the files it wrote, or the error. wait_s waits for it to finish.",
-    input: { job_id: z.string().min(1).max(80), wait_s: z.number().min(0).max(50).default(0) },
+    input: { job_id: z.string().min(1).max(80), wait_s: z.number().min(0).max(45).default(0) },
     readOnly: true,
   }, async ({ job_id, wait_s }) => {
     const j = await waitJob(ctx, job_id, wait_s * 1000);
@@ -544,6 +545,23 @@ export function registerTools(server: McpServer, ctx: Context) {
     description: "Find the ums, uhs and long pauses, show them, and cut them after you agree.",
     argsSchema: { take: z.string().optional() },
   }, ({ take }) => ({ messages: [{ role: "user", content: { type: "text", text: `In OpenTake take ${take ?? "latest"}, find the filler words and long pauses (get_transcript first if there are no captions, then find_moments). Show me the list with times. Then run remove_filler_words and remove_silences with dry_run so I can see the new length, and only save after I say yes.` } }] }));
+}
+
+/**
+ * A copy of a WebM composite with an index, so a frame anywhere is found at once (MediaRecorder files
+ * have none, and decoding an hour to reach its end is too slow). It is the editor's own preview file,
+ * made the same way (no re-encoding) and shared with it.
+ */
+async function seekableCopy(ctx: Context, dir: string, composite: string, meta: Meta): Promise<string> {
+  if (composite.endsWith(".mp4") || meta.status === "recording") return composite;
+  const preview = join(dir, "preview.webm");
+  if (existsSync(preview) && (await stat(preview)).mtimeMs >= (await stat(composite)).mtimeMs) return preview;
+  if ((await ctx.ff.probe(composite)).durationMs != null) return composite;
+  const tmp = join(dir, "preview.tmp.webm");
+  const r = await ctx.ff.run(["-nostdin", "-y", "-hide_banner", "-i", composite, "-map", "0", "-c", "copy", tmp]);
+  if (r.code !== 0) { await rm(tmp, { force: true }); return composite; }
+  await rename(tmp, preview);
+  return preview;
 }
 
 function transcriptOut(lines: Parameters<typeof transcriptText>[0], lang: CaptionLang, words: boolean, from: number, max: number): string {
