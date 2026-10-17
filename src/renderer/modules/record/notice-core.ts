@@ -9,6 +9,7 @@ import { es } from "../../../shared/i18n/es";
 import { needsScreen } from "./layout-core";
 
 /** The English forms (what the tests and the logs read); show them with t() of the same key. */
+// the English forms, for tests; the app shows t(key) and matches both languages (is() below)
 export const PICK_NOTICE = tIn("en", "record.notice.pick");
 export const WINDOW_CLOSED_NOTICE = tIn("en", "record.notice.windowClosed");
 export const NAME_CARD_NOTICE = tIn("en", "record.notice.nameCard");
