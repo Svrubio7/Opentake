@@ -83,12 +83,41 @@ export function useProblems(): number {
 }
 
 /** The processed voice's level, drawn straight from the engine (no React render per frame). */
+/** The mic input over the last few seconds as a row of bars, drawn on a canvas (no React render per frame). */
 function MicLevel() {
-  const bar = useRef<HTMLSpanElement>(null);
-  useEffect(() => getEngine().onInput((m) => {
-    if (bar.current) bar.current.style.transform = `scaleX(${Math.max(0, Math.min(1, (m.rmsDb + 60) / 60))})`;
-  }), []);
-  return <span className="st-level" aria-hidden><span ref={bar} /></span>;
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const levels: number[] = new Array(28).fill(0);
+    let last = 0;
+    return getEngine().onInput((m) => {
+      const c = ref.current;
+      if (!c) return;
+      const now = performance.now();
+      if (now - last < 70) return; // about 14 bars a second
+      last = now;
+      levels.shift();
+      levels.push(Math.max(0, Math.min(1, (m.rmsDb + 60) / 54)));
+      const dpr = window.devicePixelRatio || 1;
+      const W = c.clientWidth, H = c.clientHeight;
+      if (c.width !== Math.round(W * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+      const g = c.getContext("2d");
+      if (!g) return;
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, W, H);
+      const css = getComputedStyle(c);
+      const on = css.getPropertyValue("--brand").trim() || "#006f4f";
+      const off = css.getPropertyValue("--switch-off").trim() || "#dcdce3";
+      const step = W / levels.length, bw = Math.max(2, step - 3);
+      levels.forEach((v, i) => {
+        const h = Math.max(3, v * (H - 2));
+        g.fillStyle = v > 0.04 ? on : off;
+        g.beginPath();
+        g.roundRect(i * step + (step - bw) / 2, (H - h) / 2, bw, h, bw / 2);
+        g.fill();
+      });
+    });
+  }, []);
+  return <canvas ref={ref} className="st-media st-wave" aria-hidden />;
 }
 
 /** A tiny live picture of a stream (the chosen screen, the camera), muted and never focusable. */
@@ -101,13 +130,14 @@ function LiveThumb({ kind }: { kind: "screen" | "camera" }) {
     v.srcObject = stream;
     if (stream) void v.play().catch(() => {});
   }, [stream]);
-  return <span className="st-thumb" aria-hidden>{stream ? <video ref={ref} muted playsInline /> : null}</span>;
+  return <span className="st-media" aria-hidden>{stream ? <video ref={ref} muted playsInline /> : null}</span>;
 }
 
 function StatusTile({ r }: { r: Row }) {
   const Icon = r.icon;
   const run = r.action?.run;
-  const thumb = r.tone === "good" && (r.key === "screen" || r.key === "camera") ? <LiveThumb kind={r.key} /> : null;
+  // every good tile shows something live or measured in the same strip, so the row lines up
+  const media = r.tone !== "good" ? null : r.key === "screen" || r.key === "camera" ? <LiveThumb kind={r.key} /> : r.key === "mic" ? <MicLevel /> : null;
   return (
     <button type="button" className={`st-tile ${r.tone}`} title={r.title ? `${r.title}${r.action ? ` (${r.action.label})` : ""}` : r.action?.label} onClick={run} disabled={!run}>
       <span className="st-head">
@@ -115,15 +145,12 @@ function StatusTile({ r }: { r: Row }) {
         <span className="eyebrow">{r.label}</span>
         <span className={`st-state ${r.tone}`} aria-label={STATE_WORD[r.tone]}><i /></span>
       </span>
-      <span className="st-body">
-        {thumb}
-        <span className="st-text">
-          <b className="st-value">{r.value}</b>
-          {r.sub && <span className="st-sub">{r.sub}</span>}
-        </span>
+      {media}
+      <span className="st-text">
+        <b className="st-value">{r.value}</b>
+        {r.sub && <span className="st-sub">{r.sub}</span>}
       </span>
-      {r.key === "mic" && r.tone === "good" ? <MicLevel />
-        : r.used != null ? <span className="st-bar"><span style={{ width: `${Math.round(r.used * 100)}%` }} /></span> : null}
+      {r.used != null && <span className="st-bar"><span style={{ width: `${Math.round(r.used * 100)}%` }} /></span>}
       {r.action && r.tone !== "good" && <span className="st-fix">{r.action.label}</span>}
     </button>
   );

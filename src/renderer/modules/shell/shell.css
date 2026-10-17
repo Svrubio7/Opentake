@@ -58,9 +58,9 @@
 .st-state.good i { background: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 16%, transparent); }
 .st-state.warn i { background: var(--warn-dot); }
 .st-state.danger i { background: var(--danger); }
-.st-body { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.st-thumb { position: relative; width: 52px; height: 32px; flex: none; border-radius: 6px; overflow: hidden; background: #000; box-shadow: inset 0 0 0 1px var(--card-border); }
-.st-thumb video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.st-media { position: relative; display: block; width: 100%; height: 58px; flex: none; border-radius: 8px; overflow: hidden; background: #000; box-shadow: inset 0 0 0 1px var(--card-border); }
+.st-media video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.st-wave { background: var(--card); }
 .st-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .st-value { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .st-tile.danger .st-value { color: var(--danger); }
