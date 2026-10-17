@@ -1,7 +1,6 @@
 // The take editor's main side: the opentake-media:// protocol the player streams from, the take's
 // edit and captions on disk, waveform peaks and the 16 kHz audio the caption recognizer reads.
 import { ipcMain, protocol } from "electron";
-import { spawn } from "node:child_process";
 import { createReadStream, existsSync } from "node:fs";
 import { readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -13,6 +12,7 @@ import { mergeTouching } from "../renderer/modules/editor/edit-core";
 import { cutsSomething, readCaptions, readEdit, writeCaptions, writeEdit } from "./record/editor-store";
 import { canBurnCaptions } from "./record/export-edit";
 import { ffmpegPath } from "./record/export";
+import { runWatched } from "./record/ffmpeg-run";
 import { computePeaks, parseDurationMs } from "./record/export-core";
 import { hasAudioStream, validTakeId } from "./record/ffmpeg-core";
 import { MEDIA_SCHEME, mediaUrl, mimeFor, parseMediaUrl, parseRange } from "./record/media-core";
@@ -23,16 +23,11 @@ export function registerMediaScheme() {
   protocol.registerSchemesAsPrivileged([{ scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }]);
 }
 
-function ff(args: string[], cwd?: string): Promise<{ code: number; stdout: Buffer; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const p = spawn(ffmpegPath(), args, { cwd, windowsHide: true });
-    const out: Buffer[] = [];
-    let stderr = "";
-    p.stdout.on("data", (d: Buffer) => out.push(d));
-    p.stderr.on("data", (d: Buffer) => { stderr += d.toString(); if (stderr.length > 1_000_000) stderr = stderr.slice(-500_000); });
-    p.on("error", reject);
-    p.on("close", (code) => resolve({ code: code ?? -1, stdout: Buffer.concat(out), stderr }));
-  });
+/** ffmpeg for the editor (probe, preview copy, peaks, the recognizer's audio), watched like every export run. */
+async function ff(args: string[], cwd?: string): Promise<{ code: number; stdout: Buffer; stderr: string }> {
+  const out: Buffer[] = [];
+  const r = await runWatched(ffmpegPath(), args, { cwd, onData: (d) => out.push(d) });
+  return { ...r, stdout: Buffer.concat(out) };
 }
 
 async function serve(req: Request): Promise<Response> {

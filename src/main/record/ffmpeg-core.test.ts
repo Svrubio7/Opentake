@@ -57,6 +57,12 @@ describe("parsing", () => {
     expect(s).toHaveLength(2);
     expect(s[1]).toBe("0.066 crop@zoom w 960, crop@zoom h 540, crop@zoom x 0, crop@zoom y 0;");
   });
+  it("sets the hi-res length outright and never uses -shortest", () => {
+    const base = { input: "c.webm", out: "o.mp4", fps: 30, trim: { start: 0, end: null }, audio: true, screen: "s.webm", screenSize: { width: 640, height: 360 }, cmdFile: "z.cmd" };
+    expect(hiresArgs({ ...base, limitSec: 12.5 })).not.toContain("-shortest");
+    expect(hiresArgs({ ...base, limitSec: 12.5 }).join(" ")).toContain("-t 12.500");
+    expect(hiresArgs(base)).not.toContain("-t");
+  });
   it("starts the script at zero after a trim", () => {
     const frames = [{ t: 0, scale: 2, x: 0.5, y: 0.5 }, { t: 2000, scale: 2, x: 0.5, y: 0.5 }];
     expect(zoomCommands(frames, 100, 100, 1000).startsWith("0.000 crop@zoom w 50")).toBe(true);
@@ -103,6 +109,18 @@ describe.skipIf(!ff)("ffmpeg end to end", () => {
     expect(probe).toMatch(/Video: h264.*640x360/);
     expect(probe).toMatch(/Audio: aac/);
   }, 60_000);
+
+  it("re-renders a 1080p screen with a changing zoom without crashing (ffmpeg 6.1 segfaulted here)", () => {
+    make(["-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=30:d=3", "-c:v", "libvpx", "-b:v", "2M", "-deadline", "realtime", "-cpu-used", "8", "screen1080.webm"]);
+    writeFileSync(join(dir, "zoom1080.cmd"), zoomCommands(simulateCamera([{ t: 800, x: 0.3, y: 0.3 }, { t: 2000, x: 0.7, y: 0.6 }], [], 3000, 30), 1920, 1080));
+    const args = hiresArgs({
+      input: "composite.webm", out: "take-hires1080.mp4", fps: 30, trim: { start: 0.2, end: 2.8 }, audio: true, limitSec: 2.6,
+      screen: "screen1080.webm", screenSize: { width: 1920, height: 1080 }, cmdFile: "zoom1080.cmd",
+    });
+    const r = spawnSync(ff!, args, { cwd: dir, encoding: "utf8", timeout: 60_000 });
+    expect(r.status, r.stderr.slice(-300)).toBe(0);
+    expect(durationOf(join(dir, "take-hires1080.mp4"))).toBeCloseTo(2.6, 0);
+  }, 120_000);
 
   it("re-renders a cropped screen with a bordered rectangle camera", () => {
     const crop = { x: 64, y: 0, w: 512, h: 324 };

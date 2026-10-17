@@ -34,6 +34,8 @@ export function progressTracker() {
 export interface WatchedOptions {
   cwd?: string;
   onStdout?: (s: string) => void;
+  /** raw stdout (decoded audio): every chunk counts as activity, not only the -progress clock */
+  onData?: (d: Buffer) => void;
   stallMs?: number;
   /** called with the child as soon as it starts (for cancelling) */
   onSpawn?: (p: ChildProcess) => void;
@@ -60,6 +62,7 @@ export function runWatched(bin: string, args: string[], o: WatchedOptions = {}):
       alive();
     });
     p.stdout.on("data", (d: Buffer) => {
+      if (o.onData) { o.onData(d); alive(); return; }
       const s = d.toString();
       if (tracker.feed(s) != null) alive();
       o.onStdout?.(s);

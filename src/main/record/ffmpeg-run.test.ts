@@ -25,6 +25,14 @@ describe("ffmpeg watchdog", () => {
     await expect(runWatched(node, ["-e", printer(Array(40).fill(500000), 100)], { stallMs: 1000 })).rejects.toThrow(/stopped making progress/);
   }, 10_000);
 
+  it("counts raw output as activity for runs that stream data, and stops them when it stops", async () => {
+    const chunks: Buffer[] = [];
+    const ok = await runWatched(node, ["-e", "let i=0;const t=setInterval(()=>{process.stdout.write(Buffer.alloc(4096));if(++i>=10)clearInterval(t)},150)"], { stallMs: 600, onData: (d) => chunks.push(d) });
+    expect(ok.code).toBe(0);
+    expect(Buffer.concat(chunks).length).toBe(40960);
+    await expect(runWatched(node, ["-e", "process.stdout.write(Buffer.alloc(10));setTimeout(()=>{},60000)"], { stallMs: 600, onData: () => {} })).rejects.toBeInstanceOf(FfmpegStalled);
+  }, 15_000);
+
   it("leaves a run alone while its clock moves", async () => {
     const r = await runWatched(node, ["-e", printer(Array.from({ length: 20 }, (_, i) => i * 100000), 120)], { stallMs: 700 });
     expect(r.code).toBe(0);
