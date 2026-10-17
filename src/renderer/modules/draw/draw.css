@@ -1,0 +1,64 @@
+/* The drawing windows. Both are transparent: only the strokes and the black toolbar show.
+   The toolbar wears the rail's black, with the emerald dot of state on the chosen tool. */
+@font-face {
+  font-family: "Geist";
+  src: url("../../../../node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: block;
+}
+
+:root {
+  --draw-bar: rgba(11, 11, 12, 0.92);
+  --draw-fg: #ffffff;
+  --draw-muted: rgba(255, 255, 255, 0.66);
+  --draw-hover: rgba(255, 255, 255, 0.1);
+  --draw-on: rgba(255, 255, 255, 0.18);
+  --draw-dot: #3ccf91;
+  --draw-ring: rgba(255, 255, 255, 0.16);
+  font-family: "Geist", -apple-system, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* ---------- strokes ---------- */
+.draw-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; pointer-events: none; }
+.draw-canvas.on { pointer-events: auto; cursor: crosshair; }
+.draw-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.draw-stroke.hl { stroke-linecap: butt; }
+
+/* ---------- toolbar ---------- */
+.draw-dock { height: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 2px; }
+.draw-bar {
+  display: flex; align-items: center; gap: 2px; padding: 5px; border-radius: 14px;
+  background: var(--draw-bar); color: var(--draw-fg); box-shadow: 0 0 0 1px var(--draw-ring), 0 10px 28px -10px rgba(0, 0, 0, 0.55);
+}
+.draw-btn {
+  position: relative; width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 10px;
+  background: transparent; color: var(--draw-muted); transition: background 140ms ease-out, color 140ms ease-out;
+}
+.draw-btn svg { width: 19px; height: 19px; stroke-width: 1.75; }
+.draw-btn:hover { background: var(--draw-hover); color: var(--draw-fg); }
+.draw-btn.on { background: var(--draw-on); color: var(--draw-fg); }
+.draw-btn.on::after { content: ""; position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--draw-dot); }
+.draw-exit:hover { background: rgba(255, 69, 58, 0.22); }
+.draw-sep { width: 1px; height: 22px; margin: 0 5px; background: var(--draw-ring); }
+.draw-swatch {
+  width: 22px; height: 22px; margin: 0 3px; border: 0; border-radius: 50%; padding: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); transition: transform 140ms ease-out, box-shadow 140ms ease-out;
+}
+.draw-swatch:hover { transform: scale(1.12); }
+.draw-swatch.on { box-shadow: 0 0 0 2px var(--draw-bar), 0 0 0 4px var(--draw-fg); }
+:where(.draw-btn, .draw-swatch):focus-visible { outline: 2px solid var(--draw-fg); outline-offset: 2px; }
+
+.draw-hint {
+  margin: 0; padding: 4px 10px; border-radius: 8px; background: var(--draw-bar); color: var(--draw-muted);
+  font-size: 12px; line-height: 1.3; display: flex; align-items: center; gap: 4px; white-space: nowrap;
+}
+.draw-hint kbd {
+  font: inherit; font-size: 11px; color: var(--draw-fg); padding: 0 5px; border-radius: 4px; background: var(--draw-on);
+}
+.draw-hint kbd + kbd { margin-left: -1px; }
+.draw-hint span { margin-left: 8px; }

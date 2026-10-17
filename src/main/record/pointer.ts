@@ -30,6 +30,10 @@ let poll: NodeJS.Timeout | null = null;
 let flush: NodeJS.Timeout | null = null;
 let buffer: CursorSample[] = [];
 let last = { x: NaN, y: NaN };
+/** clicks it returns true for are not reported (drawing on the screen must not zoom) */
+let clickFilter: () => boolean = () => false;
+
+export function setClickFilter(fn: () => boolean) { clickFilter = fn; }
 
 function findDisplay(displayId?: string): Display | null {
   const all = screen.getAllDisplays();
@@ -50,7 +54,7 @@ function normalize(p: { x: number; y: number }): { x: number; y: number } | null
 }
 
 function onMouseDown(e: HookMouseEvent) {
-  if (!target || target.isDestroyed()) return;
+  if (!target || target.isDestroyed() || clickFilter()) return;
   // libuiohook reports physical pixels on Windows (Electron is per-monitor DPI aware)
   const dip = process.platform === "win32" ? screen.screenToDipPoint({ x: e.x, y: e.y }) : { x: e.x, y: e.y };
   const p = normalize(dip);

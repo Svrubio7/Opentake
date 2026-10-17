@@ -29,6 +29,7 @@ Made by [Quetzal](https://quetzaltech.app). Free for everyone, open source under
 - Auto zoom: clicks are tracked globally and the export zooms in where you click.
 - A 3, 2, 1 countdown, pause, takes you can review, and separate screen and camera tracks if you want to edit elsewhere.
 - MP4 export with optional silence trimming at the start and end and loudness normalisation.
+- Draw on the screen while you record: pen, highlighter, arrow and rectangle in five colours, with undo and strokes that fade after 3 seconds (or stay). The drawing is in the recording, the toolbar is not.
 
 **Teleprompter**
 - A floating, always-on-top prompter that sits under your webcam so your eyes stay near the lens.
@@ -49,9 +50,17 @@ The builds are not code signed yet:
 - **macOS** says the app cannot be opened. Right-click OpenTake in Applications, choose *Open*, then *Open* again. Or run `xattr -dr com.apple.quarantine /Applications/OpenTake.app`.
 - On macOS, zoom on clicks needs *Accessibility* permission and recording needs *Screen Recording* permission (System Settings, Privacy and Security). OpenTake asks the first time.
 
+## Updates
+
+OpenTake checks GitHub Releases for a new version shortly after it starts and every 6 hours.
+
+- **Windows installer** and **Linux AppImage** download the update in the background and install it when you restart. The notice has a Restart button; it never restarts during a take or an export, and otherwise the update installs the next time you quit.
+- **Windows portable** and **macOS** (until the mac builds are signed) tell you a new version is out and link to the download.
+- The version and a *Check for updates* button are under About, at the bottom of the left rail.
+
 ## Privacy
 
-Everything runs on your computer. There is no account, no sign-in, no telemetry and no analytics. Your voice, camera, screen and scripts never leave your machine: noise suppression, face detection, background segmentation and speech recognition all run locally, and the speech models ship inside the app. The only network request OpenTake can make is opening a link you click in your browser.
+Everything runs on your computer. There is no account, no sign-in, no telemetry and no analytics. Your voice, camera, screen and scripts never leave your machine: noise suppression, face detection, background segmentation and speech recognition all run locally, and the speech models ship inside the app. OpenTake makes one kind of network request on its own: it asks GitHub whether a newer version has been released (after launch and every 6 hours) and downloads it if so. Nothing about you or your recordings is sent.
 
 ## Keyboard shortcuts
 
@@ -61,11 +70,14 @@ These work from any app while OpenTake is running (on macOS, Ctrl is Cmd).
 |---|---|
 | Ctrl+Shift+R | Start or stop recording |
 | Ctrl+Shift+P | Pause or resume recording |
+| Ctrl+Shift+D | Draw on the screen: on or off |
 | Ctrl+Alt+Space | Teleprompter: play or pause |
 | Ctrl+Alt+Up / Down | Teleprompter: faster / slower |
 | Ctrl+Alt+Right / Left | Teleprompter: next / previous sentence |
 | Ctrl+Alt+Home | Teleprompter: back to the start |
 | Ctrl+Alt+T | Teleprompter: click-through on or off |
+
+While drawing: Esc stops, Ctrl+Z undoes, C clears, P, H, A and R pick the pen, highlighter, arrow and rectangle, and a right click rubs out one stroke.
 
 The teleprompter shortcuts are active while the prompter is showing. Inside the teleprompter panel or window the same keys work without Ctrl+Alt: Space, arrows and Home.
 
@@ -97,6 +109,7 @@ Unsigned builds work but warn on first launch. To sign, add these secrets to the
 
 - Windows: `WIN_CSC_LINK` (base64 of the .pfx certificate) and `WIN_CSC_KEY_PASSWORD`.
 - macOS: `CSC_LINK` (base64 of the Developer ID Application .p12) and `CSC_KEY_PASSWORD`, plus `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` for notarisation (then add `notarize: true` under `mac` in `electron-builder.yml`).
+- Mac auto update needs a signed app and a `zip` target next to the `dmg` (Squirrel.Mac installs from the zip). Build signed macs with `MAIN_VITE_MAC_SIGNED=1` so the app installs updates instead of only announcing them.
 
 ### Where the repository name lives
 

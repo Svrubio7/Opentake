@@ -9,6 +9,7 @@ import { clampBubble, formatClock, hitBubble, needsCamera, needsScreen, snapBubb
 import { BackgroundCard, CameraBubbleCard, FrameCard, LooksCard, WindowCard } from "./look-panel";
 import { exportTake, refreshTakes, startRecording, stopRecording, togglePause, wireRecorder } from "./recorder";
 import { currentLayout, isBusy, useRecord } from "./store";
+import { DrawCard } from "../draw";
 import "./record.css";
 
 // ---------- Stage ----------
@@ -330,6 +331,8 @@ export function RecordPanel() {
           )}
         </Card>
       )}
+
+      <DrawCard />
 
       <Card title="Recording">
         <div className="row">

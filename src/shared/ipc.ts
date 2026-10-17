@@ -31,4 +31,26 @@ export const IPC = {
   prompterWindowStatus: "take:prompter:window-status",
   /** controller -> main: the in-window overlay is showing, keep the global shortcuts on */
   prompterShortcuts: "take:prompter:shortcuts",
+  // shell: auto update
+  /** main -> renderers: the updater's status */
+  updateStatus: "take:update:status",
+  updateCheck: "take:update:check",
+  /** restart into the downloaded version (refused while busy) */
+  updateInstall: "take:update:install",
+  /** main window -> main: a take is recording or exporting */
+  updateBusy: "take:update:busy",
+  updateOpenRelease: "take:update:open-release",
+  // shell: drawing on the screen
+  /** main -> windows: drawing mode and preferences */
+  drawStatus: "take:draw:status",
+  /** turn drawing mode on, off or toggle it (no argument) */
+  drawToggle: "take:draw:toggle",
+  /** change preferences (fade, tool, colour) */
+  drawPrefs: "take:draw:prefs",
+  /** toolbar -> main -> overlay: undo, clear */
+  drawCommand: "take:draw:command",
+  /** main window -> main: the display the take records, so the overlay goes there */
+  drawDisplay: "take:draw:display",
+  /** overlay -> main: nothing is left on screen, the window can hide */
+  drawEmpty: "take:draw:empty",
 } as const;

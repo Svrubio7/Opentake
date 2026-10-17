@@ -139,3 +139,42 @@ export type RecordTrack = "composite" | "screen" | "camera";
 export interface RecordChunk { takeId: string; track: RecordTrack; data: Uint8Array }
 export interface RecordSave { takeId: string; final: boolean; durationMs: number; timeline: TakeTimeline }
 export type RecordShortcut = "toggle" | "pause";
+
+// ---- shell: updates ----
+
+/** install = downloads and replaces itself; notify = only says a new version exists; off = dev build */
+export type UpdateMode = "install" | "notify" | "off";
+export type UpdatePhase = "idle" | "checking" | "none" | "available" | "downloading" | "ready" | "error";
+export interface UpdateStatus {
+  current: string;
+  mode: UpdateMode;
+  phase: UpdatePhase;
+  /** the newer version, once one is found */
+  version?: string;
+  /** 0..100 while downloading */
+  percent?: number;
+  /** the release page (notes and downloads) */
+  releaseUrl: string;
+  error?: string;
+  checkedAt?: number;
+  /** a take is recording or exporting: restarting waits */
+  busy: boolean;
+  /** the dev build is pretending to be an older version: never installs */
+  fake: boolean;
+}
+
+// ---- shell: drawing on the screen ----
+
+export type DrawTool = "pen" | "highlighter" | "arrow" | "rect";
+export interface DrawStatus {
+  /** drawing mode: the overlay takes the mouse */
+  active: boolean;
+  /** strokes fade out a few seconds after they are drawn */
+  fade: boolean;
+  tool: DrawTool;
+  color: string;
+  shortcut: string;
+  /** false when another app holds the shortcut */
+  shortcutOk: boolean;
+}
+export type DrawCommand = "undo" | "clear";
