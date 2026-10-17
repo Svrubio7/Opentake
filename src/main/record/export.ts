@@ -4,9 +4,10 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import ffmpegStatic from "ffmpeg-static";
 import type { ExportOptions, ExportProgress } from "../../shared/types";
+import { cropSource, toCropSpace } from "../../renderer/modules/record/layout-core";
 import { DEFAULT_ZOOM, estimateDwellClicks, simulateCamera } from "../../renderer/modules/record/zoom-core";
 import {
-  SILENCE_FILTER, compositeArgs, hasAudioStream, hiresArgs, loudnormFilter, parseLoudnorm, parseProgressTime,
+  SILENCE_FILTER, compositeArgs, hasAudioStream, hiresArgs, hiresFrame, loudnormFilter, parseLoudnorm, parseProgressTime,
   parseSilenceTrim, zoomCommands,
 } from "./ffmpeg-core";
 import { readMeta, readTimeline, takeDir, takeFiles } from "./takes";
@@ -95,15 +96,20 @@ export async function exportTake(o: ExportOptions, send: (p: ExportProgress) => 
       if (!files.screen || !timeline?.screenSize) throw new Error("This take has no separate screen track to re-render");
       const fps = timeline.layout.fps;
       const durationMs = meta.durationMs ?? timeline.cursor[timeline.cursor.length - 1]?.t ?? 0;
-      const clicks = timeline.hooks ? timeline.clicks : estimateDwellClicks(timeline.cursor);
+      // the timeline holds raw display positions: the zoom is redone inside the cropped picture
+      const crop = timeline.layout.crop;
+      const cursor = timeline.cursor.map((p) => toCropSpace(p, crop));
+      const clicks = (timeline.hooks ? timeline.clicks : estimateDwellClicks(timeline.cursor)).map((p) => toCropSpace(p, crop));
       const zoom = timeline.layout.zoom.enabled ? { ...DEFAULT_ZOOM, scale: timeline.layout.zoom.scale } : { ...DEFAULT_ZOOM, scale: 1 };
-      const frames = simulateCamera(timeline.layout.zoom.enabled ? clicks : [], timeline.cursor, durationMs, fps, zoom);
-      await writeFile(join(dir, "zoom.cmd"), zoomCommands(frames, timeline.screenSize.width, timeline.screenSize.height, trim.start * 1000));
+      const frames = simulateCamera(timeline.layout.zoom.enabled ? clicks : [], cursor, durationMs, fps, zoom);
+      const kept = cropSource(crop, timeline.screenSize.width, timeline.screenSize.height);
+      const frame = hiresFrame(timeline.screenSize, kept);
+      await writeFile(join(dir, "zoom.cmd"), zoomCommands(frames, frame.W, frame.H, trim.start * 1000));
       out = join(dir, "take-hires.mp4");
       const withCamera = timeline.layout.mode === "screen-camera" && files.camera;
       args = hiresArgs({
         input: files.composite, out, fps, trim, audio, loudness,
-        screen: files.screen, screenSize: timeline.screenSize,
+        screen: files.screen, screenSize: timeline.screenSize, crop: kept,
         camera: withCamera ? files.camera : null, bubble: withCamera ? timeline.layout.bubble : null,
         cmdFile: "zoom.cmd",
       });

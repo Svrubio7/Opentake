@@ -98,6 +98,52 @@ export function Field({ label, hint, inline, children }: { label: ReactNode; hin
   );
 }
 
+/** A colour swatch that opens the system picker, with the hex beside it. */
+export function ColorField({ label, value, onChange, disabled }: { label: ReactNode; value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  return (
+    <label className={cx("field field-inline color-field", disabled && "disabled")}>
+      <span className="row-label">{label}</span>
+      <span className="color-control">
+        <span className="color-hex tnum">{value.toUpperCase()}</span>
+        <input type="color" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
+      </span>
+    </label>
+  );
+}
+
+/** A whole-number box that commits on blur or Enter, so typing "1" on the way to "1080" changes nothing. */
+export function NumberField({ label, value, min, max, step = 1, suffix, onCommit, disabled }: {
+  label: ReactNode; value: number; min: number; max: number; step?: number; suffix?: string; onCommit: (v: number) => void; disabled?: boolean;
+}) {
+  const commit = (el: HTMLInputElement) => {
+    const n = Number(el.value);
+    if (!Number.isFinite(n)) { el.value = String(value); return; }
+    const v = Math.min(max, Math.max(min, Math.round(n / step) * step));
+    el.value = String(v);
+    if (v !== value) onCommit(v);
+  };
+  return (
+    <label className={cx("number-field", disabled && "disabled")}>
+      <span className="label">{label}</span>
+      <span className="number-control">
+        <input key={value} className="input tnum" type="number" inputMode="numeric" defaultValue={value} min={min} max={max} step={step} disabled={disabled}
+          onBlur={(e) => commit(e.currentTarget)} onKeyDown={(e) => { if (e.key === "Enter") commit(e.currentTarget); }} />
+        {suffix && <span className="number-suffix">{suffix}</span>}
+      </span>
+    </label>
+  );
+}
+
+/** A section inside a card that folds away (the less used settings). */
+export function Disclosure({ title, children, defaultOpen }: { title: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+  return (
+    <details className="disclosure" open={defaultOpen}>
+      <summary>{title}</summary>
+      <div className="disclosure-body">{children}</div>
+    </details>
+  );
+}
+
 export function Tag({ tone = "neutral", children, title }: { tone?: "neutral" | "brand" | "good" | "warn" | "danger" | "rec"; children: ReactNode; title?: string }) {
   return <span className={cx("tag", tone)} title={title}><i className="dot" />{children}</span>;
 }

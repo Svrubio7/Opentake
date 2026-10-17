@@ -1,6 +1,6 @@
 // The prompter inside the main window: a box the person drags, resizes and snaps anywhere.
 // It is plain DOM over the app; the recorder's compositor draws only media streams, so it never
-// lands in a recording (unless the screen being recorded shows Take itself: use Pop out then).
+// lands in a recording (unless the screen being recorded shows OpenTake itself: use Pop out then).
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink, GripHorizontal, X } from "lucide-react";
 import { reportPosition } from "./controller";

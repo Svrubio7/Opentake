@@ -1,12 +1,12 @@
 # Third-party notices
 
-Take is released under the MIT licence (see `LICENSE`). It ships with the software and data below, each under its own licence. Versions are the ones in `package-lock.json` when this file was written; licences were read from each package's own `package.json`, licence file or source headers.
+OpenTake is released under the MIT licence (see `LICENSE`). It ships with the software and data below, each under its own licence. Versions are the ones in `package-lock.json` when this file was written; licences were read from each package's own `package.json`, licence file or source headers.
 
 ## Programs shipped as separate files
 
 ### FFmpeg (through ffmpeg-static 5.3.0)
 
-- What: the `ffmpeg` executable, used to export recordings to MP4. It is shipped unmodified, as a separate program next to the app (`resources/app.asar.unpacked/node_modules/ffmpeg-static/`), and Take runs it as a child process. Take does not link against it.
+- What: the `ffmpeg` executable, used to export recordings to MP4. It is shipped unmodified, as a separate program next to the app (`resources/app.asar.unpacked/node_modules/ffmpeg-static/`), and OpenTake runs it as a child process. OpenTake does not link against it.
 - Licence: **GPL-3.0** (the static builds include GPL components). The full licence text and build notes ship beside the binary (`ffmpeg.LICENSE` / `ffmpeg.exe.LICENSE`, `*.README`).
 - Binary release used by ffmpeg-static: tag `b6.1.1` from https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1 (FFmpeg 6.1.1). Windows builds come from https://www.gyan.dev/ffmpeg/builds/, macOS builds from https://evermeet.cx/pub/ffmpeg/ (x64) and https://osxexperts.net/ (arm64), Linux builds from https://johnvansickle.com/ffmpeg/.
 - FFmpeg source code: https://ffmpeg.org/download.html (release 6.1.1: https://ffmpeg.org/releases/ffmpeg-6.1.1.tar.xz). Under the GPL you may ask Quetzal (hello@quetzaltech.app) for the corresponding source of the exact binary we ship for three years from the release date; we will point you to or send the source archive.
@@ -34,7 +34,7 @@ Take is released under the MIT licence (see `LICENSE`). It ships with the softwa
 | @sapphi-red/web-noise-suppressor | 0.4.1 | MIT | https://github.com/sapphi-red/web-noise-suppressor |
 | vosk-browser (JS + WebAssembly) | 0.0.8 | Apache-2.0 | https://github.com/ccoreilly/vosk-browser |
 
-Electron includes Chromium, Node.js and other components under their own licences. Their notices ship with every build in `LICENSES.chromium.html` and `LICENSE.electron.txt` next to the Take executable.
+Electron includes Chromium, Node.js and other components under their own licences. Their notices ship with every build in `LICENSES.chromium.html` and `LICENSE.electron.txt` next to the OpenTake executable.
 
 ### Inside @sapphi-red/web-noise-suppressor
 
@@ -62,4 +62,4 @@ A copy of the Apache License 2.0 is at https://www.apache.org/licenses/LICENSE-2
 
 ## Build-time only (not shipped)
 
-electron-vite, vite, @vitejs/plugin-react, typescript, vitest, electron-builder and their dependencies are used to build and test Take and are not part of the installed app. The packaging config (`electron-builder.yml`) keeps every package out of the app except the three the main process loads (ffmpeg-static, uiohook-napi, node-gyp-build); everything else above reaches the app already bundled by Vite.
+electron-vite, vite, @vitejs/plugin-react, typescript, vitest, electron-builder and their dependencies are used to build and test OpenTake and are not part of the installed app. The packaging config (`electron-builder.yml`) keeps every package out of the app except the three the main process loads (ffmpeg-static, uiohook-napi, node-gyp-build); everything else above reaches the app already bundled by Vite.

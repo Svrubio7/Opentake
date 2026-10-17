@@ -1,12 +1,12 @@
 name: Feature request
-description: An idea to make Take better
+description: An idea to make OpenTake better
 labels: [enhancement]
 body:
   - type: textarea
     id: problem
     attributes:
       label: What are you trying to do
-      description: The recording you are making and where Take gets in the way.
+      description: The recording you are making and where OpenTake gets in the way.
     validations:
       required: true
   - type: textarea

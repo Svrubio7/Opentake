@@ -35,7 +35,7 @@ export function PrompterApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!state) return <div className="pv-root"><div className="pv-empty">Connecting to Take</div></div>;
+  if (!state) return <div className="pv-root"><div className="pv-empty">Connecting to OpenTake</div></div>;
   return (
     <PrompterSurface state={state} clickThrough={clickThrough}
       onPosition={(word, manual) => window.take.send(IPC.prompterPosition, manual ? { word, manual } : { word })}
@@ -162,7 +162,7 @@ export function PrompterSurface({ state, clickThrough = false, onPosition, onClo
     <div className={`pv-root${clickThrough ? " pv-through" : ""}${embedded ? " pv-embedded" : ""}`}>
       {!embedded && (
         <div className="pv-drag">
-          <span className="pv-drag-title">Take prompter</span>
+          <span className="pv-drag-title">OpenTake prompter</span>
           {onClose && <button type="button" className="pv-close" title="Close" aria-label="Close" onClick={onClose}><X /></button>}
         </div>
       )}
@@ -176,7 +176,7 @@ export function PrompterSurface({ state, clickThrough = false, onPosition, onClo
           <ScriptBody parsed={parsed} showNotes={state.showNotes} />
         </div>
       </div>
-      {!parsed.words.length && <div className="pv-empty">Paste a script in the Teleprompter tab of Take.</div>}
+      {!parsed.words.length && <div className="pv-empty">Paste a script in the Teleprompter tab of OpenTake.</div>}
       <Countdown until={state.countdownUntil} playing={state.playing} />
     </div>
   );

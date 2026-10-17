@@ -1,8 +1,8 @@
-<p align="center"><img src="build/icon.png" width="96" alt="Take"></p>
+<p align="center"><img src="build/icon.png" width="96" alt="OpenTake"></p>
 
-# Take
+# OpenTake
 
-Take is a free desktop app for recording yourself: it cleans up your microphone, makes your camera look better, records your screen and camera together with zoom on your clicks, and gives you a teleprompter that follows your voice. Everything runs on your computer.
+OpenTake is a free desktop app for recording yourself: it cleans up your microphone, makes your camera look better, records your screen and camera together with zoom on your clicks, and gives you a teleprompter that follows your voice. Everything runs on your computer.
 
 Made by [Quetzal](https://quetzaltech.app). Free for everyone, open source under the MIT licence.
 
@@ -11,7 +11,7 @@ Made by [Quetzal](https://quetzaltech.app). Free for everyone, open source under
 **Microphone**
 - A voice chain that runs live: noise suppression (RNNoise or Speex), gate, EQ with presence, de-esser, compressor, auto level and a limiter.
 - Presets: Natural, Podcast, Broadcast and Noisy room, plus every stage adjustable by hand.
-- Mic check: stay quiet, read a line out loud, and Take tunes the chain to your room and your voice.
+- Mic check: stay quiet, read a line out loud, and OpenTake tunes the chain to your room and your voice.
 - Live meters for level, loudness (LUFS) and how much each stage is working.
 
 **Camera**
@@ -20,7 +20,12 @@ Made by [Quetzal](https://quetzaltech.app). Free for everyone, open source under
 - Background blur or replacement and auto framing, using on-device face detection and segmentation (MediaPipe).
 
 **Record**
-- Screen, window and camera recording, with the camera as a picture-in-picture you can size and round.
+- Screen, window and camera recording, with the camera as a picture-in-picture.
+- Any frame: 16:9, 9:16, 1:1, 4:5, 4:3 or a custom width and height, at 720p, 1080p, 1440p or 4K.
+- Backgrounds: presets, your own colour, a two-colour gradient at any angle, or your own picture with optional blur.
+- The screen window: size, position, padding, rounded corners, shadow, border, and a crop to cut off a taskbar or browser tabs.
+- The camera: a circle or a rectangle with its own width, height and corner roundness, plus shadow and border. Drag it on the stage or snap it to a corner. A camera-only take can sit as a window over the background too.
+- Looks: save the whole setup under a name and switch in one click, or go back to the standard look.
 - Auto zoom: clicks are tracked globally and the export zooms in where you click.
 - A 3, 2, 1 countdown, pause, takes you can review, and separate screen and camera tracks if you want to edit elsewhere.
 - MP4 export with optional silence trimming at the start and end and loudness normalisation.
@@ -34,23 +39,23 @@ Made by [Quetzal](https://quetzaltech.app). Free for everyone, open source under
 
 Get the latest version from [GitHub Releases](https://github.com/Svrubio7/Opentake/releases/latest):
 
-- **Windows**: `Take-<version>-win-x64.exe` (installer) or `Take-<version>-portable.exe` (no install).
-- **macOS**: `Take-<version>-mac-arm64.dmg` for Apple Silicon, `Take-<version>-mac-x64.dmg` for Intel.
-- **Linux**: `Take-<version>-linux-x86_64.AppImage`.
+- **Windows**: `OpenTake-<version>-win-x64.exe` (installer) or `OpenTake-<version>-portable.exe` (no install).
+- **macOS**: `OpenTake-<version>-mac-arm64.dmg` for Apple Silicon, `OpenTake-<version>-mac-x64.dmg` for Intel.
+- **Linux**: `OpenTake-<version>-linux-x86_64.AppImage`.
 
 The builds are not code signed yet:
 
 - **Windows** shows "Windows protected your PC". Click *More info*, then *Run anyway*.
-- **macOS** says the app cannot be opened. Right-click Take in Applications, choose *Open*, then *Open* again. Or run `xattr -dr com.apple.quarantine /Applications/Take.app`.
-- On macOS, zoom on clicks needs *Accessibility* permission and recording needs *Screen Recording* permission (System Settings, Privacy and Security). Take asks the first time.
+- **macOS** says the app cannot be opened. Right-click OpenTake in Applications, choose *Open*, then *Open* again. Or run `xattr -dr com.apple.quarantine /Applications/OpenTake.app`.
+- On macOS, zoom on clicks needs *Accessibility* permission and recording needs *Screen Recording* permission (System Settings, Privacy and Security). OpenTake asks the first time.
 
 ## Privacy
 
-Everything runs on your computer. There is no account, no sign-in, no telemetry and no analytics. Your voice, camera, screen and scripts never leave your machine: noise suppression, face detection, background segmentation and speech recognition all run locally, and the speech models ship inside the app. The only network request Take can make is opening a link you click in your browser.
+Everything runs on your computer. There is no account, no sign-in, no telemetry and no analytics. Your voice, camera, screen and scripts never leave your machine: noise suppression, face detection, background segmentation and speech recognition all run locally, and the speech models ship inside the app. The only network request OpenTake can make is opening a link you click in your browser.
 
 ## Keyboard shortcuts
 
-These work from any app while Take is running (on macOS, Ctrl is Cmd).
+These work from any app while OpenTake is running (on macOS, Ctrl is Cmd).
 
 | Shortcut | Action |
 |---|---|
@@ -99,8 +104,8 @@ The GitHub owner and repository (`Svrubio7/Opentake`) are set once in `package.j
 
 ## Licence
 
-Take is released under the [MIT licence](LICENSE). It ships with third-party software and models under their own licences, including FFmpeg (GPL-3.0, shipped as a separate unmodified program) and libuiohook (LGPL-3.0). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+OpenTake is released under the [MIT licence](LICENSE). It ships with third-party software and models under their own licences, including FFmpeg (GPL-3.0, shipped as a separate unmodified program) and libuiohook (LGPL-3.0). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Made by Quetzal
 
-Take is made by [Quetzal](https://quetzaltech.app), an AI social media manager for small businesses. More free tools at [quetzaltech.app/tools](https://quetzaltech.app/tools).
+OpenTake is made by [Quetzal](https://quetzaltech.app), an AI social media manager for small businesses. More free tools at [quetzaltech.app/tools](https://quetzaltech.app/tools).

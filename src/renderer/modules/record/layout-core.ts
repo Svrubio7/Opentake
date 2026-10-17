@@ -1,13 +1,28 @@
 // Layout and recording decisions as pure functions (tested in layout-core.test.ts).
-import type { BubbleLayout, OutputAspect, RecordLayout, RecordMode } from "@shared/types";
+import type { BubbleLayout, FrameCrop, OutputAspect, RecordLayout, RecordMode } from "@shared/types";
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
-export function outputSize(aspect: OutputAspect, base = 1080): { width: number; height: number } {
-  if (aspect === "9:16") return { width: base, height: Math.round((base * 16) / 9) };
-  if (aspect === "1:1") return { width: base, height: base };
-  return { width: Math.round((base * 16) / 9), height: base };
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const even = (v: number) => Math.max(2, Math.round(v / 2) * 2);
+
+export const ASPECT_RATIO: Record<Exclude<OutputAspect, "custom">, number> = {
+  "16:9": 16 / 9, "9:16": 9 / 16, "1:1": 1, "4:3": 4 / 3, "4:5": 4 / 5,
+};
+
+/** A custom output side, in pixels. Even sizes, because H.264 in yuv420 needs them. */
+export const CUSTOM_SIDE = { min: 320, max: 4096 };
+export const clampSide = (v: number) => even(clamp(Number.isFinite(v) ? v : 1080, CUSTOM_SIDE.min, CUSTOM_SIDE.max));
+
+/** Output pixels: `base` is the shorter side; a custom aspect brings its own width and height. */
+export function outputSize(aspect: OutputAspect, base = 1080, custom?: { width: number; height: number }): { width: number; height: number } {
+  if (aspect === "custom") return { width: clampSide(custom?.width ?? 1920), height: clampSide(custom?.height ?? 1080) };
+  const r = ASPECT_RATIO[aspect] ?? 16 / 9;
+  return r >= 1 ? { width: even(base * r), height: base } : { width: base, height: even(base / r) };
 }
+
+/** Sizes that are set in 1080p pixels (corners, borders, shadows) grow with the output. */
+export const pxScale = (width: number, height: number) => Math.min(width, height) / 1080;
 
 /** Largest rect of aspect srcW/srcH that fits inside box (letterboxed). */
 export function containRect(srcW: number, srcH: number, box: Rect): Rect {
@@ -29,22 +44,84 @@ export function coverCrop(srcW: number, srcH: number, boxW: number, boxH: number
   return { x: 0, y: (srcH - h) / 2, w: srcW, h };
 }
 
-/** Where the screen goes: inside the padding, keeping its own aspect. */
-export function screenRect(layout: Pick<RecordLayout, "width" | "height" | "padding">, srcW: number, srcH: number): Rect {
+type WindowLayout = Pick<RecordLayout, "width" | "height" | "padding" | "screenScale" | "screenPosition">;
+
+/** The room inside the padding. */
+export function paddedBox(layout: Pick<RecordLayout, "width" | "height" | "padding">): Rect {
   const pad = Math.round(Math.min(layout.width, layout.height) * layout.padding);
-  return containRect(srcW, srcH, { x: pad, y: pad, w: layout.width - pad * 2, h: layout.height - pad * 2 });
+  return { x: pad, y: pad, w: layout.width - pad * 2, h: layout.height - pad * 2 };
 }
 
-/** Bubble in output pixels. A circle is square; a rounded bubble is 4:3 landscape. */
+/** Scales a window inside its box and places it in the room left over (position -1..1 on each axis). */
+function placeIn(box: Rect, w: number, h: number, layout: WindowLayout): Rect {
+  const s = clamp(layout.screenScale ?? 1, 0.3, 1);
+  const p = layout.screenPosition ?? { x: 0, y: 0 };
+  const sw = w * s, sh = h * s;
+  return {
+    x: box.x + ((box.w - sw) / 2) * (1 + clamp(p.x, -1, 1)),
+    y: box.y + ((box.h - sh) / 2) * (1 + clamp(p.y, -1, 1)),
+    w: sw, h: sh,
+  };
+}
+
+/** Where the screen goes: inside the padding, keeping its own aspect, at its size and position. */
+export function screenRect(layout: WindowLayout, srcW: number, srcH: number): Rect {
+  const box = paddedBox(layout);
+  const fit = containRect(srcW, srcH, box);
+  return placeIn(box, fit.w, fit.h, layout);
+}
+
+/** Camera-only takes fill the padded room (the picture is cropped to it), at the window size. */
+export function cameraWindowRect(layout: WindowLayout): Rect {
+  const box = paddedBox(layout);
+  return placeIn(box, box.w, box.h, layout);
+}
+
+export const NO_CROP: FrameCrop = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/** Each edge can lose at most 45%, so something is always left to show. */
+export function normalizeCrop(c: Partial<FrameCrop> | undefined): FrameCrop {
+  const k = (v: number | undefined) => clamp(Number.isFinite(v) ? (v as number) : 0, 0, 0.45);
+  return { top: k(c?.top), right: k(c?.right), bottom: k(c?.bottom), left: k(c?.left) };
+}
+
+/** The part of a w x h source that is kept, in source pixels. */
+export function cropSource(c: Partial<FrameCrop> | undefined, w: number, h: number): Rect {
+  const n = normalizeCrop(c);
+  return { x: n.left * w, y: n.top * h, w: w * (1 - n.left - n.right), h: h * (1 - n.top - n.bottom) };
+}
+
+/** A point given on the whole display, in the cropped picture's 0..1 space. */
+export function toCropSpace<P extends { x: number; y: number }>(p: P, c: Partial<FrameCrop> | undefined): P {
+  const n = normalizeCrop(c);
+  return { ...p, x: (p.x - n.left) / (1 - n.left - n.right), y: (p.y - n.top) / (1 - n.top - n.bottom) };
+}
+
+/** Width / height of a bubble: a circle is 1, a rounded bubble its own aspect (4:3 by default). */
+export const bubbleAspect = (b: Pick<BubbleLayout, "shape" | "aspect">) => (b.shape === "circle" ? 1 : clamp(b.aspect ?? 4 / 3, 0.5, 2.5));
+
+/** Bubble in output pixels. */
 export function bubbleRect(b: BubbleLayout, width: number, height: number): Rect {
   const w = b.size * Math.min(width, height);
-  const h = b.shape === "circle" ? w : (w * 3) / 4;
+  const h = w / bubbleAspect(b);
   return { x: b.cx * width - w / 2, y: b.cy * height - h / 2, w, h };
+}
+
+/** Corner radius of a bubble in pixels. */
+export function bubbleRadius(b: Pick<BubbleLayout, "shape" | "radius">, r: Pick<Rect, "w" | "h">): number {
+  const m = Math.min(r.w, r.h);
+  return b.shape === "circle" ? m / 2 : clamp(b.radius ?? 0.18, 0, 0.5) * m;
+}
+
+/** The largest size a bubble of this aspect can take and still fit on screen. */
+export function maxBubbleSize(b: Pick<BubbleLayout, "shape" | "aspect">, width: number, height: number): number {
+  const m = Math.min(width, height);
+  return Math.min((0.95 * width) / m, (0.95 * height * bubbleAspect(b)) / m);
 }
 
 /** Keeps the bubble fully on screen. */
 export function clampBubble(b: BubbleLayout, width: number, height: number): BubbleLayout {
-  const size = Math.min(0.6, Math.max(0.08, b.size));
+  const size = clamp(b.size, 0.06, maxBubbleSize(b, width, height));
   const r = bubbleRect({ ...b, size }, width, height);
   const hx = r.w / 2 / width, hy = r.h / 2 / height;
   return { ...b, size, cx: Math.min(1 - hx, Math.max(hx, b.cx)), cy: Math.min(1 - hy, Math.max(hy, b.cy)) };
@@ -125,11 +202,52 @@ export function formatClock(ms: number): string {
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+const preset = (id: string, label: string, ...stops: string[]) => ({
+  id, label, stops, css: stops.length > 1 ? `linear-gradient(135deg,${stops.join(",")})` : stops[0],
+});
+
 export const BACKGROUNDS: { id: string; label: string; css: string; stops: string[] }[] = [
-  { id: "none", label: "None", css: "#000", stops: ["#000000"] },
-  { id: "graphite", label: "Graphite", css: "linear-gradient(135deg,#2b2d33,#0f1012)", stops: ["#2b2d33", "#0f1012"] },
-  { id: "dusk", label: "Dusk", css: "linear-gradient(135deg,#ff7a59,#7b4dff)", stops: ["#ff7a59", "#7b4dff"] },
-  { id: "sea", label: "Sea", css: "linear-gradient(135deg,#1fd1a5,#2563eb)", stops: ["#1fd1a5", "#2563eb"] },
-  { id: "sand", label: "Sand", css: "linear-gradient(135deg,#f6d8b5,#c9a27e)", stops: ["#f6d8b5", "#c9a27e"] },
-  { id: "white", label: "White", css: "#f4f4f5", stops: ["#f4f4f5"] },
+  preset("none", "None", "#000000"),
+  preset("graphite", "Graphite", "#2b2d33", "#0f1012"),
+  preset("midnight", "Midnight", "#1e3a8a", "#0f172a"),
+  preset("emerald", "Emerald", "#0f8a63", "#06281d"),
+  preset("dusk", "Dusk", "#ff7a59", "#7b4dff"),
+  preset("sea", "Sea", "#1fd1a5", "#2563eb"),
+  preset("rose", "Rose", "#fbcfe8", "#c084fc"),
+  preset("sand", "Sand", "#f6d8b5", "#c9a27e"),
+  preset("white", "White", "#f4f4f5"),
+  preset("black", "Black", "#000000"),
 ];
+
+/** The background kinds a person sets up themself, beside the presets. */
+export type CustomBackground = "color" | "gradient" | "image";
+export const isCustomBackground = (id: string): id is CustomBackground => id === "color" || id === "gradient" || id === "image";
+
+export interface BackgroundSpec { id: string; color: string; color2: string; angle: number; image: string | null; blur: number }
+
+/** What to paint: one colour, a gradient at an angle, or a picture (with a colour behind it while it loads). */
+export function resolveBackground(s: BackgroundSpec): { kind: "solid"; color: string } | { kind: "gradient"; stops: string[]; angle: number } | { kind: "image"; src: string; blur: number; color: string } {
+  if (s.id === "color") return { kind: "solid", color: s.color };
+  if (s.id === "gradient") return { kind: "gradient", stops: [s.color, s.color2], angle: s.angle };
+  if (s.id === "image" && s.image) return { kind: "image", src: s.image, blur: s.blur, color: s.color };
+  if (s.id === "image") return { kind: "solid", color: s.color };
+  const p = BACKGROUNDS.find((b) => b.id === s.id) ?? BACKGROUNDS[0];
+  return p.stops.length > 1 ? { kind: "gradient", stops: p.stops, angle: 135 } : { kind: "solid", color: p.stops[0] };
+}
+
+/** A CSS-style gradient line: 0deg runs bottom to top, 90deg left to right, reaching the corners. */
+export function gradientLine(angleDeg: number, width: number, height: number) {
+  const a = (angleDeg * Math.PI) / 180;
+  const dx = Math.sin(a), dy = -Math.cos(a);
+  const half = (Math.abs(width * dx) + Math.abs(height * dy)) / 2;
+  const cx = width / 2, cy = height / 2;
+  return { x0: cx - dx * half, y0: cy - dy * half, x1: cx + dx * half, y1: cy + dy * half };
+}
+
+/** "#rgb" or "#rrggbb", else null. */
+export function parseHex(v: string): string | null {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(v.trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? m[1].split("").map((c) => c + c).join("") : m[1];
+  return `#${h.toLowerCase()}`;
+}

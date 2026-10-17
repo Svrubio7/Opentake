@@ -1,6 +1,6 @@
 {
-  "name": "take-studio",
-  "productName": "Take",
+  "name": "opentake",
+  "productName": "OpenTake",
   "version": "1.0.0",
   "description": "A free desktop recording studio: mic cleanup, camera look and lighting, screen and camera recording with auto zoom, and a teleprompter. Everything runs on your computer.",
   "main": "out/main/index.js",

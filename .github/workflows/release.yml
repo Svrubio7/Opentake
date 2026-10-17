@@ -42,7 +42,14 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Package and publish
-        run: npx electron-builder ${{ matrix.target }} --publish always
+        shell: bash
+        # A secret that is not set arrives as an empty string, and electron-builder reads an empty
+        # CSC_LINK as a path (the repo folder: "not a file"). Unset every empty signing variable.
+        run: |
+          for v in CSC_LINK CSC_KEY_PASSWORD WIN_CSC_LINK WIN_CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
+          npx electron-builder ${{ matrix.target }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Code signing (optional). Without these the builds are unsigned: Windows SmartScreen

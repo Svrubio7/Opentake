@@ -1,6 +1,6 @@
-# Contributing to Take
+# Contributing to OpenTake
 
-Thanks for helping. Take is a small app; issues and pull requests are welcome.
+Thanks for helping. OpenTake is a small app; issues and pull requests are welcome.
 
 ## Before you start
 

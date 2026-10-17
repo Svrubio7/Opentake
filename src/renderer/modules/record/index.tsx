@@ -1,11 +1,12 @@
 // OWNED BY: record agent. The big preview in the middle, its control bar, and the Record panel.
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { FolderOpen, Monitor, Pause, PictureInPicture2, Play, Square, Trash, Video, X } from "lucide-react";
-import type { BubbleShape, OutputAspect, RecordMode, ScreenSource, TakeInfo } from "@shared/types";
+import type { OutputAspect, RecordMode, ScreenSource, TakeInfo } from "@shared/types";
 import { Button, Card, Field, Hint, Segmented, Slider, Switch, Tag } from "../../ui";
 import { api, hasBridge } from "./api";
 import { compositor } from "./engine";
-import { BACKGROUNDS, clampBubble, formatClock, hitBubble, needsCamera, needsScreen, snapBubble } from "./layout-core";
+import { clampBubble, formatClock, hitBubble, needsCamera, needsScreen, snapBubble } from "./layout-core";
+import { BackgroundCard, CameraBubbleCard, FrameCard, LooksCard, WindowCard } from "./look-panel";
 import { exportTake, refreshTakes, startRecording, stopRecording, togglePause, wireRecorder } from "./recorder";
 import { currentLayout, isBusy, useRecord } from "./store";
 import "./record.css";
@@ -101,11 +102,14 @@ const MODES: { value: RecordMode; label: ReactNode; hint: string }[] = [
   { value: "screen", label: <Monitor />, hint: "Screen only" },
 ];
 const ASPECTS: OutputAspect[] = ["16:9", "9:16", "1:1"];
+const aspectLabel = (a: OutputAspect, w: number, h: number) => (a === "custom" ? `${w}×${h}` : a);
 
 export function RecordBar() {
   const status = useRecord((s) => s.status);
   const mode = useRecord((s) => s.mode);
   const aspect = useRecord((s) => s.aspect);
+  const customW = useRecord((s) => s.customWidth);
+  const customH = useRecord((s) => s.customHeight);
   const sourceId = useRecord((s) => s.sourceId);
   const sourceName = useRecord((s) => s.sourceName);
   const elapsedMs = useRecord((s) => s.elapsedMs);
@@ -151,7 +155,10 @@ export function RecordBar() {
         </div>
 
         <div className="rec-bar-side end">
-          <Segmented label="Frame" value={aspect} options={ASPECTS.map((a) => ({ value: a, label: a, hint: `Record a ${a} frame` }))} onChange={(a) => set({ aspect: a })} disabled={busy} />
+          {/* the three common frames, plus the current one when the Record panel set another */}
+          <Segmented label="Frame" value={aspect}
+            options={(ASPECTS.includes(aspect) ? ASPECTS : [...ASPECTS, aspect]).map((a) => ({ value: a, label: aspectLabel(a, customW, customH), hint: a === "custom" ? "A custom frame (Record panel, Frame)" : `Record a ${a} frame` }))}
+            onChange={(a) => set({ aspect: a })} disabled={busy} />
         </div>
       </div>
       {picking && <SourcePicker onClose={() => setPicking(false)} />}
@@ -296,11 +303,6 @@ export function RecordPanel() {
     }
   }, [s.mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const setBubble = (p: Partial<typeof s.bubble>) => {
-    const L = currentLayout(s);
-    s.set({ bubble: clampBubble({ ...s.bubble, ...p }, L.width, L.height) });
-  };
-
   if (!hasBridge()) return <div className="cards"><Card className="card-danger"><p className="note note-danger">The recorder needs the desktop app.</p></Card></div>;
 
   const mic = SOURCE_TAG[s.micSource === "fallback" ? "fallback" : s.micSource === "none" ? "none" : "processed"];
@@ -309,36 +311,11 @@ export function RecordPanel() {
 
   return (
     <div className="cards">
-      {(needsScreen(s.mode)) && (
-        <Card title="Layout">
-          {s.mode === "screen-camera" && (
-            <>
-              <div className="row">
-                <span className="row-label">Camera shape</span>
-                <Segmented<BubbleShape> value={s.bubble.shape} options={[{ value: "circle", label: "Circle" }, { value: "rounded", label: "Rounded" }]} onChange={(shape) => setBubble({ shape })} />
-              </div>
-              <Slider label="Camera size" value={s.bubble.size} min={0.12} max={0.5} step={0.01} onChange={(size) => setBubble({ size })} format={(v) => `${Math.round(v * 100)}%`} />
-            </>
-          )}
-          <div className="field">
-            <span className="label">Background</span>
-            <div className="rec-swatches">
-              {BACKGROUNDS.map((b) => (
-                <button key={b.id} type="button" title={b.label} aria-label={b.label} aria-pressed={b.id === s.backgroundId}
-                  className={b.id === s.backgroundId ? "on" : ""} style={{ background: b.id === "none" ? undefined : b.css }} onClick={() => s.set({ backgroundId: b.id })}>
-                  {b.id === "none" ? "None" : ""}
-                </button>
-              ))}
-            </div>
-          </div>
-          {s.backgroundId !== "none" && (
-            <>
-              <Slider label="Padding" value={s.padding} min={0} max={0.12} step={0.005} onChange={(padding) => s.set({ padding })} format={(v) => `${Math.round(v * 100)}%`} />
-              <Slider label="Corners" value={s.cornerRadius} min={0} max={48} step={1} onChange={(cornerRadius) => s.set({ cornerRadius })} format={(v) => `${v}px`} />
-            </>
-          )}
-        </Card>
-      )}
+      <LooksCard />
+      <FrameCard />
+      {(needsScreen(s.mode) || s.cameraFramed) && <BackgroundCard />}
+      <WindowCard />
+      {s.mode === "screen-camera" && <CameraBubbleCard />}
 
       {needsScreen(s.mode) && (
         <Card title="Auto zoom" hint="Zooms in where you click, then eases back out">

@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import ffmpegPath from "ffmpeg-static";
 import { simulateCamera } from "../../renderer/modules/record/zoom-core";
 import {
-  compositeArgs, hasAudioStream, hiresArgs, loudnormFilter, parseLoudnorm, parseProgressTime, parseSilenceTrim,
+  compositeArgs, hasAudioStream, hiresArgs, hiresFrame, loudnormFilter, parseLoudnorm, parseProgressTime, parseSilenceTrim,
   takeFolderName, validTakeId, zoomCommands,
 } from "./ffmpeg-core";
 
@@ -102,5 +102,25 @@ describe.skipIf(!ff)("ffmpeg end to end", () => {
     const probe = spawnSync(ff!, ["-nostdin", "-hide_banner", "-i", join(dir, "take-hires.mp4")], { encoding: "utf8" }).stderr;
     expect(probe).toMatch(/Video: h264.*640x360/);
     expect(probe).toMatch(/Audio: aac/);
+  }, 60_000);
+
+  it("re-renders a cropped screen with a bordered rectangle camera", () => {
+    const crop = { x: 64, y: 0, w: 512, h: 324 };
+    const frame = hiresFrame({ width: 640, height: 360 }, crop);
+    expect(frame).toMatchObject({ W: 512, H: 324 });
+    writeFileSync(join(dir, "zoom2.cmd"), zoomCommands(simulateCamera([{ t: 500, x: 0.4, y: 0.6 }], [], 2000, 30), frame.W, frame.H));
+    const args = hiresArgs({
+      input: "composite.webm", out: "take-hires2.mp4", fps: 30, trim: { start: 0, end: null }, audio: true,
+      screen: "screen.webm", screenSize: { width: 640, height: 360 }, crop, camera: "camera.webm",
+      bubble: { cx: 0.2, cy: 0.75, size: 0.4, shape: "rounded", aspect: 0.75, radius: 0.3, border: 8, borderColor: "#ff0000" }, cmdFile: "zoom2.cmd",
+    });
+    expect(args.join(" ")).toContain("crop=512:324:64:0,");
+    expect(args.join(" ")).toContain("color=c=0xff0000");
+    const r = spawnSync(ff!, args, { cwd: dir, encoding: "utf8", timeout: 60_000 });
+    expect(r.stderr.slice(-400)).not.toMatch(/Error|Invalid/);
+    expect(r.status).toBe(0);
+    const probe = spawnSync(ff!, ["-nostdin", "-hide_banner", "-i", join(dir, "take-hires2.mp4")], { encoding: "utf8" }).stderr;
+    expect(probe).toMatch(/Video: h264.*512x324/);
+    expect(durationOf(join(dir, "take-hires2.mp4"))).toBeGreaterThan(1);
   }, 60_000);
 });

@@ -151,7 +151,7 @@ class Chain {
 export function describeMicError(e: unknown): string {
   const name = (e as { name?: string })?.name ?? "";
   if (name === "NotAllowedError" || name === "SecurityError") {
-    return "Take can't use the microphone. Allow microphone access in Windows Settings, Privacy and security, Microphone, then press Try again.";
+    return "OpenTake can't use the microphone. Allow microphone access in Windows Settings, Privacy and security, Microphone, then press Try again.";
   }
   if (name === "NotFoundError" || name === "OverconstrainedError") return "No microphone found. Plug one in and press Try again.";
   if (name === "NotReadableError" || name === "AbortError") {

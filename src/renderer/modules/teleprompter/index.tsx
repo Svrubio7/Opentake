@@ -188,7 +188,7 @@ export function TeleprompterPanel() {
       </Card>
 
       <Card title={popped ? "Pop-out window" : "Overlay"}
-        hint={popped ? undefined : "If you record the screen Take itself is on, the overlay shows like the rest of Take. Pop it out instead: the window hides itself from screen recordings."}>
+        hint={popped ? undefined : "If you record the screen OpenTake itself is on, the overlay shows like the rest of OpenTake. Pop it out instead: the window hides itself from screen recordings."}>
         <Slider label="Opacity" value={Math.round(settings.window.opacity * 100)} min={20} max={100} step={5} format={(v) => `${v}%`}
           onChange={(v) => setSettings({ window: { ...settings.window, opacity: v / 100 } })} />
         {popped && (

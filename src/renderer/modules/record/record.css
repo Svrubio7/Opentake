@@ -99,3 +99,16 @@
   .rec-src { width: 36px; padding: 0; flex: none; }
   .rec-src span { display: none; }
 }
+
+/* ---------- look settings ---------- */
+.look-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.look-row > .select, .look-row > .input { flex: 1 1 auto; }
+.look-row.end { align-items: flex-end; }
+.look-row.end > .btn { margin-bottom: 1px; }
+.rec-swatches button.wide { width: auto; flex: 1 1 0; min-width: 72px; padding: 0 8px; }
+.swatch-label {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 6px;
+  font-size: 13px; font-weight: 600; color: var(--text); background: color-mix(in srgb, var(--card) 82%, transparent);
+}
+.swatch-label svg { width: 14px; height: 14px; }
+.corner-pick { display: flex; gap: 2px; margin-right: -6px; }

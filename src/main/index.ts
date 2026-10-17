@@ -20,7 +20,7 @@ function createMain() {
     minWidth: 1100,
     minHeight: 700,
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#0a0a0b" : "#f3f4f8",
-    title: "Take",
+    title: "OpenTake",
     // backgroundThrottling off: a minimised window must keep feeding the recorder at full frame rate.
     webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true, backgroundThrottling: false },
   });

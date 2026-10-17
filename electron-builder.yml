@@ -1,7 +1,7 @@
-# Packaging for Take. The GitHub owner/repo is NOT written here: electron-builder reads it
+# Packaging for OpenTake. The GitHub owner/repo is NOT written here: electron-builder reads it
 # from package.json "repository" (the one place to change it).
-appId: app.quetzaltech.take
-productName: Take
+appId: app.quetzaltech.opentake
+productName: OpenTake
 copyright: Copyright © 2026 Quetzal
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
@@ -60,7 +60,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Take
+  shortcutName: OpenTake
   license: LICENSE
 
 portable:
@@ -78,9 +78,9 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    NSCameraUsageDescription: Take uses your camera to record you and to preview the camera look.
-    NSMicrophoneUsageDescription: Take uses your microphone to record and clean up your voice, and for teleprompter voice tracking.
-    NSScreenCaptureUsageDescription: Take records your screen when you choose a screen or window to capture.
+    NSCameraUsageDescription: OpenTake uses your camera to record you and to preview the camera look.
+    NSMicrophoneUsageDescription: OpenTake uses your microphone to record and clean up your voice, and for teleprompter voice tracking.
+    NSScreenCaptureUsageDescription: OpenTake records your screen when you choose a screen or window to capture.
 
 dmg:
   artifactName: ${productName}-${version}-mac-${arch}.${ext}

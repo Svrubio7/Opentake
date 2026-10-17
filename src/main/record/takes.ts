@@ -1,4 +1,4 @@
-// Takes on disk: Documents/Take recordings/<date time>/ with take.json, timeline.json and the tracks.
+// Takes on disk: Documents/OpenTake recordings/<date time>/ with take.json, timeline.json and the tracks.
 import { app } from "electron";
 import { appendFile, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -17,7 +17,7 @@ export interface TakeMeta {
   fps: number;
 }
 
-export const recordingsRoot = () => join(app.getPath("documents"), "Take recordings");
+export const recordingsRoot = () => join(app.getPath("documents"), "OpenTake recordings");
 
 export function takeDir(id: unknown): string {
   if (!validTakeId(id)) throw new Error("bad take id");

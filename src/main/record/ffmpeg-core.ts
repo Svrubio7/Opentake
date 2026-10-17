@@ -1,5 +1,6 @@
 // ffmpeg arguments and output parsing as pure functions (tested in ffmpeg-core.test.ts).
 import type { BubbleLayout, LoudnessTarget } from "../../shared/types";
+import { bubbleAspect, bubbleRadius, parseHex, pxScale } from "../../renderer/modules/record/layout-core";
 import { cropRect, type CameraFrame } from "../../renderer/modules/record/zoom-core";
 
 /** Reads `-progress pipe:1` output; returns the encoded position in ms, or null. */
@@ -89,8 +90,8 @@ export function zoomCommands(frames: CameraFrame[], w: number, h: number, offset
 }
 
 /** Alpha mask for a rounded or round camera bubble, soft by one pixel at the edge. */
-export function bubbleMaskExpr(w: number, h: number, shape: BubbleLayout["shape"]): string {
-  const r = shape === "circle" ? Math.min(w, h) / 2 : Math.round(Math.min(w, h) * 0.18);
+export function bubbleMaskExpr(w: number, h: number, shape: BubbleLayout["shape"], radius?: number): string {
+  const r = shape === "circle" ? Math.min(w, h) / 2 : Math.round(bubbleRadius({ shape, radius }, { w, h }));
   const dx = `max(abs(X-${w / 2})-${w / 2 - r},0)`;
   const dy = `max(abs(Y-${h / 2})-${h / 2 - r},0)`;
   return `clip(255*(${r}+0.5-hypot(${dx},${dy})),0,255)`;
@@ -134,31 +135,59 @@ export interface HiresArgsInput extends EncodeArgsInput {
   camera?: string | null;
   bubble?: BubbleLayout | null;
   cmdFile: string;
+  /** the part of the screen that is kept, in source pixels (the layout's crop) */
+  crop?: { x: number; y: number; w: number; h: number } | null;
 }
 
+/** The hi-res frame: the screen's own size, or the part the crop keeps (null when nothing is cut). */
+export function hiresFrame(screenSize: { width: number; height: number }, crop?: HiresArgsInput["crop"]) {
+  const c = crop && (crop.w < screenSize.width - 1 || crop.h < screenSize.height - 1) ? crop : null;
+  return { c, W: even(c ? c.w : screenSize.width), H: even(c ? c.h : screenSize.height) };
+}
+
+const maskAlpha =(mask: string) => `format=yuva420p,geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='${mask}'`;
+const ffColor = (hex: string | undefined) => `0x${(parseHex(hex ?? "") ?? "#ffffff").slice(1)}`;
+
 /**
- * The screen track at its native resolution, zoom redone from the click timeline (sendcmd drives
- * the crop, scale brings each frame back to full size), the camera bubble laid over it, and the
- * sound from the composite take. `input` is the composite file (audio source).
+ * The screen track at its native resolution (inside the layout's crop), zoom redone from the click
+ * timeline (sendcmd drives the crop, scale brings each frame back to full size), the camera bubble
+ * laid over it with its shape and border, and the sound from the composite take.
+ * `input` is the composite file (audio source).
  */
 export function hiresArgs(o: HiresArgsInput): string[] {
-  const W = even(o.screenSize.width), H = even(o.screenSize.height);
-  const parts = [`[0:v]fps=${o.fps},sendcmd=f=${o.cmdFile},crop@zoom=w=${W}:h=${H}:x=0:y=0,scale=${W}:${H}:flags=lanczos,setsar=1[base]`];
+  const { c, W, H } = hiresFrame(o.screenSize, o.crop);
+  const at = (v: number) => Math.max(0, Math.round(v / 2) * 2);
+  const cut = c ? `crop=${W}:${H}:${at(c.x)}:${at(c.y)},` : "";
+  const parts = [`[0:v]fps=${o.fps},${cut}sendcmd=f=${o.cmdFile},crop@zoom=w=${W}:h=${H}:x=0:y=0,scale=${W}:${H}:flags=lanczos,setsar=1[base]`];
   const inputs = [...trimArgs(o.trim), "-i", o.screen];
   let last = "base";
   let audioIdx = 1;
   if (o.camera && o.bubble) {
     inputs.push(...trimArgs(o.trim), "-i", o.camera);
     audioIdx = 2;
-    const bw = even(o.bubble.size * Math.min(W, H));
-    const bh = o.bubble.shape === "circle" ? bw : even((bw * 3) / 4);
-    const x = Math.round(Math.min(W - bw, Math.max(0, o.bubble.cx * W - bw / 2)));
-    const y = Math.round(Math.min(H - bh, Math.max(0, o.bubble.cy * H - bh / 2)));
-    parts.push(
-      `[1:v]fps=${o.fps},scale=${bw}:${bh}:force_original_aspect_ratio=increase,crop=${bw}:${bh},format=yuva420p,` +
-        `geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='${bubbleMaskExpr(bw, bh, o.bubble.shape)}'[cam]`,
-      `[base][cam]overlay=${x}:${y}[out]`,
-    );
+    const b = o.bubble;
+    const bw = even(b.size * Math.min(W, H));
+    const bh = b.shape === "circle" ? bw : even(bw / bubbleAspect(b));
+    const x = Math.round(Math.min(W - bw, Math.max(0, b.cx * W - bw / 2)));
+    const y = Math.round(Math.min(H - bh, Math.max(0, b.cy * H - bh / 2)));
+    const r = bubbleRadius(b, { w: bw, h: bh });
+    // the border is a ring of colour the size of the bubble, with the picture set inside it
+    const border = Math.min(Math.round((b.border ?? 0) * pxScale(W, H)), Math.floor(Math.min(bw, bh) / 4));
+    if (border > 0) {
+      const iw = even(bw - border * 2), ih = even(bh - border * 2);
+      parts.push(
+        `color=c=${ffColor(b.borderColor)}:s=${bw}x${bh}:r=${o.fps},${maskAlpha(bubbleMaskExpr(bw, bh, b.shape, b.radius))}[ring]`,
+        `[1:v]fps=${o.fps},scale=${iw}:${ih}:force_original_aspect_ratio=increase,crop=${iw}:${ih},` +
+          maskAlpha(bubbleMaskExpr(iw, ih, b.shape === "circle" ? "circle" : "rounded", b.shape === "circle" ? undefined : Math.max(0, r - border) / Math.min(iw, ih))) + "[cam]",
+        `[base][ring]overlay=${x}:${y}:shortest=1[ringed]`,
+        `[ringed][cam]overlay=${x + Math.round((bw - iw) / 2)}:${y + Math.round((bh - ih) / 2)}[out]`,
+      );
+    } else {
+      parts.push(
+        `[1:v]fps=${o.fps},scale=${bw}:${bh}:force_original_aspect_ratio=increase,crop=${bw}:${bh},${maskAlpha(bubbleMaskExpr(bw, bh, b.shape, b.radius))}[cam]`,
+        `[base][cam]overlay=${x}:${y}[out]`,
+      );
+    }
     last = "out";
   }
   if (o.audio) inputs.push(...trimArgs(o.trim), "-i", o.input);

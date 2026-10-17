@@ -106,7 +106,7 @@ function openPrompter(getMain: () => BrowserWindow | null) {
     skipTaskbar: false,
     fullscreenable: false,
     backgroundColor: "#000000",
-    title: "Take Prompter",
+    title: "OpenTake Prompter",
     show: false,
     webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true, backgroundThrottling: false },
   });

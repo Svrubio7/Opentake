@@ -1,4 +1,4 @@
-/* Take's design system: the Quetzal app's tokens and primitives (Quetzal DESIGN.md + app/globals.css).
+/* OpenTake's design system: the Quetzal app's tokens and primitives (Quetzal DESIGN.md + app/globals.css).
    Light first: tinted canvas, white cards, pure black ink, one emerald accent that only marks state.
    Every component reads these variables, never a raw hex. Dark mode follows the system. */
 
@@ -288,3 +288,32 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* ---------- colour, number and fold-away fields ---------- */
+.color-field.disabled, .number-field.disabled { opacity: 0.5; }
+.color-control { display: inline-flex; align-items: center; gap: 10px; }
+.color-hex { font-size: 14px; color: var(--muted); }
+.color-control input[type="color"] {
+  width: 36px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: none; cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--card-border);
+}
+.color-control input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.color-control input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.number-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 0; }
+.number-control { position: relative; display: flex; }
+.number-control .input { padding-right: 34px; }
+.number-suffix { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; color: var(--faint); pointer-events: none; }
+.number-control input::-webkit-inner-spin-button { opacity: 0.6; }
+.disclosure { border-top: 1px solid var(--card-border); padding-top: 12px; }
+.disclosure > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+  font-size: 15px; color: var(--muted); border-radius: 6px;
+}
+.disclosure > summary::-webkit-details-marker { display: none; }
+.disclosure > summary::after {
+  content: ""; width: 8px; height: 8px; border-right: 1.75px solid currentColor; border-bottom: 1.75px solid currentColor;
+  transform: rotate(45deg) translate(-2px, -2px); transition: transform var(--t) var(--ease);
+}
+.disclosure[open] > summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+.disclosure > summary:hover { color: var(--text); }
+.disclosure-body { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; }

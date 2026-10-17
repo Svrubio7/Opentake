@@ -20,7 +20,7 @@ export function App() {
       <nav className="rail" aria-label="Sections">
         <div className="rail-brand">
           <img src={markWhite} alt="" className="rail-mark" />
-          <span className="rail-label rail-brand-text"><b>Take</b><small>by Quetzal</small></span>
+          <span className="rail-label rail-brand-text"><b>OpenTake</b><small>by Quetzal</small></span>
         </div>
         {TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} type="button" className={id === tab ? "rail-item on" : "rail-item"} onClick={() => setTab(id)}

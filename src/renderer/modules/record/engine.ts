@@ -1,9 +1,12 @@
 // The live compositor: screen, camera bubble, frame and auto zoom drawn into one canvas.
 // The canvas IS the recording (recorder.ts captures it), so the stage shows exactly what is recorded.
 import { getStream, publishStream, subscribeStreams } from "@core/streams";
-import type { CursorSample } from "@shared/types";
+import type { BubbleLayout, CursorSample } from "@shared/types";
 import { api, hasBridge } from "./api";
-import { BACKGROUNDS, bubbleRect, coverCrop, needsCamera, needsScreen, screenRect } from "./layout-core";
+import {
+  bubbleRadius, bubbleRect, cameraWindowRect, coverCrop, cropSource, gradientLine, needsCamera, needsScreen, pxScale,
+  resolveBackground, screenRect, toCropSpace, type Rect,
+} from "./layout-core";
 import { currentLayout, useRecord } from "./store";
 import { DEFAULT_ZOOM, DwellDetector, LiveZoom, type Pt } from "./zoom-core";
 
@@ -53,17 +56,21 @@ class Compositor {
     });
     this.zoom.opts = { ...this.zoom.opts, scale: useRecord.getState().zoomScale };
     if (hasBridge()) {
+      // the zoom and the ripples live in the cropped picture's space; listeners (the timeline) get
+      // the raw display position, and the hi-res export applies the crop itself
       api.onClick((e) => {
-        this.zoom.click(e, e.t);
-        this.ripples.push({ x: e.x, y: e.y, t: e.t });
+        const p = toCropSpace(e, useRecord.getState().crop);
+        this.zoom.click(p, e.t);
+        this.ripples.push({ x: p.x, y: p.y, t: e.t });
         this.listeners.forEach((l) => l.click?.(e));
       });
       api.onCursor((samples) => {
+        const crop = useRecord.getState().crop;
         const last = samples[samples.length - 1];
-        if (last) { this.cursor = last; this.zoom.move(last.t); }
+        if (last) { this.cursor = toCropSpace(last, crop); this.zoom.move(last.t); }
         if (!useRecord.getState().tracking?.hooks) {
           for (const s of samples) {
-            const c = this.dwell.push(s);
+            const c = this.dwell.push(toCropSpace(s, crop));
             if (c) this.zoom.click(c, s.t);
           }
         }
@@ -170,6 +177,10 @@ class Compositor {
 
   // ---- drawing ----
 
+  /** The background is painted once into its own canvas and reused until it or the frame changes. */
+  private bgCache: { key: string; canvas: HTMLCanvasElement } | null = null;
+  private bgImage: { src: string; img: HTMLImageElement; loaded: boolean } | null = null;
+
   private draw() {
     const st = useRecord.getState();
     const L = currentLayout(st);
@@ -177,117 +188,198 @@ class Compositor {
     if (this.canvas.width !== W || this.canvas.height !== H) { this.canvas.width = W; this.canvas.height = H; }
     const ctx = this.ctx;
     const now = Date.now();
+    const k = pxScale(W, H);
     if (!st.tracking?.hooks) { const c = this.dwell.tick(now); if (c) this.zoom.click(c, now); }
 
     if (L.mode === "camera") {
+      const cv = this.cameraVideo;
+      if (L.padding > 0 || (L.screenScale ?? 1) < 1) {
+        // the camera alone in a window over the background, styled like the screen window
+        this.paintBackground(W, H);
+        const r = cameraWindowRect(L);
+        const radius = L.cornerRadius * k;
+        this.frameShadow(r, radius, L.screenShadow ?? 0, k);
+        ctx.save();
+        this.roundRect(r.x, r.y, r.w, r.h, radius);
+        ctx.clip();
+        ctx.fillStyle = "#000";
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        if (ready(cv)) {
+          const c = coverCrop(cv.videoWidth, cv.videoHeight, r.w, r.h);
+          ctx.drawImage(cv, c.x, c.y, c.w, c.h, r.x, r.y, r.w, r.h);
+        }
+        ctx.restore();
+        this.frameBorder(r, radius, (L.screenBorder ?? 0) * k, L.screenBorderColor);
+        if (!ready(cv)) this.hint("Waiting for the camera");
+        return;
+      }
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, W, H);
-      if (ready(this.cameraVideo)) {
-        const c = coverCrop(this.cameraVideo.videoWidth, this.cameraVideo.videoHeight, W, H);
-        ctx.drawImage(this.cameraVideo, c.x, c.y, c.w, c.h, 0, 0, W, H);
+      if (ready(cv)) {
+        const c = coverCrop(cv.videoWidth, cv.videoHeight, W, H);
+        ctx.drawImage(cv, c.x, c.y, c.w, c.h, 0, 0, W, H);
       } else this.hint("Waiting for the camera");
       return;
     }
 
-    this.paintBackground(L.background, W, H);
+    this.paintBackground(W, H);
     const sv = this.screenVideo;
     if (needsScreen(L.mode) && ready(sv)) {
       const vw = sv.videoWidth, vh = sv.videoHeight;
-      const r = screenRect(L, vw, vh);
+      // the kept part of the screen, then the zoom inside it
+      const src = cropSource(L.crop, vw, vh);
+      const r = screenRect(L, src.w, src.h);
       const f = L.zoom.enabled && st.tracking?.normalized ? this.zoom.update(now, this.cursor) : { scale: 1, x: 0.5, y: 0.5 };
-      const sw = vw / f.scale, sh = vh / f.scale;
-      const sx = Math.min(vw - sw, Math.max(0, f.x * vw - sw / 2));
-      const sy = Math.min(vh - sh, Math.max(0, f.y * vh - sh / 2));
-      const radius = L.padding > 0 ? L.cornerRadius : 0;
-      if (L.padding > 0) {
-        ctx.save();
-        ctx.shadowColor = "rgba(0,0,0,0.45)";
-        ctx.shadowBlur = 48;
-        ctx.shadowOffsetY = 16;
-        ctx.fillStyle = "#000";
-        this.roundRect(r.x, r.y, r.w, r.h, radius);
-        ctx.fill();
-        ctx.restore();
-      }
+      const sw = src.w / f.scale, sh = src.h / f.scale;
+      const sx = src.x + Math.min(src.w - sw, Math.max(0, f.x * src.w - sw / 2));
+      const sy = src.y + Math.min(src.h - sh, Math.max(0, f.y * src.h - sh / 2));
+      const radius = L.cornerRadius * k;
+      this.frameShadow(r, radius, L.screenShadow ?? 0, k);
       ctx.save();
       this.roundRect(r.x, r.y, r.w, r.h, radius);
       ctx.clip();
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(sv, sx, sy, sw, sh, r.x, r.y, r.w, r.h);
-      this.drawRipples(now, r, { sx: sx / vw, sy: sy / vh, sw: sw / vw, sh: sh / vh });
+      this.drawRipples(now, r, { sx: (sx - src.x) / src.w, sy: (sy - src.y) / src.h, sw: sw / src.w, sh: sh / src.h }, k);
       ctx.restore();
+      this.frameBorder(r, radius, (L.screenBorder ?? 0) * k, L.screenBorderColor);
     } else if (needsScreen(L.mode)) {
       this.hint(st.sourceId ? "Starting the screen capture" : "Pick a screen or a window to record");
     }
 
-    if (L.mode === "screen-camera") this.drawBubble(L.bubble, W, H);
+    if (L.mode === "screen-camera") this.drawBubble(L.bubble, W, H, k);
   }
 
-  private paintBackground(id: string, W: number, H: number) {
+  private paintBackground(W: number, H: number) {
+    const st = useRecord.getState();
+    const spec = resolveBackground({ id: st.backgroundId, color: st.bgColor, color2: st.bgColor2, angle: st.bgAngle, image: st.bgImage, blur: st.bgBlur });
+    if (spec.kind === "image" && this.bgImage?.src !== spec.src) {
+      const img = new Image();
+      const entry = { src: spec.src, img, loaded: false };
+      img.onload = () => { entry.loaded = true; this.bgCache = null; };
+      img.src = spec.src;
+      this.bgImage = entry;
+    }
+    const imageReady = spec.kind === "image" && !!this.bgImage?.loaded;
+    // the picture itself is keyed by identity (its data URL is long), the rest by value
+    const key = spec.kind === "image"
+      ? `${W}x${H}|image|${spec.blur}|${spec.color}|${spec.src.length}:${spec.src.slice(-64)}|${imageReady}`
+      : `${W}x${H}|${JSON.stringify(spec)}`;
+    if (this.bgCache?.key !== key) {
+      const c = this.bgCache?.canvas ?? document.createElement("canvas");
+      c.width = W; c.height = H;
+      const g = c.getContext("2d")!;
+      if (spec.kind === "gradient") {
+        const l = gradientLine(spec.angle, W, H);
+        const grad = g.createLinearGradient(l.x0, l.y0, l.x1, l.y1);
+        spec.stops.forEach((s, i) => grad.addColorStop(i / Math.max(1, spec.stops.length - 1), s));
+        g.fillStyle = grad;
+      } else g.fillStyle = spec.color;
+      g.fillRect(0, 0, W, H);
+      if (spec.kind === "image" && imageReady && this.bgImage) {
+        const img = this.bgImage.img;
+        const blur = spec.blur * pxScale(W, H);
+        // drawn a little larger when blurred, so the soft edge falls outside the frame
+        const grow = blur * 2;
+        const crop = coverCrop(img.naturalWidth, img.naturalHeight, W, H);
+        g.filter = blur > 0 ? `blur(${blur}px)` : "none";
+        g.drawImage(img, crop.x, crop.y, crop.w, crop.h, -grow, -grow, W + grow * 2, H + grow * 2);
+        g.filter = "none";
+      }
+      this.bgCache = { key, canvas: c };
+    }
+    this.ctx.drawImage(this.bgCache.canvas, 0, 0);
+  }
+
+  private frameShadow(r: Rect, radius: number, amount: number, k: number) {
+    if (amount <= 0) return;
     const ctx = this.ctx;
-    const bg = BACKGROUNDS.find((b) => b.id === id) ?? BACKGROUNDS[0];
-    if (bg.stops.length > 1) {
-      const g = ctx.createLinearGradient(0, 0, W, H);
-      bg.stops.forEach((c, i) => g.addColorStop(i / (bg.stops.length - 1), c));
-      ctx.fillStyle = g;
-    } else ctx.fillStyle = bg.stops[0];
-    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    ctx.shadowColor = `rgba(0,0,0,${(0.25 + 0.35 * amount).toFixed(3)})`;
+    ctx.shadowBlur = 64 * amount * k;
+    ctx.shadowOffsetY = 20 * amount * k;
+    ctx.fillStyle = "#000";
+    this.roundRect(r.x, r.y, r.w, r.h, radius);
+    ctx.fill();
+    ctx.restore();
   }
 
-  private drawRipples(now: number, r: { x: number; y: number; w: number; h: number }, view: { sx: number; sy: number; sw: number; sh: number }) {
+  /** A border drawn inside the window's edge, so it never changes the window's size. */
+  private frameBorder(r: Rect, radius: number, width: number, color: string | undefined) {
+    if (width <= 0) return;
+    const ctx = this.ctx;
+    const h = width / 2;
+    ctx.save();
+    this.roundRect(r.x + h, r.y + h, r.w - width, r.h - width, Math.max(0, radius - h));
+    ctx.lineWidth = width;
+    ctx.strokeStyle = color || "#ffffff";
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawRipples(now: number, r: Rect, view: { sx: number; sy: number; sw: number; sh: number }, k: number) {
     const ctx = this.ctx;
     this.ripples = this.ripples.filter((p) => now - p.t < 600);
     for (const p of this.ripples) {
-      const k = (now - p.t) / 600;
+      const t = (now - p.t) / 600;
       const x = r.x + ((p.x - view.sx) / view.sw) * r.w;
       const y = r.y + ((p.y - view.sy) / view.sh) * r.h;
       ctx.beginPath();
-      ctx.arc(x, y, 14 + 34 * k, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255,255,255,${0.75 * (1 - k)})`;
-      ctx.lineWidth = 4;
+      ctx.arc(x, y, (14 + 34 * t) * k, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,255,255,${0.75 * (1 - t)})`;
+      ctx.lineWidth = 4 * k;
       ctx.stroke();
-      ctx.fillStyle = `rgba(255,255,255,${0.18 * (1 - k)})`;
+      ctx.fillStyle = `rgba(255,255,255,${0.18 * (1 - t)})`;
       ctx.fill();
     }
   }
 
-  private bubblePath(b: ReturnType<typeof bubbleRect>, shape: "circle" | "rounded") {
-    if (shape === "circle") {
-      this.ctx.beginPath();
-      this.ctx.arc(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, 0, Math.PI * 2);
-    } else this.roundRect(b.x, b.y, b.w, b.h, Math.min(b.w, b.h) * 0.18);
-  }
-
-  private drawBubble(layout: { cx: number; cy: number; size: number; shape: "circle" | "rounded" }, W: number, H: number) {
+  private drawBubble(layout: BubbleLayout, W: number, H: number, k: number) {
     const ctx = this.ctx;
     const b = bubbleRect(layout, W, H);
+    const radius = bubbleRadius(layout, b);
+    const shadow = layout.shadow ?? 0.6;
+    if (shadow > 0) {
+      ctx.save();
+      ctx.shadowColor = `rgba(0,0,0,${(0.3 + 0.3 * shadow).toFixed(3)})`;
+      ctx.shadowBlur = 56 * shadow * k;
+      ctx.shadowOffsetY = 16 * shadow * k;
+      ctx.fillStyle = "#1b1b1e";
+      this.roundRect(b.x, b.y, b.w, b.h, radius);
+      ctx.fill();
+      ctx.restore();
+    }
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = 40;
-    ctx.shadowOffsetY = 12;
-    ctx.fillStyle = "#1b1b1e";
-    this.bubblePath(b, layout.shape);
-    ctx.fill();
-    ctx.restore();
-    ctx.save();
-    this.bubblePath(b, layout.shape);
+    this.roundRect(b.x, b.y, b.w, b.h, radius);
     ctx.clip();
+    ctx.fillStyle = "#1b1b1e";
+    ctx.fillRect(b.x, b.y, b.w, b.h);
     if (ready(this.cameraVideo)) {
       const c = coverCrop(this.cameraVideo.videoWidth, this.cameraVideo.videoHeight, b.w, b.h);
       ctx.drawImage(this.cameraVideo, c.x, c.y, c.w, c.h, b.x, b.y, b.w, b.h);
     }
     ctx.restore();
-    this.bubblePath(b, layout.shape);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = this.bubbleHover && useRecord.getState().status === "idle" ? "rgba(61,220,151,0.9)" : "rgba(255,255,255,0.18)";
-    ctx.stroke();
+    const border = (layout.border ?? 0) * k;
+    if (border > 0) this.frameBorder(b, radius, border, layout.borderColor);
+    if (this.bubbleHover && useRecord.getState().status === "idle") {
+      // the drag outline only shows between takes
+      this.roundRect(b.x, b.y, b.w, b.h, radius);
+      ctx.lineWidth = 3 * k;
+      ctx.strokeStyle = "rgba(61,220,151,0.9)";
+      ctx.stroke();
+    } else if (border <= 0) {
+      this.roundRect(b.x, b.y, b.w, b.h, radius);
+      ctx.lineWidth = 2 * k;
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.stroke();
+    }
   }
 
   private roundRect(x: number, y: number, w: number, h: number, r: number) {
     const ctx = this.ctx;
     ctx.beginPath();
     if (r <= 0) ctx.rect(x, y, w, h);
-    else ctx.roundRect(x, y, w, h, r);
+    else ctx.roundRect(x, y, w, h, Math.min(r, w / 2, h / 2));
   }
 
   private hint(text: string) {

@@ -44,11 +44,33 @@ export interface CursorSample { x: number; y: number; t: number }
 export interface ClickTrackingStatus { hooks: boolean; normalized: boolean; reason?: string }
 
 export type RecordMode = "camera" | "screen-camera" | "screen";
-export type OutputAspect = "16:9" | "9:16" | "1:1";
+export type OutputAspect = "16:9" | "9:16" | "1:1" | "4:3" | "4:5" | "custom";
+/** The output's shorter side in pixels (a custom size sets both sides itself). */
+export type OutputQuality = 720 | 1080 | 1440 | 2160;
 export type BubbleShape = "circle" | "rounded";
 
-/** Camera bubble placement in output space: centre and width as fractions of the output frame. */
-export interface BubbleLayout { cx: number; cy: number; size: number; shape: BubbleShape }
+/**
+ * Camera bubble placement in output space: centre as fractions of the frame, width as a fraction of
+ * its shorter side. The optional fields came after v1.0.0: without them a bubble is the old 4:3 one.
+ */
+export interface BubbleLayout {
+  cx: number;
+  cy: number;
+  size: number;
+  shape: BubbleShape;
+  /** rounded only: width / height (4:3 by default) */
+  aspect?: number;
+  /** rounded only: corner radius as a fraction of the shorter side, 0 square to 0.5 pill */
+  radius?: number;
+  /** border width in pixels at 1080p (scaled with the output) */
+  border?: number;
+  borderColor?: string;
+  /** drop shadow strength, 0 to 1 */
+  shadow?: number;
+}
+
+/** What is cut off each edge of the captured screen, as fractions of its width or height. */
+export interface FrameCrop { top: number; right: number; bottom: number; left: number }
 
 export interface RecordLayout {
   mode: RecordMode;
@@ -59,10 +81,21 @@ export interface RecordLayout {
   bubble: BubbleLayout;
   /** padding around the screen as a fraction of the shorter output side (0 = edge to edge) */
   padding: number;
-  /** screen corner radius in output pixels */
+  /** screen corner radius in pixels at 1080p (scaled with the output) */
   cornerRadius: number;
   background: string;
   zoom: { enabled: boolean; scale: number };
+  /** the screen window's size inside the padding, 0.3 to 1 (1 = as large as fits) */
+  screenScale?: number;
+  /** where a smaller window sits in the room left over: -1 left/top, 0 centre, 1 right/bottom */
+  screenPosition?: { x: number; y: number };
+  /** drop shadow strength of the screen window, 0 to 1 */
+  screenShadow?: number;
+  /** border width of the screen window in pixels at 1080p */
+  screenBorder?: number;
+  screenBorderColor?: string;
+  /** cut off the edges of the captured screen (a taskbar, a browser's tabs) */
+  crop?: FrameCrop;
 }
 
 /** Saved beside a take as timeline.json; times are ms on the recording clock (pauses removed). */
