@@ -148,8 +148,9 @@ export function OpenInEditor({ take, compact }: { take: TakeInfo; compact?: bool
   };
   if (compact) {
     return (
-      <Button variant="ghost" size="sm" disabled={busy || !take.files.composite} title="Write a timeline for FilmCraft, DaVinci Resolve, Premiere or Final Cut (.otio and .fcpxml), with your cuts and markers"
-        onClick={() => void run({ layout: "composite", compatibleMedia: false })}><Clapperboard />{busy ? "Writing..." : "Open in an editor"}</Button>
+      <Button variant="ghost" size="icon-sm" disabled={busy || !take.files.composite} aria-label="Open in an editor"
+        title={msg ?? "Open in an editor: write a timeline for FilmCraft, DaVinci Resolve, Premiere or Final Cut (.otio and .fcpxml) with your cuts and markers"}
+        onClick={() => void run({ layout: "composite", compatibleMedia: false })}><Clapperboard /></Button>
     );
   }
   return (
