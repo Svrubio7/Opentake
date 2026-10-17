@@ -7,7 +7,7 @@ import ffmpegPath from "ffmpeg-static";
 import { simulateCamera } from "../../renderer/modules/record/zoom-core";
 import {
   compositeArgs, hasAudioStream, hiresArgs, hiresFrame, loudnormFilter, parseLoudnorm, parseProgressTime, parseSilenceTrim,
-  takeFolderName, validTakeId, zoomCommands,
+  takeFolderName, validTakeId, zoomChainRect, zoomCommands,
 } from "./ffmpeg-core";
 
 describe("parsing", () => {
@@ -55,7 +55,39 @@ describe("parsing", () => {
     ];
     const s = zoomCommands(frames, 1920, 1080).trim().split("\n");
     expect(s).toHaveLength(2);
-    expect(s[1]).toBe("0.066 crop@zoom w 960, crop@zoom h 540, crop@zoom x 0, crop@zoom y 0;");
+    expect(s[1]).toBe("0.050 crop@zin w 962, crop@zin h 542, crop@zin x 0, crop@zin y 0, scale@zs w 1924, scale@zs h 1084, crop@zout x 0, crop@zout y 0;");
+  });
+  it("times every line before its frame (a line at 0.067 for a frame at 66.667 ms lands a frame late)", () => {
+    const frames = Array.from({ length: 90 }, (_, i) => ({ t: (i * 1000) / 30, scale: 1 + i / 100, x: 0.5, y: 0.5 }));
+    const times = zoomCommands(frames, 1920, 1080).trim().split("\n").map((l) => Number(l.split(" ")[0]));
+    times.slice(1).forEach((t, i) => {
+      const frameT = (i + 1) / 30;
+      expect(t).toBeLessThan(frameT);
+      expect(t).toBeGreaterThan(frameT - 1 / 30);
+    });
+  });
+  it("places the zoomed view within half an output pixel of the camera (a crop alone is off by up to 2 source pixels)", () => {
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (const [w, h] of [[1920, 1080], [3840, 2160], [1366, 768]]) {
+      for (let i = 0; i < 500; i++) {
+        const f = { scale: 1 + rnd() * 1.4, x: rnd(), y: rnd() };
+        const r = zoomChainRect(f, w, h);
+        expect(r.crop.w % 2 + r.crop.h % 2 + r.crop.x % 2 + r.crop.y % 2).toBe(0);
+        expect(r.crop.x + r.crop.w).toBeLessThanOrEqual(w);
+        expect(r.crop.y + r.crop.h).toBeLessThanOrEqual(h);
+        expect(r.out.x + w).toBeLessThanOrEqual(r.scale.w);
+        expect(r.out.y + h).toBeLessThanOrEqual(r.scale.h);
+        // where two source points land in the output, against the exact camera
+        const cw = w / f.scale, L = Math.min(w - cw, Math.max(0, f.x * w - cw / 2));
+        const ch = h / f.scale, T = Math.min(h - ch, Math.max(0, f.y * h - ch / 2));
+        for (const [px, py] of [[L, T], [L + cw, T + ch]]) {
+          const ux = (px - r.crop.x) * (r.scale.w / r.crop.w) - r.out.x, uy = (py - r.crop.y) * (r.scale.h / r.crop.h) - r.out.y;
+          expect(Math.abs(ux - (px - L) * f.scale)).toBeLessThan(1.6);
+          expect(Math.abs(uy - (py - T) * f.scale)).toBeLessThan(1.6);
+        }
+      }
+    }
   });
   it("sets the hi-res length outright and never uses -shortest", () => {
     const base = { input: "c.webm", out: "o.mp4", fps: 30, trim: { start: 0, end: null }, audio: true, screen: "s.webm", screenSize: { width: 640, height: 360 }, cmdFile: "z.cmd" };
@@ -65,7 +97,7 @@ describe("parsing", () => {
   });
   it("starts the script at zero after a trim", () => {
     const frames = [{ t: 0, scale: 2, x: 0.5, y: 0.5 }, { t: 2000, scale: 2, x: 0.5, y: 0.5 }];
-    expect(zoomCommands(frames, 100, 100, 1000).startsWith("0.000 crop@zoom w 50")).toBe(true);
+    expect(zoomCommands(frames, 100, 100, 1000).startsWith("0.000 crop@zin w 56")).toBe(true);
   });
 });
 
