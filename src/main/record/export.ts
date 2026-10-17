@@ -1,5 +1,5 @@
 // MP4 export with ffmpeg-static: optional silence trim, two-pass loudnorm, progress from -progress.
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import ffmpegStatic from "ffmpeg-static";
@@ -11,6 +11,7 @@ import {
   parseSilenceTrim, zoomCommands,
 } from "./ffmpeg-core";
 import { exportEdited, wantsEditedExport } from "./export-edit";
+import { runWatched } from "./ffmpeg-run";
 import { readMeta, readTimeline, takeDir, takeFiles, type TakeMeta } from "./takes";
 
 // inside a packaged app the binary lives in app.asar.unpacked
@@ -22,20 +23,11 @@ const cancelled = new Set<string>();
 export function run(takeId: string, args: string[], cwd: string, onStdout?: (s: string) => void): Promise<{ code: number; stderr: string }> {
   return new Promise((resolve, reject) => {
     if (cancelled.has(takeId)) return reject(new Error("Export cancelled"));
-    const p = spawn(ffmpegPath(), args, { cwd, windowsHide: true });
-    running.set(takeId, p);
-    let stderr = "";
-    p.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString();
-      if (stderr.length > 2_000_000) stderr = stderr.slice(-1_000_000);
-    });
-    p.stdout.on("data", (d: Buffer) => onStdout?.(d.toString()));
-    p.on("error", reject);
-    p.on("close", (code) => {
-      running.delete(takeId);
-      if (cancelled.has(takeId)) reject(new Error("Export cancelled"));
-      else resolve({ code: code ?? -1, stderr });
-    });
+    // a run that stops moving is stopped with an error instead of hanging (ffmpeg-run.ts)
+    runWatched(ffmpegPath(), args, { cwd, onStdout, onSpawn: (p) => running.set(takeId, p) }).then(
+      (r) => { running.delete(takeId); if (cancelled.has(takeId)) reject(new Error("Export cancelled")); else resolve(r); },
+      (e) => { running.delete(takeId); reject(cancelled.has(takeId) ? new Error("Export cancelled") : e); },
+    );
   });
 }
 

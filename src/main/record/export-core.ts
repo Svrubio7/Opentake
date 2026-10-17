@@ -147,6 +147,8 @@ export interface EditExportInput {
   /** ASS file and fonts folder, relative to the working directory (the take folder) */
   burn?: { ass: string; fontsDir?: string } | null;
   out: string;
+  /** the edited length in seconds (stops both streams together; the screen and the sound can differ by a frame) */
+  limitSec?: number | null;
   /** two-pass encoding for a target size */
   pass?: { n: 1 | 2; log: string; kbps: number } | null;
 }
@@ -212,7 +214,8 @@ export function editExportArgs(p: EditExportInput): string[] {
     ...inputs,
     "-filter_complex", parts.join(";"),
     ...maps, ...codec,
-    ...(p.source.kind === "hires" ? ["-shortest"] : []),
+    // the export's length, set outright: -shortest with this graph (concat, loudnorm) could deadlock at the end
+    ...(p.limitSec && Number.isFinite(p.limitSec) ? ["-t", p.limitSec.toFixed(3)] : []),
     "-progress", "pipe:1", "-nostats",
     ...target,
   ];

@@ -113,7 +113,7 @@ export async function exportEdited(o: ExportOptions, c: EditedContext): Promise<
     const t = parseProgressTime(s);
     if (t != null) progress(stage, Number.isFinite(encodeMs) && encodeMs > 0 ? Math.min(to, from + (to - from) * (t / encodeMs)) : null);
   };
-  const base = { source, srcSize, audio, keep, loudness, output, burn, out };
+  const base = { source, srcSize, audio, keep, loudness, output, burn, out, limitSec: Number.isFinite(encodeMs) && encodeMs > 0 ? encodeMs / 1000 : null };
 
   try {
     if (output.quality.mode === "size" && output.format !== "gif") {
