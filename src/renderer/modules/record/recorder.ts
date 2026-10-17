@@ -74,6 +74,8 @@ function trackStopped(track: RecordTrack, reason = ""): string {
 
 // a message from main that ends in "Settings" / "Ajustes" names its own fix
 const SETTINGS_HINT = /Settings|Ajustes/;
+/** How long after the computer sound opens the camera picture may still be stalled by it. */
+const SOUND_OPEN_STALL_MS = 3000;
 /** How long GPU readbacks wait while a recorder sets up its encoder (measured stall: ~470 ms). */
 const ENCODER_START_MS = 1000;
 
@@ -226,8 +228,10 @@ async function begin() {
     await checkDiskBeforeTake();
     const mic = await getMicTracks(owned);
     const sysAudio = systemAudioWanted(layout.mode, s) ? await takeSystemAudio(mic, cleanup, delay.delayMs) : null;
-    // the first opening of the computer sound stalls the camera picture for a moment: start after it
-    if (sysAudio && needsCamera(layout.mode)) await comp.steadyCamera();
+    // opening the computer sound stalls the camera picture for a moment: a take that starts right
+    // after it opened starts once the picture is steady again. A sound that has been open for a
+    // while (the panel's meter keeps it open) has nothing to wait for.
+    if (sysAudio && needsCamera(layout.mode) && performance.now() - systemSound().openedAt < SOUND_OPEN_STALL_MS) await comp.steadyCamera();
     const canvasTrack = comp.captureTrack(layout.fps);
     owned.push(canvasTrack);
     // a delayed take's composite sound is delayed inside the graph that makes it (the computer sound

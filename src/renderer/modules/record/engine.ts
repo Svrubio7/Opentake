@@ -9,7 +9,7 @@ import { api, hasBridge } from "./api";
 import {
   coverCrop, cropSource, gradientLine, needsCamera, needsScreen, pxScale, resolveBackground, toCropSpace, type Rect,
 } from "./layout-core";
-import { FramePacer, TICK_MS } from "./pace-core";
+import { FramePacer, SteadyFrames, TICK_MS } from "./pace-core";
 import { frameDrawn } from "@core/gpu-quiet";
 import { History, capStore, largerStore, planDelay, ringSlots, scaleStore, storeSize } from "./delay-core";
 import { FrameRing, type StoredFrame } from "./frame-ring";
@@ -250,22 +250,24 @@ class Compositor {
    * Resolves once the camera picture arrives steadily again (three frames, none more than
    * STEADY_GAP_MS apart), or after maxMs. Opening the computer sound the first time stalls the
    * picture for a moment; a take started inside that stall began with its camera frozen.
+   * The frames are counted on the video itself, on the compositor's worker tick: a
+   * requestVideoFrameCallback never fires while the window paints nothing (minimized, covered),
+   * which held every such take's start for the whole maxMs.
    */
   steadyCamera(maxMs = 1000): Promise<void> {
-    const v = this.cameraVideo as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
-    if (!ready(v) || !v.requestVideoFrameCallback) return Promise.resolve();
+    const v = this.cameraVideo as HTMLVideoElement & { webkitDecodedFrameCount?: number };
+    const count = () => v.webkitDecodedFrameCount ?? v.getVideoPlaybackQuality?.().totalVideoFrames;
+    const ticker = this.ticker;
+    if (!ready(v) || count() == null || !ticker) return Promise.resolve();
     return new Promise((done) => {
       const t0 = performance.now();
-      let last = t0, good = 0, over = false;
-      const end = () => { if (!over) { over = true; done(); } };
+      const steady = new SteadyFrames(STEADY_GAP_MS);
+      let over = false;
+      const end = () => { if (over) return; over = true; ticker.removeEventListener("message", tick); done(); };
+      const tick = () => { const now = performance.now(); if (now - t0 >= maxMs || steady.sample(now, count() ?? 0)) end(); };
       setTimeout(end, maxMs);
-      const next = () => v.requestVideoFrameCallback!(() => {
-        const now = performance.now();
-        good = now - last <= STEADY_GAP_MS ? good + 1 : 0;
-        last = now;
-        if (good >= 3) end(); else if (!over) next();
-      });
-      next();
+      ticker.addEventListener("message", tick);
+      tick();
     });
   }
 

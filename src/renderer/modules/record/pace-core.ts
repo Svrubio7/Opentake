@@ -24,3 +24,26 @@ export class FramePacer {
  * whenever the page was busy and every late tick was a lost frame.
  */
 export const TICK_MS = 4;
+
+/**
+ * Whether a picture arrives steadily, read from a running frame count sampled on any clock:
+ * `need` new frames in a row, none more than `gapMs` after the one before. A count read from the
+ * video itself keeps working while the window paints nothing (minimized or covered), where a
+ * requestVideoFrameCallback never fires.
+ */
+export class SteadyFrames {
+  private count: number | null = null;
+  private lastAt = 0;
+  private good = 0;
+  constructor(private gapMs: number, private need = 3) {}
+
+  /** A reading of the frame count at `now`; true once the picture is steady. */
+  sample(now: number, count: number): boolean {
+    if (this.count == null) { this.count = count; this.lastAt = now; return false; }
+    if (count === this.count) return false;
+    this.good = now - this.lastAt <= this.gapMs ? this.good + 1 : 0;
+    this.count = count;
+    this.lastAt = now;
+    return this.good >= this.need;
+  }
+}
