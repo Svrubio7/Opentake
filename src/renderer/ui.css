@@ -304,7 +304,11 @@ kbd {
   animation: q-pop 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 /* every dialog opens on the same header: its title and close, over a hairline */
-.modal > .row:first-child { padding-bottom: 14px; margin: 0 -22px; padding-left: 22px; padding-right: 14px; border-bottom: 1px solid var(--card-border); }
+.modal > .row:first-child {
+  position: sticky; top: -20px; z-index: 2; margin: -20px -22px 0; padding: 20px 14px 14px 22px;
+  background: var(--card); border-bottom: 1px solid var(--card-border);
+}
+.modal:focus { outline: none; }
 @keyframes q-pop { from { opacity: 0; transform: translateY(6px) scale(0.985); } }
 .modal-title { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
 @keyframes q-fade { from { opacity: 0; } }
