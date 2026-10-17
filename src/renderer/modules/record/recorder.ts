@@ -4,6 +4,8 @@ import { getStream } from "@core/streams";
 import type { ExportOutput, RecordMode, RecordShortcut, RecordTrack, TakeTimeline } from "@shared/types";
 import { api, hasBridge } from "./api";
 import { AUDIO_BPS, DISK_POLL_MS, diskBeforeTake, diskWhileRecording, takeBitrate, type DiskLevel } from "./disk-core";
+import { laterQueue } from "./delay-core";
+import { delayedSound } from "./delayed-sound";
 import { compositor } from "./engine";
 import { extensionFor, needsCamera, needsScreen, pickMime, videoBitrate } from "./layout-core";
 import { currentLayout, useRecord } from "./store";
@@ -30,7 +32,12 @@ interface Session {
   /** what all tracks write together, bits a second */
   bitrate: number;
   diskLevel: DiskLevel;
+  /** the composite picture runs this far behind real time (auto zoom ahead of clicks); 0 = live */
+  delayMs: number;
+  /** schedules a composite recorder step delayMs later, in order (at once when delayMs is 0) */
+  later: (fn: () => void) => void;
 }
+
 
 let session: Session | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -186,14 +193,24 @@ async function begin() {
   const comp = compositor();
   const owned: MediaStreamTrack[] = [];
   const cleanup: (() => void)[] = [];
+  // with auto zoom the picture runs behind real time from now on (the frames start filling the
+  // rings here, before the take's first moment); the composite waits for it below
+  const delay = comp.beginDelay();
+  cleanup.push(() => comp.endDelay());
   try {
     s.set({ status: "recording", elapsedMs: 0 });
+    if (delay.reason) s.set({ notice: `Auto zoom: ${delay.reason}.` });
     await checkDiskBeforeTake();
     const mic = await getMicTracks(owned);
     const sysAudio = systemAudioWanted(layout.mode, s) ? await takeSystemAudio(mic, cleanup) : null;
     const canvasTrack = comp.canvas.captureStream(layout.fps).getVideoTracks()[0];
     owned.push(canvasTrack);
-    const compositeAudio = sysAudio ? [sysAudio.mixed] : mic;
+    let compositeAudio = sysAudio ? [sysAudio.mixed] : mic;
+    if (delay.delayMs && compositeAudio.length) {
+      const d = delayedSound(compositeAudio, delay.delayMs);
+      cleanup.push(d.dispose);
+      compositeAudio = d.tracks;
+    }
     const composite = new MediaStream([canvasTrack, ...compositeAudio]);
     const mime = pickMime((m) => MediaRecorder.isTypeSupported(m), compositeAudio.length > 0);
     const isoMime = pickMime((m) => MediaRecorder.isTypeSupported(m), false);
@@ -227,7 +244,10 @@ async function begin() {
       scenes: [],
       overlays: comp.overlays.activeList(),
     };
-    const sess: Session = { takeId, tracks: [], startWall: 0, pausedTotal: 0, pauseStart: null, timeline, owned, unsubscribe: () => {}, timers: [], failed: null, cleanup, bitrate: 0, diskLevel: "ok" };
+    const sess: Session = {
+      takeId, tracks: [], startWall: 0, pausedTotal: 0, pauseStart: null, timeline, owned, unsubscribe: () => {}, timers: [], failed: null, cleanup, bitrate: 0, diskLevel: "ok",
+      delayMs: delay.delayMs, later: laterQueue(delay.delayMs),
+    };
 
     sess.tracks.push(makeTrack(sess, "composite", composite, mime, videoBitrate(layout.width, layout.height, layout.fps)));
     if (screen) {
@@ -264,7 +284,11 @@ async function begin() {
 
     sess.startWall = Date.now();
     comp.overlays.takeStarted(sess.startWall);
-    for (const t of sess.tracks) t.rec.start(1000);
+    // the composite starts when the delayed picture reaches this moment, so every file's clock is the take's
+    for (const t of sess.tracks) {
+      if (t.track === "composite") sess.later(() => { if (t.rec.state === "inactive") t.rec.start(1000); });
+      else t.rec.start(1000);
+    }
     session = sess;
     sess.timers.push(setInterval(() => st().set({ elapsedMs: elapsed() }), 200));
     // the click timeline is small: rewrite it every few seconds so a crash keeps it too
@@ -284,14 +308,16 @@ export function togglePause() {
   const s = session;
   if (!s) return;
   const status = st().status;
+  // the composite pauses and resumes when its delayed picture reaches the press
+  const each = (fn: (t: Track) => void) => s.tracks.forEach((t) => (t.track === "composite" ? s.later(() => fn(t)) : fn(t)));
   if (status === "recording") {
     s.pauseStart = Date.now();
-    s.tracks.forEach((t) => t.rec.state === "recording" && t.rec.pause());
+    each((t) => t.rec.state === "recording" && t.rec.pause());
     st().set({ status: "paused" });
   } else if (status === "paused") {
     if (s.pauseStart != null) s.pausedTotal += Date.now() - s.pauseStart;
     s.pauseStart = null;
-    s.tracks.forEach((t) => t.rec.state === "paused" && t.rec.resume());
+    each((t) => t.rec.state === "paused" && t.rec.resume());
     st().set({ status: "recording" });
   }
 }
@@ -319,15 +345,17 @@ export async function stopRecording() {
 async function finishTake(s: Session) {
   if (session !== s || st().status === "stopping") return;
   st().set({ status: "stopping" });
-  compositor().overlays.takeEnded();
   const durationMs = elapsed();
   s.timers.forEach(clearInterval);
   s.unsubscribe();
-  await Promise.all(s.tracks.map((t) => new Promise<void>((res) => {
+  const stop = (t: Track) => new Promise<void>((res) => {
     if (t.rec.state === "inactive") return res();
     t.rec.addEventListener("stop", () => res(), { once: true });
     t.rec.stop();
-  })));
+  });
+  // the composite stops once its delayed picture has caught up with this moment
+  await Promise.all(s.tracks.map((t) => (t.track === "composite" ? new Promise<void>((res) => s.later(() => void stop(t).then(res))) : stop(t))));
+  compositor().overlays.takeEnded();
   await Promise.all(s.tracks.map((t) => t.queue));
   s.owned.forEach((t) => t.stop());
   s.cleanup.forEach((f) => f());
