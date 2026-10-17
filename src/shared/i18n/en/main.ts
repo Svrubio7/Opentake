@@ -27,6 +27,8 @@ export const main = {
   "main.export.stalled": "ffmpeg stopped making progress for {seconds} seconds, so the export was stopped. Try again.",
   "main.editor.noSound": "Could not read the take's sound",
   "main.editor.noCaptionsToSave": "There are no captions to save",
+  "main.editor.keepSomething": "An edit has to keep part of the take",
+  "main.editor.badCaptions": "These captions could not be read",
   "main.update.noNetwork": "Could not reach GitHub. Check your connection.",
   "main.update.noRelease": "No published release was found.",
   "main.update.busy": "GitHub is busy. Try again in a while.",

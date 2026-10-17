@@ -30,6 +30,8 @@ export const main: Shape<typeof en> = {
   "main.export.stalled": "ffmpeg ha dejado de avanzar durante {seconds} segundos, así que se ha detenido la exportación. Vuelve a intentarlo.",
   "main.editor.noSound": "No se ha podido leer el sonido de la toma",
   "main.editor.noCaptionsToSave": "No hay subtítulos que guardar",
+  "main.editor.keepSomething": "Un corte tiene que dejar alguna parte de la toma",
+  "main.editor.badCaptions": "No se han podido leer estos subtítulos",
   "main.update.noNetwork": "No se ha podido conectar con GitHub. Revisa tu conexión.",
   "main.update.noRelease": "No se ha encontrado ninguna versión publicada.",
   "main.update.busy": "GitHub está saturado. Vuelve a intentarlo dentro de un rato.",

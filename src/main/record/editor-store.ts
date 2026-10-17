@@ -5,6 +5,7 @@ import type { TakeCaptions, TakeEdit } from "../../shared/types";
 import { parseCaptions } from "../../renderer/modules/editor/captions-core";
 import { isWhole, parseEdit } from "../../renderer/modules/editor/edit-core";
 import { takeDir } from "./takes";
+import { t } from "../../shared/i18n";
 
 async function readJson(file: string): Promise<unknown> {
   try { return JSON.parse(await readFile(file, "utf8")); } catch { return null; }
@@ -24,7 +25,7 @@ export async function writeEdit(takeId: string, raw: unknown, durationMs: number
   const file = join(takeDir(takeId), "edit.json");
   const e = parseEdit(raw, durationMs);
   if (!e || (e.keep.length === 1 && isWhole(e.keep, durationMs))) { await rm(file, { force: true }); return null; }
-  if (!e.keep.length) throw new Error("An edit has to keep something");
+  if (!e.keep.length) throw new Error(t("main.editor.keepSomething"));
   await writeFile(file, JSON.stringify(e, null, 1));
   return e;
 }
@@ -36,7 +37,7 @@ export async function readCaptions(takeId: string): Promise<TakeCaptions | null>
 export async function writeCaptions(takeId: string, raw: unknown): Promise<TakeCaptions | null> {
   const file = join(takeDir(takeId), "captions.json");
   const c = parseCaptions(raw);
-  if (!c) throw new Error("These captions could not be read");
+  if (!c) throw new Error(t("main.editor.badCaptions"));
   await writeFile(file, JSON.stringify(c));
   return c;
 }
