@@ -30,6 +30,21 @@ export function exportStem(o: Pick<ExportOptions, "kind" | "output">, meta: Pick
 }
 
 /**
+ * The file name a new export of these options would get now: what the export dialog shows. Taken
+ * names on disk and names held by running exports get their number, as exportTarget would.
+ */
+export async function exportPreviewName(o: ExportOptions, meta: TakeMeta, takeFolder: string): Promise<string> {
+  const s = getSettings();
+  const ext = o.output?.format ?? "mp4";
+  const stem = exportStem(o, meta);
+  const also = ext !== "gif" && !!(await readCaptions(o.takeId))?.lines.length ? ["srt", "vtt"] : [];
+  const folder = s.exportDestination === "ask"
+    ? lastAskedDir && existsSync(lastAskedDir) ? lastAskedDir : s.exportDir && existsSync(s.exportDir) ? s.exportDir : takeFolder
+    : s.exportDestination === "folder" && s.exportDir ? s.exportDir : takeFolder;
+  return reserved.peek(folder, stem, ext, (n) => existsSync(join(folder, n)), also);
+}
+
+/**
  * The absolute path to write, or null when the person cancelled the Save dialog. Throws a plain line
  * when the chosen folder cannot be used (its drive unplugged, no permission).
  */

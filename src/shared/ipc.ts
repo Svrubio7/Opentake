@@ -15,6 +15,8 @@ export const IPC = {
   recordChunk: "take:record:chunk",
   recordShortcut: "take:record:shortcut",
   exportCancel: "take:record:export-cancel",
+  /** the file name an export would be written under now (taken names get a number) */
+  exportName: "take:record:export-name",
   takesList: "take:record:takes",
   takeDelete: "take:record:take-delete",
   /** renderer -> main: start or stop the keystroke overlay's global key hook */

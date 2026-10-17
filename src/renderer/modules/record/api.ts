@@ -20,6 +20,7 @@ export const api = {
   openFolder: () => t().invoke(IPC.openRecordingsFolder) as Promise<void>,
   exportTake: (o: ExportOptions) => t().invoke(IPC.exportVideo, o) as Promise<string>,
   cancelExport: (id: string) => t().invoke(IPC.exportCancel, id) as Promise<boolean>,
+  exportName: (o: ExportOptions) => t().invoke(IPC.exportName, o) as Promise<string>,
   diskSpace: () => t().invoke(IPC.diskSpace) as Promise<DiskSpace>,
   onClick: (cb: (e: ClickEvent) => void) => t().on(IPC.clickEvent, (e) => cb(e as ClickEvent)),
   onCursor: (cb: (s: CursorSample[]) => void) => t().on(IPC.cursorEvent, (s) => cb(s as CursorSample[])),
