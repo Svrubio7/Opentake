@@ -10,6 +10,7 @@ import {
 import { Renderer } from "./gl";
 import { MaskSmoother, detectFace, loadFaceDetector, loadSegmenter, segment } from "./ml";
 import { useCamera, type CameraSettings, type CameraStatus } from "./store";
+import { useRecord } from "../record/store";
 
 const MEASURE_MS = 300;
 const FACE_MS = 200;
@@ -62,6 +63,9 @@ class CameraEngine {
   private frames = 0;
   private fpsT0 = 0;
   private fps = 0;
+  /** real frames from the camera (frame callbacks only, never the watchdog), per second */
+  private srcFrames = 0;
+  private srcT0 = 0;
   private face: Rect | null = null;
   private auto: AutoState = initialAutoState();
   private autoNow: AutoValues = { exposure: 0, shadows: 0, highlights: 0, temperature: 0, tint: 0 };
@@ -126,19 +130,30 @@ class CameraEngine {
     st.setLive({ status: "starting", error: null });
     this.stopSource();
     if (!navigator.mediaDevices?.getUserMedia) { st.setLive({ status: "error", error: "This system has no camera support." }); return; }
-    const [w, h] = parseRes(st.resolution ?? "") ?? [3840, 2160];
-    const video = (deviceId: string | null): MediaTrackConstraints => ({
+    // 1080p unless a size was picked: most webcams only reach 4K at 5-15 fps, which looks choppy
+    // and smears every movement. The frame rate is a floor, so a camera can't trade it for size.
+    const [w, h] = parseRes(st.resolution ?? "") ?? [1920, 1080];
+    const video = (deviceId: string | null, floor: boolean): MediaTrackConstraints => ({
       ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-      width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: st.fps },
+      width: { ideal: w }, height: { ideal: h },
+      frameRate: floor ? { min: Math.round(st.fps * 0.8), ideal: st.fps } : { ideal: st.fps },
     });
+    const get = (deviceId: string | null, floor: boolean) => navigator.mediaDevices.getUserMedia({ video: video(deviceId, floor), audio: false });
+    /** with the frame rate floor first; a camera that cannot hold it still opens without one */
+    const open = async (deviceId: string | null) => {
+      try { return await get(deviceId, true); } catch (e) {
+        if ((e as { name?: string })?.name !== "OverconstrainedError") throw e;
+        return get(deviceId, false);
+      }
+    };
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: video(st.deviceId), audio: false });
+      stream = await open(st.deviceId);
     } catch (e) {
       const name = (e as { name?: string })?.name;
       if (st.deviceId && (name === "OverconstrainedError" || name === "NotFoundError")) {
         // the remembered camera is gone: take whichever one is there
-        try { stream = await navigator.mediaDevices.getUserMedia({ video: video(null), audio: false }); }
+        try { stream = await open(null); }
         catch (e2) { await this.listDevices(); st.setLive(explain(e2)); return; }
       } else { await this.listDevices(); st.setLive(explain(e)); return; }
     }
@@ -183,7 +198,9 @@ class CameraEngine {
     this.out?.getTracks().forEach((t) => t.stop());
     this.out = null;
     publishStream("camera", null);
-    useCamera.getState().setLive({ status: "off", actual: null, outFps: 0 });
+    this.srcT0 = 0;
+    this.srcFrames = 0;
+    useCamera.getState().setLive({ status: "off", actual: null, outFps: 0, sourceFps: 0 });
   }
 
   private makeRenderer() {
@@ -235,6 +252,7 @@ class CameraEngine {
     const onFrame = () => {
       if (!this.running) return;
       v.requestVideoFrameCallback(onFrame);
+      this.countSourceFrame(performance.now());
       this.renderOnce(performance.now());
     };
     if ("requestVideoFrameCallback" in v) v.requestVideoFrameCallback(onFrame);
@@ -244,6 +262,16 @@ class CameraEngine {
       const fps = useCamera.getState().fps;
       if (now - this.lastRender > (1000 / fps) * 2.5) this.renderOnce(now);
     }, 1000 / 30);
+  }
+
+  private countSourceFrame(now: number) {
+    if (!this.srcT0) this.srcT0 = now;
+    this.srcFrames++;
+    if (now - this.srcT0 < 2000) return;
+    const fps = Math.round((this.srcFrames * 1000) / (now - this.srcT0));
+    this.srcFrames = 0;
+    this.srcT0 = now;
+    if (fps !== useCamera.getState().sourceFps) useCamera.getState().setLive({ sourceFps: fps });
   }
 
   private renderOnce(now: number) {
@@ -278,6 +306,7 @@ class CameraEngine {
       lookAmount: s.lookAmount,
       crop,
       mirror: s.mirrorRecording,
+      flipY: s.flipVertical,
       bgMode: s.bgMode,
       bgBlur: s.bgBlur,
       bgColor: hexToRgb(s.bgColor),
@@ -380,9 +409,23 @@ class CameraEngine {
 
 let engine: CameraEngine | null = null;
 /** Starts the one camera engine (idempotent). */
+let followingRecord = false;
+/** A 60 fps recording asks the camera for 60 too, when it can give it (30 stays a choice of its own). */
+function followRecordFps() {
+  if (followingRecord) return;
+  followingRecord = true;
+  const match = (fps: number) => {
+    const cam = useCamera.getState();
+    if (fps === 60 && cam.fps !== 60 && cam.fpsOptions.includes(60)) cam.set({ fps: 60 });
+  };
+  match(useRecord.getState().fps);
+  useRecord.subscribe((s, prev) => { if (s.fps !== prev.fps) match(s.fps); });
+}
+
 export function startCameraEngine() {
   engine ??= new CameraEngine();
   engine.start();
+  followRecordFps();
   return engine;
 }
 export function retryCamera() { void startCameraEngine().open(); }

@@ -166,15 +166,24 @@ export function CameraPanel() {
             </div>
           )}
         </div>
-        {live && s.actual && s.fps === 60 && s.actual.fps < 50 && (
+        {live && s.sourceFps > 0 && s.sourceFps < s.fps * 0.75 ? (
+          <p className="note note-warn">
+            The camera is sending {s.sourceFps} frames a second, not {s.fps}, so movement blurs.
+            Cameras slow down in a dim room to let in more light: more light on your face fixes it. A lower resolution can help too.
+          </p>
+        ) : live && s.actual && s.fps === 60 && s.actual.fps < 50 && (
           <p className="note note-warn">This camera gives {s.actual.fps} fps at this resolution. Try a lower resolution for 60.</p>
         )}
         {live && s.outFps > 0 && s.outFps < Math.min(s.fps, s.actual?.fps || s.fps) * 0.75 && (
           <p className="note note-warn">Processing is behind ({s.outFps} fps). A lower resolution or less skin smoothing will help.</p>
         )}
         <Switch label="Camera on" checked={s.enabled} onChange={(v) => s.set({ enabled: v })} />
-        <Switch label="Mirror preview" checked={s.mirrorPreview} onChange={(v) => s.set({ mirrorPreview: v })} hint="Only what you see here" />
-        <Switch label="Mirror recording" checked={s.mirrorRecording} onChange={(v) => s.set({ mirrorRecording: v })} hint="Flips the recorded video" />
+        <Switch label="Flip left to right" checked={s.mirrorRecording} onChange={(v) => s.set({ mirrorRecording: v })}
+          hint="Many webcams mirror the picture, which makes a face look odd. Set this so writing behind you reads the right way. Changes the recording." />
+        <Switch label="Flip upside down" checked={s.flipVertical} onChange={(v) => s.set({ flipVertical: v })}
+          hint="For a camera mounted upside down, or one looking down at a desk. Changes the recording." />
+        <Switch label="Mirror my preview" checked={s.mirrorPreview} onChange={(v) => s.set({ mirrorPreview: v })}
+          hint="Shows you like a mirror while you look at yourself here. The recording is not affected." />
       </Card>
 
       <Card title="Look" action={<Button variant="ghost" size="sm" onClick={s.resetLook}>Reset</Button>}>

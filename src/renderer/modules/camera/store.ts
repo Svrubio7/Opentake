@@ -21,6 +21,8 @@ export interface CameraSettings {
   bgColor: string;
   mirrorPreview: boolean;
   mirrorRecording: boolean;
+  /** turns the picture upside down (preview and recording) */
+  flipVertical: boolean;
   zoom: number;
   autoFrame: boolean;
 }
@@ -36,6 +38,8 @@ export interface CameraLive {
   fpsOptions: number[];
   actual: { w: number; h: number; fps: number } | null;
   outFps: number;
+  /** frames the camera itself delivers each second (it slows down in a dim room) */
+  sourceFps: number;
   autoNow: AutoValues;
   report: LightingReport | null;
   hist: Histogram | null;
@@ -64,6 +68,7 @@ export const DEFAULT_SETTINGS: CameraSettings = {
   bgColor: "#1b1b1e",
   mirrorPreview: true,
   mirrorRecording: false,
+  flipVertical: false,
   zoom: 1,
   autoFrame: false,
 };
@@ -103,6 +108,7 @@ export const useCamera = create<Store>()((set, get) => ({
   fpsOptions: [30, 60],
   actual: null,
   outFps: 0,
+  sourceFps: 0,
   autoNow: { exposure: 0, shadows: 0, highlights: 0, temperature: 0, tint: 0 },
   report: null,
   hist: null,

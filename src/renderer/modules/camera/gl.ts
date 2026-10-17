@@ -11,6 +11,8 @@ export interface RenderParams {
   lookAmount: number;
   crop: Rect;
   mirror: boolean;
+  /** upside down: for a camera mounted the other way up, or a top-down shot */
+  flipY: boolean;
   bgMode: BgMode;
   /** 0..1 */
   bgBlur: number;
@@ -70,6 +72,7 @@ uniform float uLutSize, uLutAmt;
 uniform vec2 uTexel, uMaskTexel;
 uniform vec4 uCrop;
 uniform bool uMirror;
+uniform bool uFlipY;
 uniform vec3 uWb;
 uniform float uExposure, uContrast, uHigh, uShadow, uSat, uVib, uSharpen, uVignette, uSmooth, uSmoothR;
 uniform int uBgMode;
@@ -113,6 +116,7 @@ void main() {
   vec2 outUv = vec2(vUv.x, 1.0 - vUv.y);       // y down, like the source image
   vec2 o2 = outUv;
   if (uMirror) o2.x = 1.0 - o2.x;
+  if (uFlipY) o2.y = 1.0 - o2.y;
   vec2 uv = uCrop.xy + o2 * uCrop.zw;
   vec3 src = texture(uVideo, uv).rgb;
   vec3 c = src;
@@ -372,6 +376,7 @@ export class Renderer {
     gl.uniform2f(u.uMaskTexel, 1 / this.maskSize[0], 1 / this.maskSize[1]);
     gl.uniform4f(u.uCrop, p.crop.x, p.crop.y, p.crop.w, p.crop.h);
     gl.uniform1i(u.uMirror, p.mirror ? 1 : 0);
+    gl.uniform1i(u.uFlipY, p.flipY ? 1 : 0);
     gl.uniform3f(u.uWb, p.wb[0], p.wb[1], p.wb[2]);
     gl.uniform1f(u.uExposure, A.exposure);
     gl.uniform1f(u.uContrast, A.contrast);
