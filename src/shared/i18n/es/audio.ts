@@ -120,4 +120,15 @@ export const audio: Shape<typeof en> = {
   "audio.find.air": "A tu sonido le falta aire. Brillo {gain}.",
   "audio.find.sibilant": "Eses fuertes. De-esser más firme.",
   "audio.find.loudness": "Sonoridad objetivo {target} LUFS. El nivel automático te mantiene ahí.",
+  // ---- el motor ----
+  "audio.err.denied": "OpenTake no puede usar el micrófono. Permite el acceso en Configuración de Windows > Privacidad y seguridad > Micrófono y pulsa Reintentar.",
+  "audio.err.notFound": "No hay ningún micrófono. Conecta uno y pulsa Reintentar.",
+  "audio.err.busy": "El micrófono está ocupado o no ha podido arrancar. Cierra las otras apps que lo usan y pulsa Reintentar.",
+  "audio.err.failed": "El micrófono no ha podido arrancar.",
+  "audio.err.failedWhy": "El micrófono no ha podido arrancar ({reason}).",
+  "audio.err.engine": "El motor de audio no ha podido arrancar ({reason}).",
+  "audio.err.disconnected": "Se ha desconectado el micrófono. Vuelve a conectarlo o elige otro.",
+  "audio.err.notRunning": "El micrófono no está activo.",
+  "audio.deviceN": "Micrófono {n}",
+  "audio.listenOff": "Escuchar se ha desactivado: los altavoces se estaban acoplando en el micro. Usa auriculares.",
 };

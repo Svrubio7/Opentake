@@ -2,6 +2,7 @@
 // screen and the camera. Chunks go to disk every second through IPC, so a crash keeps the take.
 import { getStream } from "@core/streams";
 import type { ExportOutput, RecordMode, RecordShortcut, RecordTrack, TakeTimeline } from "@shared/types";
+import { t } from "../../../shared/i18n";
 import { api, hasBridge } from "./api";
 import { AUDIO_BPS, DISK_POLL_MS, diskBeforeTake, diskWhileRecording, takeBitrate, type DiskLevel } from "./disk-core";
 import { laterQueue } from "./delay-core";
@@ -57,11 +58,14 @@ export function ipcMessage(e: unknown): string {
 function writeFailure(track: RecordTrack, err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   if (/ENOENT|EIO|ENODEV|ENXIO|EBUSY|not available|no such file/i.test(msg)) {
-    return "The recordings folder stopped answering (was a drive unplugged?). The take was stopped and what was recorded so far is kept.";
+    return t("record.rec.folderGone");
   }
-  if (/ENOSPC|no space/i.test(msg)) return "The recordings drive is full. The take was stopped and what was recorded so far is kept.";
-  return `Could not write the ${track} track, so the take was stopped: ${msg}`;
+  if (/ENOSPC|no space/i.test(msg)) return t("record.rec.driveFull");
+  return t("record.rec.writeFailed", { track: t(`record.rec.track.${track}`), reason: msg });
 }
+
+// a message from main that ends in "Settings" / "Ajustes" names its own fix
+const SETTINGS_HINT = /Settings|Ajustes/;
 
 const st = () => useRecord.getState();
 
@@ -114,14 +118,14 @@ function makeTrack(s: Session, track: RecordTrack, stream: MediaStream, mime: st
 export function startRecording() {
   const s = st();
   if (s.status !== "idle") return;
-  if (!hasBridge()) return s.set({ error: "Recording needs the desktop app." });
+  if (!hasBridge()) return s.set({ error: t("record.rec.needsApp") });
   // a folder already known to be gone is said before the countdown, not after it (main checks again)
   const folder = useShell.getState().view?.recordings;
   if (folder && folder.state !== "ok") {
     return s.set({
       error: folder.state === "missing"
-        ? `The recordings folder ${folder.path} is not available. Is its drive plugged in? Choose another folder in Settings.`
-        : `OpenTake cannot write to the recordings folder ${folder.path}. Choose another folder in Settings.`,
+        ? t("record.notice.folderMissing", { path: folder.path })
+        : t("record.notice.folderReadonly", { path: folder.path }),
       noticeAction: "settings",
     });
   }
@@ -158,7 +162,7 @@ async function takeSystemAudio(mic: MediaStreamTrack[], cleanup: (() => void)[])
   const audio = ok ? sys.mix(mic) : null;
   if (!audio) {
     const reason = useSystemSound.getState().reason;
-    st().set({ notice: `Recording without computer sound${reason ? `: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}` : "."}` });
+    st().set({ notice: reason ? t("record.notice.noComputerSoundWhy", { reason: `${reason.charAt(0).toLowerCase()}${reason.slice(1)}` }) : t("record.notice.noComputerSound") });
     return null;
   }
   cleanup.push(audio.dispose);
@@ -199,7 +203,7 @@ async function begin() {
   cleanup.push(() => comp.endDelay());
   try {
     s.set({ status: "recording", elapsedMs: 0 });
-    if (delay.reason) s.set({ notice: `Auto zoom: ${delay.reason}.` });
+    if (delay.reason) s.set({ notice: t("record.rec.zoomNotice", { reason: delay.reason }) });
     await checkDiskBeforeTake();
     const mic = await getMicTracks(owned);
     const sysAudio = systemAudioWanted(layout.mode, s) ? await takeSystemAudio(mic, cleanup) : null;
@@ -300,7 +304,7 @@ async function begin() {
     cleanup.forEach((f) => f());
     session = null;
     const msg = ipcMessage(e);
-    st().set({ status: "idle", error: /Settings/.test(msg) ? msg : `Could not start recording: ${msg}`, noticeAction: /Settings/.test(msg) ? "settings" : null });
+    st().set({ status: "idle", error: SETTINGS_HINT.test(msg) ? msg : t("record.rec.startFailed", { reason: msg }), noticeAction: SETTINGS_HINT.test(msg) ? "settings" : null });
   }
 }
 
@@ -363,7 +367,7 @@ async function finishTake(s: Session) {
   try {
     await api.save({ takeId: s.takeId, final: true, durationMs, timeline: s.timeline });
   } catch (e) {
-    st().set({ error: s.failed ?? `Could not close the take: ${e instanceof Error ? e.message : e}` });
+    st().set({ error: s.failed ?? t("record.rec.closeFailed", { reason: e instanceof Error ? e.message : String(e) }) });
   }
   st().set({ status: "idle", elapsedMs: 0, notice: s.failed ? null : SAVED_NOTICE, noticeAction: s.failed ? null : "takes" });
   await refreshTakes();
@@ -391,7 +395,7 @@ export async function refreshTakes() {
 
 export async function exportTake(takeId: string, kind: "composite" | "hires", output?: ExportOutput, manual = false) {
   const s = st();
-  s.set({ exports: { ...s.exports, [takeId]: { takeId, stage: "Starting", ratio: 0 } } });
+  s.set({ exports: { ...s.exports, [takeId]: { takeId, stage: t("record.rec.exportStarting"), ratio: 0 } } });
   try {
     await api.exportTake({ takeId, kind, loudness: s.loudness, trimSilence: s.trimSilence, output, manual });
   } catch {

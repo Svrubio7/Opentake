@@ -117,4 +117,15 @@ export const audio = {
   "audio.find.air": "Your sound lacks air. Brightness {gain}.",
   "audio.find.sibilant": "Strong S sounds. De-esser set firmer.",
   "audio.find.loudness": "Loudness target {target} LUFS. Auto level keeps you there.",
+  // ---- the engine ----
+  "audio.err.denied": "OpenTake can't use the microphone. Allow microphone access in Windows Settings, Privacy and security, Microphone, then press Try again.",
+  "audio.err.notFound": "No microphone found. Plug one in and press Try again.",
+  "audio.err.busy": "The microphone is busy or failed to start. Close other apps that use it and press Try again.",
+  "audio.err.failed": "The microphone could not start.",
+  "audio.err.failedWhy": "The microphone could not start ({reason}).",
+  "audio.err.engine": "Audio engine failed to start ({reason}).",
+  "audio.err.disconnected": "Your microphone was disconnected. Plug it back in, or pick another one.",
+  "audio.err.notRunning": "The microphone is not running.",
+  "audio.deviceN": "Microphone {n}",
+  "audio.listenOff": "Listen was turned off: the speakers were feeding back into the mic. Use headphones.",
 } as const;

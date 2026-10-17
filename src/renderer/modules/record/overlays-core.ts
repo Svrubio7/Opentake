@@ -1,6 +1,7 @@
 // What is drawn over the picture (pointer, keys, logo, name card, intro and outro cards) as settings
 // and pure functions (tested in overlays-core.test.ts). These settings are part of a saved look.
 import type { Rect } from "./layout-core";
+import { tIn } from "../../../shared/i18n";
 
 export type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -89,7 +90,8 @@ export const DEFAULT_OVERLAYS: OverlayLook = {
   logoImage: null,
   lowerThird: { enabled: false, name: "", title: "", style: "bar", accent: "#3ddc97", position: "bottom-left", seconds: 6 },
   intro: { enabled: false, title: "", subtitle: "", seconds: 3, background: "look", color: "#111114", textColor: "#ffffff" },
-  outro: { enabled: false, title: "Thanks for watching", subtitle: "", seconds: 3, background: "look", color: "#111114", textColor: "#ffffff" },
+  // in English here; turning the outro on puts the standard title in the app's language (branding-panel)
+  outro: { enabled: false, title: tIn("en", "ov.card.outroDefault"), subtitle: "", seconds: 3, background: "look", color: "#111114", textColor: "#ffffff" },
 };
 
 export const OVERLAY_KEYS = Object.keys(DEFAULT_OVERLAYS) as (keyof OverlayLook)[];

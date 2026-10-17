@@ -8,18 +8,8 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(__dirname);
 
-// files other builders were still changing when the strings moved to the dictionaries; the last pass removes them
-const NOT_YET: string[] = [
-  "modules/record/engine.ts",
-  "modules/record/recorder.ts",
-  "modules/record/zoom-core.ts",
-  "modules/record/overlays.ts",
-  "modules/record/overlays-core.ts",
-  "modules/record/branding-panel.tsx",
-  "modules/record/scenes-core.ts",
-  "modules/record/keys-core.ts",
-  "modules/audio/engine.ts",
-];
+// files left out of the scan (none: every renderer file goes through the dictionaries)
+const NOT_YET: string[] = [];
 
 /** Strings that are the same in English and Spanish: product, format, codec, unit and key names. */
 const SAME_EVERYWHERE = new Set([
