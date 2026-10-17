@@ -17,6 +17,7 @@ import { editorApi } from "./api";
 import { openExport, useEditor } from "./store";
 import { MAX_ZOOM, Timeline, type Selection } from "./Timeline";
 import { transcribe } from "./transcribe";
+import { onTakeChanged } from "../assistant/api";
 
 interface Doc { keep: TimeRange[]; lines: CaptionLine[] | null; lang: CaptionLang }
 
@@ -84,6 +85,16 @@ export function Editor({ takeId, onClose }: { takeId: string; onClose: () => voi
     }, 400);
     return () => clearTimeout(timer);
   }, [doc, duration, takeId]);
+
+  // the assistant changed this take's cuts or captions: show them now (one undo step goes back)
+  useEffect(() => onTakeChanged(takeId, async () => {
+    const fresh = await editorApi.open(takeId).catch(() => null);
+    if (!fresh || duration == null) return;
+    const keep = fresh.edit?.keep.length ? fresh.edit.keep : wholeTake(duration);
+    const lines = fresh.captions?.lines ?? null;
+    saved.current = { keep, lines };
+    setHist((h) => (h ? push(h, { keep, lines: lines ?? h.present.lines, lang: fresh.captions?.lang ?? h.present.lang }) : h));
+  }), [takeId, duration]);
 
   // ---- playback that skips the cuts ----
   const seek = useCallback((ms: number) => {

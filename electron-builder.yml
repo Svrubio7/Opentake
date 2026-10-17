@@ -14,6 +14,7 @@ directories:
 # dependency (react, geist and the Next.js it pulls in, mediapipe, vosk...) stays out of the app.
 files:
   - out/**
+  - "!out/mcp/**"
   - package.json
   - "!**/*.map"
   - "!node_modules/**"
@@ -33,6 +34,10 @@ files:
 extraResources:
   - from: LICENSE
     to: LICENSE
+  # the MCP server for Claude and Codex (scripts/build-mcp.mjs): outside the asar archive, so the app's
+  # own executable can run it in Node mode (ELECTRON_RUN_AS_NODE=1)
+  - from: out/mcp
+    to: mcp
   - from: THIRD_PARTY_NOTICES.md
     to: THIRD_PARTY_NOTICES.md
 

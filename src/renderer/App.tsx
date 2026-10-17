@@ -10,6 +10,7 @@ import { PrompterOverlay, TeleprompterPanel, linkPrompterToRecorder } from "./mo
 import { DrawBridge } from "./modules/draw";
 import { AboutButton, UpdateNotice } from "./modules/update";
 import { SettingsPanel, ShellHost, refreshSettings, useShell } from "./modules/shell";
+import { AssistantSync } from "./modules/assistant";
 
 interface Tab { id: string; label: string; title: string; icon: LucideIcon; Panel: ComponentType; hint: string; foot?: boolean }
 
@@ -58,6 +59,7 @@ export function App() {
 
   return (
     <div className="app">
+      <AssistantSync />
       <nav className="rail" aria-label="Sections">
         <div className="rail-brand">
           <img src={markWhite} alt="" className="rail-mark" />

@@ -10,6 +10,7 @@ import { exportSuggestion } from "../shell/suggestions-core";
 import { exportTake } from "../record/recorder";
 import { useRecord } from "../record/store";
 import { outputFrom, useEditor } from "./store";
+import { OpenInEditor } from "../assistant";
 
 const PRESET_ORDER: ExportPreset[] = ["original", "youtube", "vertical", "square", "linkedin", "x", "custom"];
 const QUALITY = [
@@ -165,6 +166,7 @@ export function ExportDialog({ take, onClose }: { take: TakeInfo; onClose: () =>
             hint={take.files.edit ? "With cuts, the silence is trimmed from the start and end of the edited result" : undefined} />
         </div>
 
+        <OpenInEditor take={take} />
         {warnings.map((w) => <p key={w} className="note note-warn">{w}</p>)}
         <div className="ed-export-foot">
           <span className="note ed-export-where">

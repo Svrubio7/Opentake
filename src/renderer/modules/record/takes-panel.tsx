@@ -6,6 +6,7 @@ import type { RecordMode, TakeInfo } from "@shared/types";
 import { Button, Card, Tag } from "../../ui";
 import { shortPath } from "../../../main/settings-core";
 import { openEditor, openExport } from "../editor";
+import { OpenInEditor } from "../assistant";
 import { applyChoice, dismiss, freeLabel, goTo, refreshSettings, shellApi, useShell } from "../shell/store";
 import { takeSuggestion } from "../shell/suggestions-core";
 import { api, hasBridge } from "./api";
@@ -110,6 +111,7 @@ function TakeRow({ take }: { take: TakeInfo }) {
         <div className="rec-take-actions">
           <Button size="sm" disabled={running || active || !take.files.composite} title="Cut, trim and caption this take" onClick={() => openEditor(take.id)}><Scissors />Edit</Button>
           <Button size="sm" disabled={running || active || !take.files.composite} title="Choose a frame, a format and the quality" onClick={() => openExport(take.id)}>Export</Button>
+          <OpenInEditor take={take} compact />
           <Button variant="ghost" size="sm" title={lastVideo ? "Show the newest export in its folder" : "Open the take's folder"} onClick={() => api.revealTake(take.id, lastVideo ?? take.files.outputs?.[0])}>Show</Button>
           <Button variant="ghost" size="icon-sm" className="rec-del" disabled={running || active} onClick={() => setConfirm(true)} title="Delete this take" aria-label="Delete"><Trash /></Button>
         </div>
