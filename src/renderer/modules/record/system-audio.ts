@@ -4,6 +4,7 @@
 import { create } from "zustand";
 import { IPC } from "@shared/ipc";
 import type { SystemAudioSupport } from "@shared/types";
+import { t } from "../../../shared/i18n";
 import { hasBridge } from "./api";
 import { useRecord } from "./store";
 import { peakDb } from "./system-audio-core";
@@ -26,8 +27,8 @@ export interface TakeAudio {
 
 let support: Promise<SystemAudioSupport> | null = null;
 export function systemAudioSupport(): Promise<SystemAudioSupport> {
-  if (!hasBridge()) return Promise.resolve({ supported: false, reason: "Computer sound needs the desktop app." });
-  support ??= (window.take.invoke(IPC.systemAudioSupport) as Promise<SystemAudioSupport>).catch(() => ({ supported: false, reason: "Could not check for computer sound." }));
+  if (!hasBridge()) return Promise.resolve({ supported: false, reason: t("record.sys.needsApp") });
+  support ??= (window.take.invoke(IPC.systemAudioSupport) as Promise<SystemAudioSupport>).catch(() => ({ supported: false, reason: t("record.sys.checkFailed") }));
   return support;
 }
 
@@ -93,13 +94,13 @@ class SystemSound {
       track.addEventListener("ended", () => {
         if (this.stream !== stream) return;
         this.close();
-        useSystemSound.getState().set({ status: "failed", reason: "The computer sound capture stopped." });
+        useSystemSound.getState().set({ status: "failed", reason: t("record.sys.stopped") });
       });
       st.set({ status: "on", reason: null });
       return true;
     } catch (e) {
       console.warn("[record] computer sound unavailable", e);
-      st.set({ status: "failed", reason: "Could not capture the computer sound on this system." });
+      st.set({ status: "failed", reason: t("record.sys.failed") });
       return false;
     }
   }
@@ -126,17 +127,23 @@ class SystemSound {
     return peakDb(this.block);
   }
 
-  /** The take's sound: the mic plus the computer sound in one track, and the computer sound on its own. */
-  mix(mic: MediaStreamTrack[]): TakeAudio | null {
+  /**
+   * The take's sound: the mic plus the computer sound in one track, and the computer sound on its own.
+   * `delayMs` delays the mixed track inside this graph (a delayed take's composite), never the other.
+   */
+  mix(mic: MediaStreamTrack[], delayMs = 0): TakeAudio | null {
     const ctx = this.ctx, gain = this.gain;
     if (!ctx || !gain || !this.live) return null;
     const mixDest = new MediaStreamAudioDestinationNode(ctx);
     const sysDest = new MediaStreamAudioDestinationNode(ctx);
-    gain.connect(mixDest);
+    const delay = delayMs > 0 ? new DelayNode(ctx, { maxDelayTime: delayMs / 1000 + 1, delayTime: delayMs / 1000 }) : null;
+    delay?.connect(mixDest);
+    const into = delay ?? mixDest;
+    gain.connect(into);
     gain.connect(sysDest);
     const micSources = mic.map((t) => {
       const s = new MediaStreamAudioSourceNode(ctx, { mediaStream: new MediaStream([t]) });
-      s.connect(mixDest);
+      s.connect(into);
       return s;
     });
     return {
@@ -144,7 +151,8 @@ class SystemSound {
       system: sysDest.stream.getAudioTracks()[0],
       dispose: () => {
         micSources.forEach((s) => s.disconnect());
-        try { gain.disconnect(mixDest); gain.disconnect(sysDest); } catch { /* the capture already closed */ }
+        try { gain.disconnect(into); gain.disconnect(sysDest); } catch { /* the capture already closed */ }
+        delay?.disconnect();
         mixDest.stream.getTracks().forEach((t) => t.stop());
         sysDest.stream.getTracks().forEach((t) => t.stop());
       },

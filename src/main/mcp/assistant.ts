@@ -2,6 +2,7 @@
 // note it reads at start (app.json), the Settings section that connects Claude or Codex, the activity
 // list with Undo, and "Open in an editor". Started with --assistant, the app runs with no window and
 // quits by itself after 10 quiet minutes; opening OpenTake normally then shows the window.
+import { t } from "../../shared/i18n";
 import { app, globalShortcut, ipcMain, type BrowserWindow } from "electron";
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -87,7 +88,7 @@ async function status(): Promise<AssistantStatus> {
     claudeCode: claudeCodeCommand(l),
     codex: codexToml(l),
     codexPath: codexConfigPath(homedir(), process.env),
-    warning: l.flavour === "portable" ? "For Claude and Codex, use the installed OpenTake: the portable copy is not tested with them yet." : undefined,
+    warning: l.flavour === "portable" ? t("ma.portable") : undefined,
   };
 }
 
@@ -100,13 +101,13 @@ async function setupClaudeDesktop(): Promise<SetupResult> {
   try {
     const existing = await readText(target);
     const merged = mergeClaudeDesktop(existing, l);
-    if (!merged.changed) return { ok: true, message: "Claude Desktop is already set up. Restart it if OpenTake does not show.", path: target };
+    if (!merged.changed) return { ok: true, message: t("ma.setup.already"), path: target };
     await mkdir(dirname(target), { recursive: true });
     let backup: string | undefined;
     if (existing != null) { backup = backupName(target, new Date()); await copyFile(target, backup); }
     await writeFile(`${target}.opentake-tmp`, merged.text);
     await rename(`${target}.opentake-tmp`, target);
-    return { ok: true, message: "Done. Quit Claude Desktop completely and open it again to load OpenTake.", path: target, backup };
+    return { ok: true, message: t("ma.setup.done"), path: target, backup };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e), path: target };
   }
@@ -117,15 +118,15 @@ function testConnection(): Promise<TestResult> {
   const l = launch();
   const started = Date.now();
   return new Promise((resolve) => {
-    if (!existsSync(l.args[0])) return resolve({ ok: false, message: `The server file is missing: ${l.args[0]}` });
+    if (!existsSync(l.args[0])) return resolve({ ok: false, message: t("ma.test.missing", { path: l.args[0] }) });
     // the data folder is passed only here, for a test copy run with its own --user-data-dir
     const p = spawn(l.command, l.args, { env: { ...process.env, ...l.env, OPENTAKE_USER_DATA: app.getPath("userData"), OPENTAKE_NO_LAUNCH: "1" }, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
     let buf = "";
     let tools = 0;
     const finish = (r: TestResult) => { clearTimeout(timer); p.kill(); resolve(r); };
-    const timer = setTimeout(() => finish({ ok: false, message: "The server did not answer within 20 seconds." }), 20_000);
+    const timer = setTimeout(() => finish({ ok: false, message: t("ma.test.timeout") }), 20_000);
     const send = (m: object) => p.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...m }) + "\n");
-    p.on("error", (e) => finish({ ok: false, message: `Could not start it: ${e.message}` }));
+    p.on("error", (e) => finish({ ok: false, message: t("ma.test.cannotStart", { detail: e.message }) }));
     p.stdout.on("data", (d: Buffer) => {
       buf += d.toString("utf8");
       let nl: number;
@@ -144,7 +145,7 @@ function testConnection(): Promise<TestResult> {
           const text = m.result?.content?.[0]?.text ?? "";
           if (m.result?.isError) return finish({ ok: false, message: text });
           const takes = Number(/^(\d+) take/.exec(text)?.[1] ?? 0);
-          finish({ ok: true, message: `Connected: ${tools} tools, ${takes} take(s) found. Claude and Codex start it the same way.`, tools, takes, ms: Date.now() - started });
+          finish({ ok: true, message: t("ma.test.connected", { tools, takes }), tools, takes, ms: Date.now() - started });
         }
       }
     });
@@ -181,7 +182,7 @@ export function registerAssistant(getMain: () => BrowserWindow | null, o: { back
     handlers: {
       ping: () => ({ version: app.getVersion(), window: !!getMain(), background: keepRunningWithoutWindows(), shortcutsHeld: allShortcuts().filter((k) => globalShortcut.isRegistered(k)) }),
       changed: (p) => { if (validTakeId(p.takeId)) changed(p.takeId); return true; },
-      job: (p) => { const j = jobs.get(String(p.id)); if (!j) throw new Error("That job is not known (OpenTake may have restarted)."); return j; },
+      job: (p) => { const j = jobs.get(String(p.id)); if (!j) throw new Error(t("ma.jobUnknown")); return j; },
       cancel: (p) => { const j = jobs.get(String(p.id)); if (j?.kind === "export") cancelExport(j.takeId); return !!j; },
       transcribe: (p) => {
         if (!validTakeId(p.takeId)) throw new Error("bad take id");

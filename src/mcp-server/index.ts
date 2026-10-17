@@ -6,7 +6,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { Bridge } from "./bridge-client";
 import { Ff } from "./ff";
-import { ffmpegBinary, recordingsRoot, userDataDir } from "./paths";
+import { localeFor, resolveLang, setLang } from "../shared/i18n";
+import { ffmpegBinary, readSettings, recordingsRoot, userDataDir } from "./paths";
 import { Store } from "./store";
 import { registerTools } from "./tools";
 
@@ -18,6 +19,10 @@ console.info = console.error;
 
 async function main() {
   const userData = userDataDir();
+  // what the person reads (the activity list, undo, timeline notes) follows the app's language
+  const system = [Intl.DateTimeFormat().resolvedOptions().locale, process.env.LANG ?? ""].filter(Boolean);
+  const lang = resolveLang(readSettings(userData).language, system);
+  setLang(lang, localeFor(lang, system));
   const server = new McpServer(
     { name: "opentake", title: "OpenTake", version },
     {

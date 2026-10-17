@@ -2,6 +2,7 @@
 // window's own preferences: first run done, dismissed suggestions, the Record panel's open section.
 import { create } from "zustand";
 import { IPC } from "@shared/ipc";
+import { bytes, t } from "@shared/i18n";
 import type { AppSettings, FolderChoice, Permissions, SettingsView } from "@shared/types";
 
 const bridge = () => (typeof window !== "undefined" ? window.take : undefined);
@@ -79,7 +80,18 @@ export async function refreshSettings() {
 /** Applies a folder choice: the new view, or the reason it was refused. */
 export function applyChoice(r: FolderChoice) {
   if (r.cancelled) return;
-  useShell.getState().set({ folderError: r.ok ? null : r.error ?? "That folder cannot be used.", ...(r.view ? { view: r.view } : {}) });
+  useShell.getState().set({ folderError: r.ok ? null : r.error ?? t("shell.folderUnusable"), ...(r.view ? { view: r.view } : {}) });
+}
+
+/** Saves the language; main switches every window (this one included) as soon as it is saved. */
+export async function setTheme(theme: AppSettings["theme"]) {
+  if (!bridge()) return;
+  useShell.getState().set({ view: await shellApi.set({ theme }) });
+}
+
+export async function setLanguage(language: AppSettings["language"]) {
+  if (!bridge()) return;
+  useShell.getState().set({ view: await shellApi.set({ language }) });
 }
 
 export const dismiss = (id: string) => {
@@ -92,5 +104,4 @@ export const goTo = (tab: TabId) => window.dispatchEvent(new CustomEvent("openta
 /** Opens the Record tab on one of its sections. */
 export const goToRecord = (section: RecordSection) => { useShell.getState().set({ recordSection: section }); goTo("record"); };
 
-const fmtGb = (b: number) => (b >= 1024 ** 4 ? `${(b / 1024 ** 4).toFixed(1)} TB` : `${(b / 1024 ** 3).toFixed(b < 10 * 1024 ** 3 ? 1 : 0)} GB`);
-export const freeLabel = (b: number | null) => (b == null ? "" : `${fmtGb(b)} free`);
+export const freeLabel = (b: number | null) => (b == null ? "" : t("shell.free", { size: bytes(b) }));

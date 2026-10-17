@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowLeft, Pause, Play, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut, ArchiveRestore, Upload } from "lucide-react";
 import type { CaptionLang, CaptionLine, EditorTake, TakePeaks, TimeRange } from "@shared/types";
+import { dateTime, t } from "@shared/i18n";
 import { Button, Hint } from "../../ui";
 import { usePrompter } from "../teleprompter/store";
 import { refreshTakes } from "../record/recorder";
@@ -80,7 +81,7 @@ export function Editor({ takeId, onClose }: { takeId: string; onClose: () => voi
         setSaveError(null);
         void refreshTakes();
       } catch (e) {
-        setSaveError(`Could not save: ${e instanceof Error ? e.message : e}`);
+        setSaveError(t("editor.couldNotSave", { error: e instanceof Error ? e.message : String(e) }));
       }
     }, 400);
     return () => clearTimeout(timer);
@@ -201,7 +202,7 @@ export function Editor({ takeId, onClose }: { takeId: string; onClose: () => voi
       const lines = groupWords(fromVosk(words, doc.lang), doc.lang);
       change((d) => ({ ...d, lines }));
     } catch (e) {
-      if (!ctl.signal.aborted) setCaptionError(`Could not make captions: ${e instanceof Error ? e.message : e}`);
+      if (!ctl.signal.aborted) setCaptionError(t("editor.captionsFailed", { error: e instanceof Error ? e.message : String(e) }));
     } finally {
       setCaptionJob(null);
       abort.current = null;
@@ -214,7 +215,7 @@ export function Editor({ takeId, onClose }: { takeId: string; onClose: () => voi
       if (doc?.lines) { await editorApi.saveCaptions(takeId, { version: 1, lang: doc.lang, lines: doc.lines }); saved.current.lines = doc.lines; }
       if (doc && duration != null) { await editorApi.saveEdit(takeId, { version: 1, keep: doc.keep }, duration); saved.current.keep = doc.keep; }
       await editorApi.captionFiles(takeId);
-      setFilesNote("Saved take.srt and take.vtt");
+      setFilesNote(t("editor.savedCaptionFiles"));
       void refreshTakes();
     } catch (e) {
       setFilesNote(e instanceof Error ? e.message : String(e));
@@ -245,31 +246,31 @@ export function Editor({ takeId, onClose }: { takeId: string; onClose: () => voi
   const active = lines ? activeLine(lines, playhead) : -1;
   const running = progress && !progress.done;
   const cut = duration != null && !isWhole(keep, duration);
-  const title = data ? data.take.title || new Date(data.take.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  const title = data ? data.take.title || dateTime(data.take.createdAt) : "";
 
   return (
-    <div className="ed-scrim" role="dialog" aria-label="Edit take">
+    <div className="ed-scrim" role="dialog" aria-label={t("editor.aria")}>
       <header className="ed-head">
-        <Button variant="ghost" onClick={close}><ArrowLeft />Takes</Button>
+        <Button variant="ghost" onClick={close}><ArrowLeft />{t("editor.back")}</Button>
         <div className="ed-title">
           <b>{title}</b>
-          {duration != null && <span className="tnum">{cut ? `${formatTime(editedMs, false)} of ${formatTime(duration, false)}` : formatTime(duration, false)}</span>}
+          {duration != null && <span className="tnum">{cut ? t("editor.lengthOf", { edited: formatTime(editedMs, false), total: formatTime(duration, false) }) : formatTime(duration, false)}</span>}
         </div>
         <div className="ed-head-tools">
           {saveError && <span className="note note-danger">{saveError}</span>}
           {running && <span className="note tnum">{progress.stage}{progress.ratio != null ? ` ${Math.round(progress.ratio * 100)}%` : ""}</span>}
-          {progress?.done && progress.output && !progress.error && <span className="note">Saved {progress.output.split(/[\\/]/).pop()}</span>}
+          {progress?.done && progress.output && !progress.error && <span className="note">{t("editor.savedFile", { file: progress.output.split(/[\\/]/).pop() ?? "" })}</span>}
           {progress?.error && <span className="note note-danger">{progress.error}</span>}
-          <Button size="icon" variant="ghost" onClick={doUndo} disabled={!hist?.past.length} title="Undo (Ctrl+Z)" aria-label="Undo"><Undo2 /></Button>
-          <Button size="icon" variant="ghost" onClick={doRedo} disabled={!hist?.future.length} title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><Redo2 /></Button>
-          <Button variant="ink" onClick={exportNow} disabled={!hist || running}><Upload />Export</Button>
+          <Button size="icon" variant="ghost" onClick={doUndo} disabled={!hist?.past.length} title={t("editor.undoTitle")} aria-label={t("editor.undo")}><Undo2 /></Button>
+          <Button size="icon" variant="ghost" onClick={doRedo} disabled={!hist?.future.length} title={t("editor.redoTitle")} aria-label={t("editor.redo")}><Redo2 /></Button>
+          <Button variant="ink" onClick={exportNow} disabled={!hist || running}><Upload />{t("editor.export")}</Button>
         </div>
       </header>
 
       <div className="ed-body">
         <div className="ed-stage">
           {error && <p className="note note-danger">{error}</p>}
-          {!data && !error && <p className="note">Opening the take</p>}
+          {!data && !error && <p className="note">{t("editor.opening")}</p>}
           {data && (
             <Player url={data.mediaUrl} videoRef={video} onReady={(ms) => begin(Number.isFinite(ms) && ms > 0 ? ms : data.durationMs ?? 0)}
               onTime={(ms) => { if (!playing) setPlayhead(ms); }} onClick={toggle}
@@ -289,30 +290,30 @@ export function Editor({ takeId, onClose }: { takeId: string; onClose: () => voi
 
       <footer className="ed-foot">
         <div className="ed-transport">
-          <Button size="icon" variant="ink" onClick={toggle} disabled={!hist} title={playing ? "Pause (Space)" : "Play (Space)"} aria-label={playing ? "Pause" : "Play"}>{playing ? <Pause /> : <Play />}</Button>
-          <span className="ed-clock tnum" title="Position in the edited video, and on the recording">
-            {editedAt != null ? formatTime(editedAt) : "Cut"} <small>/ {formatTime(editedMs)}</small>
+          <Button size="icon" variant="ink" onClick={toggle} disabled={!hist} title={playing ? t("editor.pauseTitle") : t("editor.playTitle")} aria-label={playing ? t("editor.pause") : t("editor.play")}>{playing ? <Pause /> : <Play />}</Button>
+          <span className="ed-clock tnum" title={t("editor.clockTitle")}>
+            {editedAt != null ? formatTime(editedAt) : t("editor.cutHere")} <small>/ {formatTime(editedMs)}</small>
           </span>
           <div className="ed-tools">
-            <Button size="sm" onClick={markIn} disabled={!hist} title="Cut everything before the playhead (I)">Set in</Button>
-            <Button size="sm" onClick={markOut} disabled={!hist} title="Cut everything after the playhead (O)">Set out</Button>
-            <Button size="sm" onClick={split} disabled={!hist} title="Split at the playhead (S)"><Scissors />Split</Button>
+            <Button size="sm" onClick={markIn} disabled={!hist} title={t("editor.setInTitle")}>{t("editor.setIn")}</Button>
+            <Button size="sm" onClick={markOut} disabled={!hist} title={t("editor.setOutTitle")}>{t("editor.setOut")}</Button>
+            <Button size="sm" onClick={split} disabled={!hist} title={t("editor.splitTitle")}><Scissors />{t("editor.split")}</Button>
             {selection?.kind === "gap"
-              ? <Button size="sm" onClick={removeSelected} title="Put this cut back (Delete)"><ArchiveRestore />Restore</Button>
-              : <Button size="sm" onClick={removeSelected} disabled={!hist || keep.length <= 1} title="Delete the selected part, or the part under the playhead (Delete)"><Trash2 />Delete</Button>}
+              ? <Button size="sm" onClick={removeSelected} title={t("editor.restoreTitle")}><ArchiveRestore />{t("editor.restore")}</Button>
+              : <Button size="sm" onClick={removeSelected} disabled={!hist || keep.length <= 1} title={t("editor.deleteTitle")}><Trash2 />{t("editor.delete")}</Button>}
           </div>
           <div className="ed-zoom">
-            <Button size="icon-sm" variant="ghost" onClick={() => setZoom((z) => Math.max(1, z / 1.5))} disabled={zoom <= 1} title="Zoom out (-)" aria-label="Zoom out"><ZoomOut /></Button>
-            <input className="range" type="range" min={0} max={Math.log(MAX_ZOOM)} step={0.01} value={Math.log(zoom)} aria-label="Zoom"
+            <Button size="icon-sm" variant="ghost" onClick={() => setZoom((z) => Math.max(1, z / 1.5))} disabled={zoom <= 1} title={t("editor.zoomOutTitle")} aria-label={t("editor.zoomOut")}><ZoomOut /></Button>
+            <input className="range" type="range" min={0} max={Math.log(MAX_ZOOM)} step={0.01} value={Math.log(zoom)} aria-label={t("editor.zoom")}
               style={{ "--lo": "0%", "--hi": `${(Math.log(zoom) / Math.log(MAX_ZOOM)) * 100}%` } as CSSProperties}
               onChange={(e) => setZoom(Math.exp(Number(e.target.value)))} />
-            <Button size="icon-sm" variant="ghost" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 1.5))} title="Zoom in (+)" aria-label="Zoom in"><ZoomIn /></Button>
+            <Button size="icon-sm" variant="ghost" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 1.5))} title={t("editor.zoomInTitle")} aria-label={t("editor.zoomIn")}><ZoomIn /></Button>
           </div>
         </div>
         {duration != null && doc ? (
           <Timeline durationMs={duration} keep={keep} peaks={peaks} lines={lines} playhead={playhead} zoom={zoom} selection={selection}
             onSeek={seek} onSelect={setSelection} onZoom={setZoom} />
-        ) : <div className="ed-timeline-wait note">Reading the take</div>}
+        ) : <div className="ed-timeline-wait note">{t("editor.reading")}</div>}
       </footer>
     </div>
   );
@@ -321,16 +322,16 @@ export function Editor({ takeId, onClose }: { takeId: string; onClose: () => voi
 function KeysCard() {
   return (
     <section className="card ed-keys">
-      <div className="card-head"><h3 className="card-title">Keys<Hint text="Shortcuts work while the editor is open and you are not typing in a caption." /></h3></div>
+      <div className="card-head"><h3 className="card-title">{t("card.keys")}<Hint text={t("editor.keys.hint")} /></h3></div>
       <dl>
-        <dt><kbd>Space</kbd></dt><dd>Play or pause</dd>
-        <dt><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd></dt><dd>Back 2 s, pause, play (again: faster)</dd>
-        <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>One frame, with Shift one second</dd>
-        <dt><kbd>I</kbd> <kbd>O</kbd></dt><dd>Cut before or after the playhead</dd>
-        <dt><kbd>S</kbd></dt><dd>Split at the playhead</dd>
-        <dt><kbd>Delete</kbd></dt><dd>Delete the part, or restore a cut</dd>
-        <dt><kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>Undo, with Shift redo</dd>
-        <dt><kbd>Ctrl</kbd> + wheel</dt><dd>Zoom the timeline</dd>
+        <dt><kbd>{t("editor.keys.space")}</kbd></dt><dd>{t("editor.keys.playPause")}</dd>
+        <dt><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd></dt><dd>{t("editor.keys.jkl")}</dd>
+        <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>{t("editor.keys.arrows")}</dd>
+        <dt><kbd>I</kbd> <kbd>O</kbd></dt><dd>{t("editor.keys.inOut")}</dd>
+        <dt><kbd>S</kbd></dt><dd>{t("editor.keys.split")}</dd>
+        <dt><kbd>{t("editor.keys.delete")}</kbd></dt><dd>{t("editor.keys.deletePart")}</dd>
+        <dt><kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>{t("editor.keys.undo")}</dd>
+        <dt><kbd>Ctrl</kbd> {t("editor.keys.wheel")}</dt><dd>{t("editor.keys.zoom")}</dd>
       </dl>
     </section>
   );
@@ -377,7 +378,7 @@ function Player({ url, videoRef, onReady, onTime, onClick, caption, playhead }: 
           onLoadedMetadata={(e) => { const v = e.currentTarget; setNatural({ w: v.videoWidth || 16, h: v.videoHeight || 9 }); onReady(v.duration * 1000); }}
           onTimeUpdate={(e) => onTime(e.currentTarget.currentTime * 1000)}
           onSeeked={(e) => onTime(e.currentTarget.currentTime * 1000)}
-          onError={() => { setFailed("The take could not be played here. Cuts and export still work."); onReady(NaN); }} />
+          onError={() => { setFailed(t("editor.playerFailed")); onReady(NaN); }} />
         {text && fit && (
           <div className={`ed-cap ${look.style} ${look.position}`}
             style={{ fontSize: short * (look.style === "social" ? 0.085 : 0.05), [look.position]: look.margin * fit.h } as CSSProperties}>

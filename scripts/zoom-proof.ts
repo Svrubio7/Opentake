@@ -24,7 +24,7 @@ type TP = Pt & { t: number };
 type Frame = { t: number; scale: number; x: number; y: number };
 interface Model {
   simulateCamera(clicks: TP[], cursor: TP[], durationMs: number, fps: number): Frame[];
-  LiveZoom: new () => { click(p: Pt, t: number): void; move(t: number): void; update(t: number, c: Pt | null): Omit<Frame, "t"> };
+  LiveZoom: new () => { click(p: Pt, t: number): void; move(t: number): void; update(t: number, c: Pt | null, ahead?: Pt | null): Omit<Frame, "t"> };
 }
 
 // ---- synthetic timelines ----
@@ -109,6 +109,28 @@ function runLive(m: Model, sc: Scenario, fps = FPS): Frame[] {
   return frames;
 }
 const runExport = (m: Model, sc: Scenario, fps = FPS) => m.simulateCamera(sc.clicks, sc.cursor, sc.durationMs, fps);
+
+/**
+ * The delayed live recording (engine.ts during a take with auto zoom): the picture at time t is drawn
+ * at real time t + DELAY_MS, when every click up to then has arrived (at its real time) and the cursor
+ * trail is known up to then (in 50 ms batches).
+ */
+function runDelayed(m: Model, sc: Scenario, fps = FPS, delayMs = 800, cursorLeadMs = 500): Frame[] {
+  const z = new m.LiveZoom();
+  const frames: Frame[] = [];
+  let ci = 0, si = 0, nextFlush = 50;
+  const trail: TP[] = [];
+  for (let i = 0; i * (1000 / fps) <= sc.durationMs; i++) {
+    const t = i * (1000 / fps), now = t + delayMs;
+    while (nextFlush <= now) { while (si < sc.cursor.length && sc.cursor[si].t <= nextFlush) trail.push(sc.cursor[si++]); nextFlush += 50; }
+    while (ci < sc.clicks.length && sc.clicks[ci].t <= now) { const c = sc.clicks[ci++]; z.click(c, c.t); }
+    frames.push({ t, ...z.update(t, NEW.cursorAt(trail, t), NEW.cursorAt(trail, t + cursorLeadMs)) });
+  }
+  return frames;
+}
+type Path = "live" | "delayed" | "export";
+const run = (m: Model, sc: Scenario, path: Path, fps = FPS) => (path === "live" ? runLive(m, sc, fps) : path === "delayed" ? runDelayed(m, sc, fps) : runExport(m, sc, fps));
+const PATH_LABEL: Record<Path, string> = { live: "live recording", delayed: "live recording (delayed)", export: "hi-res export" };
 
 // ---- metrics ----
 
@@ -274,8 +296,8 @@ async function main() {
   // metrics, at the take's 30 fps and at 60
   const rows: string[] = [];
   const report: Record<string, unknown> = {};
-  for (const sc of SCENARIOS) for (const fps of [30, 60]) for (const { key, m } of models) for (const path of ["live", "export"] as const) {
-    const fr = path === "live" ? runLive(m, sc, fps) : runExport(m, sc, fps);
+  for (const sc of SCENARIOS) for (const fps of [30, 60]) for (const { key, m } of models) for (const path of (key === "new" ? ["live", "delayed", "export"] : ["live", "export"]) as Path[]) {
+    const fr = run(m, sc, path, fps);
     const r = metrics(fr, sc, NEW.DEFAULT_ZOOM.scale);
     report[`${sc.name}/${fps}/${key}/${path}`] = r;
     rows.push([sc.name.padEnd(7), String(fps).padEnd(3), key.padEnd(4), path.padEnd(7),
@@ -296,14 +318,14 @@ async function main() {
   const src = await testPattern();
   const cols = models.length;
   const VW = PW * cols, VH = PH * 2;
-  const panels: { model: (typeof models)[number]; path: "live" | "export"; ox: number; oy: number }[] = [];
-  models.forEach((model, ci) => (["live", "export"] as const).forEach((path, ri) => panels.push({ model, path, ox: ci * PW, oy: ri * PH })));
-  const labels = await Promise.all(panels.map((p) => label(`${p.model.label} - ${p.path === "live" ? "live recording" : "hi-res export"}`, 420, 44)));
+  const panels: { model: (typeof models)[number]; path: Path; ox: number; oy: number }[] = [];
+  models.forEach((model, ci) => ((model.key === "new" ? ["delayed", "export"] : ["live", "export"]) as Path[]).forEach((path, ri) => panels.push({ model, path, ox: ci * PW, oy: ri * PH })));
+  const labels = await Promise.all(panels.map((p) => label(`${p.model.label} - ${PATH_LABEL[p.path]}`, 420, 44)));
   const ff = spawn(ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", `${VW}x${VH}`, "-r", String(FPS), "-i", "-",
     "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p", "-movflags", "+faststart", join(OUT, "zoom-compare.mp4")], { stdio: ["pipe", "inherit", "inherit"] });
   const sheetTimes: Record<string, number[]> = {};
   for (const sc of SCENARIOS) {
-    const runs = panels.map((p) => (p.path === "live" ? runLive(p.model.m, sc) : runExport(p.model.m, sc)));
+    const runs = panels.map((p) => run(p.model.m, sc, p.path));
     const title = await label(sc.title, 320, 44);
     const n = runs[0].length;
     // contact sheet: one row per panel, a column every 150 ms from 900 ms before the first click

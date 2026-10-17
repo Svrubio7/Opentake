@@ -10,6 +10,7 @@ import {
   type CardLook, type LowerThirdLook,
 } from "./overlays-core";
 import { useRecord } from "./store";
+import { Pending } from "./delay-core";
 import { springStep, type Pt, type Spring } from "./zoom-core";
 
 /** What the panel and the bar need to know about the overlays right now. */
@@ -53,6 +54,10 @@ function wrap(g: CanvasRenderingContext2D, text: string, maxW: number, max: numb
 }
 
 export class OverlayPainter {
+  /** the picture runs this far behind real time (a delayed take): keys and the name card hotkey wait for it */
+  delayMs = 0;
+  private keyQueue = new Pending<Parameters<typeof pushKey>[1]>();
+  private cardQueue = new Pending<boolean>();
   private ripples: { x: number; y: number; t: number }[] = [];
   private feed: KeyFeed | null = null;
   private target: Pt | null = null;
@@ -70,7 +75,8 @@ export class OverlayPainter {
     if (!hasBridge()) return;
     api.onKeys((p) => {
       const k = useRecord.getState().keys;
-      this.feed = pushKey(this.feed, p, { showAll: k.showAll, mac: IS_MAC }, Date.now());
+      if (!k.enabled) return;
+      this.keyQueue.push(Date.now(), p);
     });
     const sync = () => {
       const k = useRecord.getState().keys;
@@ -103,7 +109,7 @@ export class OverlayPainter {
   /** Starts the outro; returns how long the take must keep recording for it (0 when it is off). */
   startOutro(now: number): number {
     const ms = outroSpanMs(useRecord.getState().outro);
-    if (ms > 0) { this.outroStart = now; useOverlays.setState({ outroEndsAt: now + ms }); }
+    if (ms > 0) { this.outroStart = now; useOverlays.setState({ outroEndsAt: now + ms + this.delayMs }); }
     return ms;
   }
 
@@ -117,7 +123,10 @@ export class OverlayPainter {
   toggleLowerThird() {
     const s = useRecord.getState();
     if (!s.lowerThird.enabled) return false;
-    useOverlays.setState({ lowerThirdManual: !(this.ltValue > 0.5) });
+    // shown when the picture reaches the press (a delayed take draws it that much later)
+    const last = this.cardShown ?? this.ltValue > 0.5;
+    this.cardShown = !last;
+    this.cardQueue.push(Date.now(), !last);
     return true;
   }
 
@@ -139,8 +148,11 @@ export class OverlayPainter {
 
   /** Once per frame: moves the smoothed pointer. */
   tick(now: number) {
-    const dt = this.lastTick ? Math.min(100, now - this.lastTick) : 0;
+    const dt = this.lastTick ? Math.min(100, Math.max(0, now - this.lastTick)) : 0;
     this.lastTick = now;
+    // keystrokes join the feed when the picture reaches them
+    const k = useRecord.getState().keys;
+    for (const e of this.keyQueue.due(now)) this.feed = pushKey(this.feed, e.v, { showAll: k.showAll, mac: IS_MAC }, e.t);
     if (!this.target) return;
     if (!this.spring) { this.spring = { x: { value: this.target.x, velocity: 0 }, y: { value: this.target.y, velocity: 0 } }; return; }
     this.spring = { x: springStep(this.spring.x, this.target.x, dt, 16), y: springStep(this.spring.y, this.target.y, dt, 16) };
@@ -153,6 +165,7 @@ export class OverlayPainter {
   drawScreen(ctx: CanvasRenderingContext2D, r: Rect, view: View, k: number, now: number, zoom: number, alpha: number) {
     const p = useRecord.getState().pointer;
     this.ripples = this.ripples.filter((c) => now - c.t < RIPPLE_MS);
+    const shownRipples = this.ripples.filter((c) => now >= c.t);
     const glide = this.smoothed();
 
     if (p.spotlight && glide) {
@@ -167,7 +180,7 @@ export class OverlayPainter {
     }
 
     if (p.highlight) {
-      for (const c of this.ripples) {
+      for (const c of shownRipples) {
         const ring = rippleAt(now - c.t, RIPPLE_MS, Math.max(0.3, p.highlightSize));
         if (!ring) continue;
         const at = viewToFrame(c, r, view);
@@ -223,7 +236,9 @@ export class OverlayPainter {
 
     if (s.logo.enabled && s.logoImage) this.drawLogo(ctx, W, H);
 
-    const ms = this.takeStart != null ? now - this.takeStart : null;
+    for (const e of this.cardQueue.due(now)) { useOverlays.setState({ lowerThirdManual: e.v }); if (this.cardShown === e.v) this.cardShown = null; }
+    // before the take starts (the first moments of a delayed take) there is no take time yet
+    const ms = this.takeStart != null && now >= this.takeStart ? now - this.takeStart : null;
     const introMs = ms != null ? introSpanMs(s.intro) : 0;
     this.ltValue = approach(this.ltValue, lowerThirdWanted(s.lowerThird, ms, introMs, o.lowerThirdManual), dt, LOWER_THIRD_MS);
     if (this.ltValue > 0) this.drawLowerThird(ctx, s.lowerThird, W, H, k, this.ltValue);
@@ -251,6 +266,8 @@ export class OverlayPainter {
     if (outro > 0) this.drawCard(ctx, "outro", s.outro, W, H, k, outro, bg);
   }
   private frameT = 0;
+  /** the name card state the last hotkey press asked for, until the picture reaches it */
+  private cardShown: boolean | null = null;
 
   private cached(id: string, key: string, paint: (c: HTMLCanvasElement) => void): HTMLCanvasElement {
     const hit = this.caches.get(id);

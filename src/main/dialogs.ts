@@ -3,6 +3,7 @@
 // opens on screen: pickers return the answer, Explorer and Finder calls are only logged.
 import { dialog, shell, type BrowserWindow } from "electron";
 import { readFileSync } from "node:fs";
+import { t } from "../shared/i18n";
 
 interface FakeAnswers { folder?: string; save?: string; message?: number }
 
@@ -29,7 +30,7 @@ export async function pickSaveFile(win: BrowserWindow | null, defaultPath: strin
   const f = fake();
   if (f) { console.log("[fake-dialog] save", defaultPath); return !f.save || f.save === "cancel" ? null : f.save; }
   const name = ext === "gif" ? "GIF" : ext.toUpperCase();
-  const opts = { title: "Export to", defaultPath, filters: [{ name: `${name} video`, extensions: [ext] }] };
+  const opts = { title: t("main.export.dialogTitle"), defaultPath, filters: [{ name: t("main.export.filterName", { format: name }), extensions: [ext] }] };
   const p = parent(win);
   const r = p ? await dialog.showSaveDialog(p, opts) : await dialog.showSaveDialog(opts);
   return r.canceled || !r.filePath ? null : r.filePath;

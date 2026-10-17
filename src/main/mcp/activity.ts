@@ -3,6 +3,7 @@
 // activity.jsonl, one line per tool call, and snapshots/<id>.json, the files an edit changed as they
 // were before it. Undo puts them back only while they still hold what the assistant wrote, so a later
 // change by hand is never thrown away. Nothing is deleted: a file the edit created is moved aside.
+import { t } from "../../shared/i18n";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
@@ -106,17 +107,17 @@ export interface UndoResult { ok: boolean; message: string; takeId?: string }
 
 /** Puts an edit's files back as they were before it. */
 export async function undo(userData: string, id: string): Promise<UndoResult> {
-  if (!/^[a-z0-9]+-[0-9a-f]{8}$/.test(id)) return { ok: false, message: "That is not a change OpenTake knows." };
+  if (!/^[a-z0-9]+-[0-9a-f]{8}$/.test(id)) return { ok: false, message: t("ma.undo.unknown") };
   const entry = (await readActivity(userData, 10_000)).find((e) => e.id === id);
-  if (!entry) return { ok: false, message: "That change is not in the list any more." };
-  if (entry.undoneAt) return { ok: false, message: "That change was already undone.", takeId: entry.takeId };
+  if (!entry) return { ok: false, message: t("ma.undo.gone") };
+  if (entry.undoneAt) return { ok: false, message: t("ma.undo.already"), takeId: entry.takeId };
   const raw = await readText(snapFile(userData, id));
-  if (!raw) return { ok: false, message: "That change cannot be undone.", takeId: entry.takeId };
+  if (!raw) return { ok: false, message: t("ma.undo.cannot"), takeId: entry.takeId };
   const snap = JSON.parse(raw) as Snapshot;
-  if (!existsSync(snap.takeDir)) return { ok: false, message: "The take is not in its folder any more.", takeId: snap.takeId };
+  if (!existsSync(snap.takeDir)) return { ok: false, message: t("ma.undo.noFolder"), takeId: snap.takeId };
   for (const f of snap.files) {
     if (hash(await current(snap.takeDir, f.name)) !== f.after) {
-      return { ok: false, message: "The take was changed again after this, so undo it in the editor instead.", takeId: snap.takeId };
+      return { ok: false, message: t("ma.undo.changedSince"), takeId: snap.takeId };
     }
   }
   for (const f of snap.files) {
@@ -134,5 +135,5 @@ export async function undo(userData: string, id: string): Promise<UndoResult> {
     }
   }
   await append(userData, { undo: id, at: Date.now() });
-  return { ok: true, message: `Undid: ${entry.summary}`, takeId: snap.takeId };
+  return { ok: true, message: t("ma.undo.done", { summary: entry.summary }), takeId: snap.takeId };
 }

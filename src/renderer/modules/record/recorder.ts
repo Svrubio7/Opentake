@@ -2,12 +2,16 @@
 // screen and the camera. Chunks go to disk every second through IPC, so a crash keeps the take.
 import { getStream } from "@core/streams";
 import type { ExportOutput, RecordMode, RecordShortcut, RecordTrack, TakeTimeline } from "@shared/types";
+import { t } from "../../../shared/i18n";
 import { api, hasBridge } from "./api";
 import { AUDIO_BPS, DISK_POLL_MS, diskBeforeTake, diskWhileRecording, takeBitrate, type DiskLevel } from "./disk-core";
+import { delayedSoundPath, laterQueue } from "./delay-core";
+import { getEngine } from "../audio/engine";
+import { delayedSound } from "./delayed-sound";
 import { compositor } from "./engine";
 import { extensionFor, needsCamera, needsScreen, pickMime, videoBitrate } from "./layout-core";
 import { currentLayout, useRecord } from "./store";
-import { NAME_CARD_NOTICE, PICK_NOTICE, SAVED_NOTICE } from "./notice-core";
+
 import { useShell } from "../shell/store";
 import { muteOwnAudio, systemSound, useSystemSound, type TakeAudio } from "./system-audio";
 import { pickAudioMime, systemAudioWanted } from "./system-audio-core";
@@ -30,7 +34,12 @@ interface Session {
   /** what all tracks write together, bits a second */
   bitrate: number;
   diskLevel: DiskLevel;
+  /** the composite picture runs this far behind real time (auto zoom ahead of clicks); 0 = live */
+  delayMs: number;
+  /** schedules a composite recorder step delayMs later, in order (at once when delayMs is 0) */
+  later: (fn: () => void) => void;
 }
+
 
 let session: Session | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -50,11 +59,14 @@ export function ipcMessage(e: unknown): string {
 function writeFailure(track: RecordTrack, err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   if (/ENOENT|EIO|ENODEV|ENXIO|EBUSY|not available|no such file/i.test(msg)) {
-    return "The recordings folder stopped answering (was a drive unplugged?). The take was stopped and what was recorded so far is kept.";
+    return t("record.rec.folderGone");
   }
-  if (/ENOSPC|no space/i.test(msg)) return "The recordings drive is full. The take was stopped and what was recorded so far is kept.";
-  return `Could not write the ${track} track, so the take was stopped: ${msg}`;
+  if (/ENOSPC|no space/i.test(msg)) return t("record.rec.driveFull");
+  return t("record.rec.writeFailed", { track: t(`record.rec.track.${track}`), reason: msg });
 }
+
+// a message from main that ends in "Settings" / "Ajustes" names its own fix
+const SETTINGS_HINT = /Settings|Ajustes/;
 
 const st = () => useRecord.getState();
 
@@ -107,21 +119,21 @@ function makeTrack(s: Session, track: RecordTrack, stream: MediaStream, mime: st
 export function startRecording() {
   const s = st();
   if (s.status !== "idle") return;
-  if (!hasBridge()) return s.set({ error: "Recording needs the desktop app." });
+  if (!hasBridge()) return s.set({ error: t("record.rec.needsApp") });
   // a folder already known to be gone is said before the countdown, not after it (main checks again)
   const folder = useShell.getState().view?.recordings;
   if (folder && folder.state !== "ok") {
     return s.set({
       error: folder.state === "missing"
-        ? `The recordings folder ${folder.path} is not available. Is its drive plugged in? Choose another folder in Settings.`
-        : `OpenTake cannot write to the recordings folder ${folder.path}. Choose another folder in Settings.`,
+        ? t("record.notice.folderMissing", { path: folder.path })
+        : t("record.notice.folderReadonly", { path: folder.path }),
       noticeAction: "settings",
     });
   }
   if (needsScreen(s.mode) && !getStream("screen")) {
     // the one fix is choosing a screen: open the picker instead of only saying so
     window.dispatchEvent(new Event("opentake:pick-screen"));
-    return s.set({ error: null, notice: PICK_NOTICE, noticeAction: null });
+    return s.set({ error: null, notice: t("record.notice.pick"), noticeAction: null });
   }
   s.set({ error: null, notice: null, noticeAction: null });
   if (!s.countdown) return void begin();
@@ -144,14 +156,14 @@ function cancelCountdown() {
 }
 
 /** Opens the computer sound for a take and mixes it with the mic; null when it is off or unavailable. */
-async function takeSystemAudio(mic: MediaStreamTrack[], cleanup: (() => void)[]): Promise<TakeAudio | null> {
+async function takeSystemAudio(mic: MediaStreamTrack[], cleanup: (() => void)[], delayMs: number): Promise<TakeAudio | null> {
   const sys = systemSound();
   const ok = await sys.acquire();
   cleanup.push(() => sys.release());
-  const audio = ok ? sys.mix(mic) : null;
+  const audio = ok ? sys.mix(mic, delayMs) : null;
   if (!audio) {
     const reason = useSystemSound.getState().reason;
-    st().set({ notice: `Recording without computer sound${reason ? `: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}` : "."}` });
+    st().set({ notice: reason ? t("record.notice.noComputerSoundWhy", { reason: `${reason.charAt(0).toLowerCase()}${reason.slice(1)}` }) : t("record.notice.noComputerSound") });
     return null;
   }
   cleanup.push(audio.dispose);
@@ -186,14 +198,28 @@ async function begin() {
   const comp = compositor();
   const owned: MediaStreamTrack[] = [];
   const cleanup: (() => void)[] = [];
+  // with auto zoom the picture runs behind real time from now on (the frames start filling the
+  // rings here, before the take's first moment); the composite waits for it below
+  const delay = comp.beginDelay();
+  cleanup.push(() => comp.endDelay());
   try {
     s.set({ status: "recording", elapsedMs: 0 });
+    if (delay.reason) s.set({ notice: t("record.rec.zoomNotice", { reason: delay.reason }) });
     await checkDiskBeforeTake();
     const mic = await getMicTracks(owned);
-    const sysAudio = systemAudioWanted(layout.mode, s) ? await takeSystemAudio(mic, cleanup) : null;
+    const sysAudio = systemAudioWanted(layout.mode, s) ? await takeSystemAudio(mic, cleanup, delay.delayMs) : null;
     const canvasTrack = comp.canvas.captureStream(layout.fps).getVideoTracks()[0];
     owned.push(canvasTrack);
-    const compositeAudio = sysAudio ? [sysAudio.mixed] : mic;
+    // a delayed take's composite sound is delayed inside the graph that makes it (the computer sound
+    // mix, or the voice engine): one more trip between audio contexts would put it 50 ms behind
+    let compositeAudio = sysAudio ? [sysAudio.mixed] : mic;
+    const path = delayedSoundPath({ delayMs: delay.delayMs, hasSound: compositeAudio.length > 0, systemMix: !!sysAudio, voiceEngine: st().micSource === "module" });
+    if (path === "voice" || path === "hop") {
+      const voice = path === "voice" ? getEngine().delayedVoice(delay.delayMs) : null;
+      const d = voice ? { tracks: [voice.track], dispose: voice.dispose } : delayedSound(compositeAudio, delay.delayMs);
+      cleanup.push(d.dispose);
+      compositeAudio = d.tracks;
+    }
     const composite = new MediaStream([canvasTrack, ...compositeAudio]);
     const mime = pickMime((m) => MediaRecorder.isTypeSupported(m), compositeAudio.length > 0);
     const isoMime = pickMime((m) => MediaRecorder.isTypeSupported(m), false);
@@ -227,7 +253,10 @@ async function begin() {
       scenes: [],
       overlays: comp.overlays.activeList(),
     };
-    const sess: Session = { takeId, tracks: [], startWall: 0, pausedTotal: 0, pauseStart: null, timeline, owned, unsubscribe: () => {}, timers: [], failed: null, cleanup, bitrate: 0, diskLevel: "ok" };
+    const sess: Session = {
+      takeId, tracks: [], startWall: 0, pausedTotal: 0, pauseStart: null, timeline, owned, unsubscribe: () => {}, timers: [], failed: null, cleanup, bitrate: 0, diskLevel: "ok",
+      delayMs: delay.delayMs, later: laterQueue(delay.delayMs),
+    };
 
     sess.tracks.push(makeTrack(sess, "composite", composite, mime, videoBitrate(layout.width, layout.height, layout.fps)));
     if (screen) {
@@ -264,7 +293,11 @@ async function begin() {
 
     sess.startWall = Date.now();
     comp.overlays.takeStarted(sess.startWall);
-    for (const t of sess.tracks) t.rec.start(1000);
+    // the composite starts when the delayed picture reaches this moment, so every file's clock is the take's
+    for (const t of sess.tracks) {
+      if (t.track === "composite") sess.later(() => { if (t.rec.state === "inactive") t.rec.start(1000); });
+      else t.rec.start(1000);
+    }
     session = sess;
     sess.timers.push(setInterval(() => st().set({ elapsedMs: elapsed() }), 200));
     // the click timeline is small: rewrite it every few seconds so a crash keeps it too
@@ -276,22 +309,25 @@ async function begin() {
     cleanup.forEach((f) => f());
     session = null;
     const msg = ipcMessage(e);
-    st().set({ status: "idle", error: /Settings/.test(msg) ? msg : `Could not start recording: ${msg}`, noticeAction: /Settings/.test(msg) ? "settings" : null });
+    st().set({ status: "idle", error: SETTINGS_HINT.test(msg) ? msg : t("record.rec.startFailed", { reason: msg }), noticeAction: SETTINGS_HINT.test(msg) ? "settings" : null });
   }
 }
 
 export function togglePause() {
   const s = session;
-  if (!s) return;
+  // the outro plays to its end on a timer: a pause there would stop the take with the outro cut short
+  if (!s || outroTimer) return;
   const status = st().status;
+  // the composite pauses and resumes when its delayed picture reaches the press
+  const each = (fn: (t: Track) => void) => s.tracks.forEach((t) => (t.track === "composite" ? s.later(() => fn(t)) : fn(t)));
   if (status === "recording") {
     s.pauseStart = Date.now();
-    s.tracks.forEach((t) => t.rec.state === "recording" && t.rec.pause());
+    each((t) => t.rec.state === "recording" && t.rec.pause());
     st().set({ status: "paused" });
   } else if (status === "paused") {
     if (s.pauseStart != null) s.pausedTotal += Date.now() - s.pauseStart;
     s.pauseStart = null;
-    s.tracks.forEach((t) => t.rec.state === "paused" && t.rec.resume());
+    each((t) => t.rec.state === "paused" && t.rec.resume());
     st().set({ status: "recording" });
   }
 }
@@ -319,15 +355,17 @@ export async function stopRecording() {
 async function finishTake(s: Session) {
   if (session !== s || st().status === "stopping") return;
   st().set({ status: "stopping" });
-  compositor().overlays.takeEnded();
   const durationMs = elapsed();
   s.timers.forEach(clearInterval);
   s.unsubscribe();
-  await Promise.all(s.tracks.map((t) => new Promise<void>((res) => {
+  const stop = (t: Track) => new Promise<void>((res) => {
     if (t.rec.state === "inactive") return res();
     t.rec.addEventListener("stop", () => res(), { once: true });
     t.rec.stop();
-  })));
+  });
+  // the composite stops once its delayed picture has caught up with this moment
+  await Promise.all(s.tracks.map((t) => (t.track === "composite" ? new Promise<void>((res) => s.later(() => void stop(t).then(res))) : stop(t))));
+  compositor().overlays.takeEnded();
   await Promise.all(s.tracks.map((t) => t.queue));
   s.owned.forEach((t) => t.stop());
   s.cleanup.forEach((f) => f());
@@ -335,9 +373,9 @@ async function finishTake(s: Session) {
   try {
     await api.save({ takeId: s.takeId, final: true, durationMs, timeline: s.timeline });
   } catch (e) {
-    st().set({ error: s.failed ?? `Could not close the take: ${e instanceof Error ? e.message : e}` });
+    st().set({ error: s.failed ?? t("record.rec.closeFailed", { reason: e instanceof Error ? e.message : String(e) }) });
   }
-  st().set({ status: "idle", elapsedMs: 0, notice: s.failed ? null : SAVED_NOTICE, noticeAction: s.failed ? null : "takes" });
+  st().set({ status: "idle", elapsedMs: 0, notice: s.failed ? null : t("record.notice.saved"), noticeAction: s.failed ? null : "takes" });
   await refreshTakes();
   if (st().autoExport && !s.failed && !quitting) void exportTake(s.takeId, "composite");
 }
@@ -363,7 +401,7 @@ export async function refreshTakes() {
 
 export async function exportTake(takeId: string, kind: "composite" | "hires", output?: ExportOutput, manual = false) {
   const s = st();
-  s.set({ exports: { ...s.exports, [takeId]: { takeId, stage: "Starting", ratio: 0 } } });
+  s.set({ exports: { ...s.exports, [takeId]: { takeId, stage: t("record.rec.exportStarting"), ratio: 0 } } });
   try {
     await api.exportTake({ takeId, kind, loudness: s.loudness, trimSilence: s.trimSilence, output, manual });
   } catch {
@@ -389,7 +427,7 @@ function onShortcut(a: RecordShortcut) {
   const scene = SCENE_SHORTCUTS[a];
   if (scene) return switchScene(scene);
   if (a === "lower-third" && !compositor().overlays.toggleLowerThird()) {
-    st().set({ notice: NAME_CARD_NOTICE, noticeAction: "overlays" });
+    st().set({ notice: t("record.notice.nameCard"), noticeAction: "overlays" });
   }
 }
 

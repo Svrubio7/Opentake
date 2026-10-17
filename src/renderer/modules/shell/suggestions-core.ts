@@ -1,6 +1,7 @@
 // Gentle suggestions: a few rules over what the app already knows, each shown until it is acted on
 // or dismissed (then never again). Pure: a snapshot in, at most a couple of suggestions out.
 import type { ExportPreset, RecordMode } from "@shared/types";
+import { bytes, t } from "../../../shared/i18n";
 
 export type SuggestionAction = "look" | "camera" | "settings" | "system-sound-off" | "reels" | "captions";
 export interface Suggestion { id: string; text: string; action?: { label: string; does: SuggestionAction } }
@@ -31,16 +32,16 @@ export function setupSuggestions(s: SetupSnapshot, dismissed: ReadonlySet<string
   if (s.busy) return [];
   const out: Suggestion[] = [];
   if (s.freeBytes != null && s.freeBytes < TIGHT_DISK_BYTES) {
-    out.push({ id: "disk-tight", text: `The recordings drive has ${(s.freeBytes / 1024 ** 3).toFixed(1)} GB free. A folder on a bigger drive leaves room for long takes.`, action: { label: "Choose a folder", does: "settings" } });
+    out.push({ id: "disk-tight", text: t("tip.diskTight", { free: bytes(s.freeBytes) }), action: { label: t("tip.diskTight.action"), does: "settings" } });
   }
   if (s.systemSound && s.headphones === false) {
-    out.push({ id: "headphones", text: "Computer sound is on and your speakers can echo into the mic. Headphones keep the voice clean.", action: { label: "Turn computer sound off", does: "system-sound-off" } });
+    out.push({ id: "headphones", text: t("tip.headphones"), action: { label: t("tip.headphones.action"), does: "system-sound-off" } });
   }
   if (s.mode !== "screen" && s.cameraLight === "poor") {
-    out.push({ id: "camera-dim", text: "Your camera looks dim. Face a window or a lamp, or let Auto lighting help in the Camera tab.", action: { label: "Open Camera", does: "camera" } });
+    out.push({ id: "camera-dim", text: t("tip.cameraDim"), action: { label: t("tip.cameraDim.action"), does: "camera" } });
   }
   if (s.mode !== "camera" && s.backgroundId === "none") {
-    out.push({ id: "screen-background", text: "Your screen fills the frame edge to edge. A background with a little padding looks more finished.", action: { label: "Pick a background", does: "look" } });
+    out.push({ id: "screen-background", text: t("tip.screenBackground"), action: { label: t("tip.screenBackground.action"), does: "look" } });
   }
   return out.filter((x) => !dismissed.has(x.id)).slice(0, MAX_SHOWN);
 }
@@ -50,13 +51,13 @@ export function exportSuggestion(frame: { width: number; height: number } | unde
   if (!frame || dismissed.has("export-reels")) return null;
   const vertical = frame.height > frame.width * 1.2;
   if (!vertical || preset === "vertical" || preset === "custom") return null;
-  return { id: "export-reels", text: "This take is vertical. The Reels, TikTok, Shorts preset keeps it full screen at 1080 by 1920.", action: { label: "Use it", does: "reels" } };
+  return { id: "export-reels", text: t("tip.exportReels"), action: { label: t("tip.exportReels.action"), does: "reels" } };
 }
 
 /** A take row's suggestion: captions for a long take that has none. */
-export function takeSuggestion(t: { durationMs: number | null; hasCaptions: boolean }, dismissed: ReadonlySet<string>): Suggestion | null {
-  if (dismissed.has("take-captions") || t.hasCaptions || t.durationMs == null || t.durationMs < LONG_TAKE_MS) return null;
-  return { id: "take-captions", text: "A long take: captions help everyone who watches without sound.", action: { label: "Make captions", does: "captions" } };
+export function takeSuggestion(take: { durationMs: number | null; hasCaptions: boolean }, dismissed: ReadonlySet<string>): Suggestion | null {
+  if (dismissed.has("take-captions") || take.hasCaptions || take.durationMs == null || take.durationMs < LONG_TAKE_MS) return null;
+  return { id: "take-captions", text: t("tip.takeCaptions"), action: { label: t("tip.takeCaptions.action"), does: "captions" } };
 }
 
 /** Whether an output device's name sounds like headphones (null when there is no name to read). */

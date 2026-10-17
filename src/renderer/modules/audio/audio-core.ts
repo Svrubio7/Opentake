@@ -1,5 +1,7 @@
 // Voice chain settings, presets and the Mic check analysis. Pure functions, no DOM.
 import { KWeighting, msToLufs, powerToDb } from "./dsp";
+// relative, not @shared: vitest runs this file without the vite aliases
+import { num, t } from "../../../shared/i18n";
 
 // ---------------------------------------------------------------- settings
 
@@ -37,10 +39,13 @@ const BASE: ChainSettings = {
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
-export const PRESETS: Record<PresetId, { label: string; hint: string; settings: ChainSettings }> = {
-  natural: { label: "Natural", hint: "Light touch, keeps your room", settings: clone(BASE) },
+/** A preset's name and its one-line hint, in the app's language. */
+export const presetLabel = (id: PresetId) => t(`audio.preset.${id}`);
+export const presetHint = (id: PresetId) => t(`audio.preset.${id}.hint`);
+
+export const PRESETS: Record<PresetId, { settings: ChainSettings }> = {
+  natural: { settings: clone(BASE) },
   podcast: {
-    label: "Podcast", hint: "Close, warm and even",
     settings: {
       ...clone(BASE), preset: "podcast",
       ns: { mode: "rnnoise", mix: 0.9 },
@@ -50,7 +55,6 @@ export const PRESETS: Record<PresetId, { label: string; hint: string; settings: 
     },
   },
   broadcast: {
-    label: "Broadcast", hint: "Dense, upfront, radio style",
     settings: {
       ...clone(BASE), preset: "broadcast",
       highpass: { on: true, freq: 90 },
@@ -63,7 +67,6 @@ export const PRESETS: Record<PresetId, { label: string; hint: string; settings: 
     },
   },
   noisy: {
-    label: "Noisy room", hint: "Strong cleanup for fans and traffic",
     settings: {
       ...clone(BASE), preset: "noisy",
       highpass: { on: true, freq: 100 },
@@ -354,21 +357,21 @@ export function planFromMetrics(m: MicMetrics, base: ChainSettings): MicCheckRes
   const findings: Finding[] = [];
 
   if (m.voicedRatio < 0.15 || m.snrDb < 6) {
-    findings.push({ tone: "warn", text: "We could not hear you clearly. Check that the selected mic is the one in front of you, then run the check again." });
+    findings.push({ tone: "warn", text: t("audio.find.unclear") });
     return { ok: false, metrics: m, findings, settings: s, agcStartGainDb: 0 };
   }
 
   // Clipping comes first: no setting here can undo distortion that happened inside the mic.
   if (m.clippedRuns > 0 || m.peakDb > -0.3) {
-    findings.push({ tone: "warn", text: "Your mic is clipping at its loudest moments. Turn its gain down a little, on the mic itself or in Windows sound settings." });
+    findings.push({ tone: "warn", text: t("audio.find.clipping") });
   }
 
   // Input gain: bring speech to the level every threshold assumes.
   const gain = clamp(Math.round(TARGET_SPEECH_DB - m.speechDb), -12, 24);
   s.inputGainDb = gain;
-  if (gain >= 3) findings.push({ tone: "info", text: `You're quiet, ${signed(gain)}.` + (gain > 15 ? " Moving closer to the mic will sound cleaner than more gain." : "") });
-  else if (gain <= -3) findings.push({ tone: "info", text: `You're loud, ${signed(gain)}.` });
-  else findings.push({ tone: "good", text: "Your level is right where it should be." });
+  if (gain >= 3) findings.push({ tone: "info", text: t(gain > 15 ? "audio.find.quietCloser" : "audio.find.quiet", { gain: signed(gain) }) });
+  else if (gain <= -3) findings.push({ tone: "info", text: t("audio.find.loud", { gain: signed(gain) }) });
+  else findings.push({ tone: "good", text: t("audio.find.levelRight") });
 
   const speechPost = m.speechDb + gain;
   const noisePost = m.noiseFloorDb + gain;
@@ -376,13 +379,13 @@ export function planFromMetrics(m: MicMetrics, base: ChainSettings): MicCheckRes
   // Noise suppression strength from signal to noise.
   if (m.snrDb >= 45) {
     s.ns = { mode: "rnnoise", mix: Math.min(s.ns.mix, 0.6) };
-    findings.push({ tone: "good", text: "Your room is quiet. Noise suppression stays light." });
+    findings.push({ tone: "good", text: t("audio.find.roomQuiet") });
   } else if (m.snrDb >= 30) {
     s.ns = { mode: "rnnoise", mix: Math.max(s.ns.mix, 0.85) };
-    findings.push({ tone: "info", text: "There is some background noise. Noise suppression on, medium." });
+    findings.push({ tone: "info", text: t("audio.find.roomSome") });
   } else {
     s.ns = { mode: "rnnoise", mix: 1 };
-    findings.push({ tone: "warn", text: "Your room is noisy. Noise suppression on, strong." });
+    findings.push({ tone: "warn", text: t("audio.find.roomNoisy") });
   }
 
   // Gate between what is left of the noise after suppression and the quiet end of speech.
@@ -395,7 +398,7 @@ export function planFromMetrics(m: MicMetrics, base: ChainSettings): MicCheckRes
   s.highpass.on = true;
   if (m.humHz) {
     s.highpass.freq = Math.max(s.highpass.freq, m.humHz * 2);
-    findings.push({ tone: "warn", text: `We hear electrical hum at ${m.humHz} Hz. Low cut raised to ${s.highpass.freq} Hz. Another USB port or moving away from chargers can remove it.` });
+    findings.push({ tone: "warn", text: t("audio.find.hum", { hum: m.humHz, freq: s.highpass.freq }) });
   }
 
   // Tone.
@@ -404,24 +407,24 @@ export function planFromMetrics(m: MicMetrics, base: ChainSettings): MicCheckRes
   if (b.low > 5) {
     const cut = clamp(b.low - 2, 2, 6);
     s.eq.lowGainDb = round1(Math.min(s.eq.lowGainDb, 0) - cut);
-    findings.push({ tone: "info", text: `Your voice is boomy (often from being very close to the mic). Low end ${signed(-cut)}.` });
+    findings.push({ tone: "info", text: t("audio.find.boomy", { gain: signed(-cut) }) });
   } else if (b.low < -8) {
     s.eq.lowGainDb = round1(Math.max(s.eq.lowGainDb, 0) + 2);
-    findings.push({ tone: "info", text: "Your voice sounds thin. A little warmth added." });
+    findings.push({ tone: "info", text: t("audio.find.thin") });
   }
   if (b.presence > 4) {
     const cut = clamp(b.presence - 1, 1.5, 5);
     s.eq.presenceGainDb = round1(Math.min(s.eq.presenceGainDb, 0) - cut);
-    findings.push({ tone: "info", text: `Your sound is a bit harsh around 3 kHz. Softened ${signed(-cut)}.` });
+    findings.push({ tone: "info", text: t("audio.find.harsh", { gain: signed(-cut) }) });
   } else if (b.presence < -6) {
     const lift = clamp(-b.presence - 3, 1.5, 4);
     s.eq.presenceGainDb = round1(Math.max(s.eq.presenceGainDb, 0) + lift);
-    findings.push({ tone: "info", text: `Your voice is muffled. Clarity ${signed(lift)}.` });
+    findings.push({ tone: "info", text: t("audio.find.muffled", { gain: signed(lift) }) });
   }
   if (b.air < -8) {
     const lift = clamp(-b.air - 5, 1.5, m.snrDb >= 30 ? 4 : 2);
     s.eq.airGainDb = round1(Math.max(s.eq.airGainDb, 0) + lift);
-    findings.push({ tone: "info", text: `Your sound lacks air. Brightness ${signed(lift)}.` });
+    findings.push({ tone: "info", text: t("audio.find.air", { gain: signed(lift) }) });
   }
 
   // De-esser: set just under the loud end of the sibilance band, firmer when S sounds stick out.
@@ -430,14 +433,14 @@ export function planFromMetrics(m: MicMetrics, base: ChainSettings): MicCheckRes
   s.deesser.thresholdDb = round1(m.sibilanceP95Db + gain - (sibilant ? 8 : 4));
   if (sibilant) {
     s.deesser.maxReductionDb = Math.max(s.deesser.maxReductionDb, 10);
-    findings.push({ tone: "info", text: "Strong S sounds. De-esser set firmer." });
+    findings.push({ tone: "info", text: t("audio.find.sibilant") });
   }
 
   // Loudness: the AGC starts where the measured speech would land, then tracks slowly.
   s.agc.on = true;
   const compEstimateDb = s.comp.on ? -2 + s.comp.makeupDb : 0;
   const agcStartGainDb = round1(clamp(s.agc.targetLufs - (m.speechLufs + gain + compEstimateDb), s.agc.minGainDb, s.agc.maxGainDb));
-  findings.push({ tone: "good", text: `Loudness target ${s.agc.targetLufs} LUFS. Auto level keeps you there.` });
+  findings.push({ tone: "good", text: t("audio.find.loudness", { target: num(s.agc.targetLufs) }) });
 
   if (s.preset !== "custom") s.preset = base.preset;
   return { ok: true, metrics: m, findings, settings: s, agcStartGainDb };
@@ -447,8 +450,8 @@ export function analyseMicCheck(silence: Float32Array, speech: Float32Array, sam
   return planFromMetrics(measureMic(silence, speech, sampleRate), base);
 }
 
-export const MIC_CHECK_SENTENCE =
-  "Today I'm sharing six simple steps to sound clear on camera. Pick a quiet place, sit close to the mic, and keep a steady pace so every sentence is sharp and easy to follow.";
+/** The line read out loud in the Mic check, in the app's language. */
+export const micCheckSentence = () => t("audio.check.sentence");
 
 // ---------------------------------------------------------------- feedback guard
 

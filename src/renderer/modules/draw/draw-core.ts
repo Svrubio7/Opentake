@@ -14,11 +14,12 @@ export interface Stroke {
 }
 
 export const COLORS = [
-  { id: "red", value: "#ff3b30", label: "Red" },
-  { id: "yellow", value: "#ffd60a", label: "Yellow" },
-  { id: "green", value: "#30d158", label: "Green" },
-  { id: "blue", value: "#0a84ff", label: "Blue" },
-  { id: "white", value: "#ffffff", label: "White" },
+  // label: the dictionary key of the colour's name (shown on hover)
+  { id: "red", value: "#ff3b30", label: "draw.color.red" },
+  { id: "yellow", value: "#ffd60a", label: "draw.color.yellow" },
+  { id: "green", value: "#30d158", label: "draw.color.green" },
+  { id: "blue", value: "#0a84ff", label: "draw.color.blue" },
+  { id: "white", value: "#ffffff", label: "draw.color.white" },
 ] as const;
 
 /** How long a finished stroke stays fully visible, then how long it takes to fade away. */

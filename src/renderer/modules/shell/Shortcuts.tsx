@@ -2,7 +2,8 @@
 import { useEffect } from "react";
 import { X } from "lucide-react";
 import { Button } from "../../ui";
-import { SHORTCUT_GROUPS, keyLabel, opensSheet } from "./shortcuts-core";
+import { t } from "@shared/i18n";
+import { keyLabel, opensSheet, shortcutGroups } from "./shortcuts-core";
 import { useShell } from "./store";
 
 const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent);
@@ -27,13 +28,13 @@ export function ShortcutsSheet() {
   const close = () => set({ shortcutsOpen: false });
   return (
     <div className="modal-scrim sc-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="modal sc-sheet" role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
+      <div className="modal sc-sheet" role="dialog" aria-label={t("sc.title")} aria-modal="true" tabIndex={-1} ref={(el) => el?.focus()}>
         <div className="row">
-          <h2 className="modal-title">Keyboard shortcuts</h2>
-          <Button variant="ghost" size="icon" onClick={close} aria-label="Close" autoFocus><X /></Button>
+          <h2 className="modal-title">{t("sc.title")}</h2>
+          <Button variant="ghost" size="icon" onClick={close} aria-label={t("shell.close")}><X /></Button>
         </div>
         <div className="sc-groups">
-          {SHORTCUT_GROUPS.map((g) => (
+          {shortcutGroups().map((g) => (
             <section key={g.title} className="sc-group">
               <h3 className="sc-title">{g.title}</h3>
               {g.note && <p className="note">{g.note}</p>}

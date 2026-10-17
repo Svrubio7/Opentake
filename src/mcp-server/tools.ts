@@ -8,6 +8,7 @@ import { basename, extname, isAbsolute, join, resolve } from "node:path";
 import { constants as fsc } from "node:fs";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { t as tr } from "../shared/i18n";
 import type { AssistantJob } from "../shared/assistant";
 import type { CaptionBurn, CaptionLang, ExportOptions, ExportOutput, TimeRange } from "../shared/types";
 import { keptDuration, mergeTouching, toEdited, toSource, wholeTake, isWhole } from "../renderer/modules/editor/edit-core";
@@ -86,7 +87,7 @@ export function registerTools(server: McpServer, ctx: Context) {
         return { content };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        await record(ctx.userData, { tool: name, summary: `Failed: ${msg}`.slice(0, 300), ok: false, takeId: typeof (args as { take?: unknown }).take === "string" ? String((args as { take: string }).take) : undefined }).catch(() => {});
+        await record(ctx.userData, { tool: name, summary: tr("sum.failed", { detail: msg }).slice(0, 300), ok: false, takeId: typeof (args as { take?: unknown }).take === "string" ? String((args as { take: string }).take) : undefined }).catch(() => {});
         return { content: [{ type: "text" as const, text: msg }], isError: true };
       }
     }) as never);
@@ -126,7 +127,7 @@ export function registerTools(server: McpServer, ctx: Context) {
       });
       if (out.length >= limit) break;
     }
-    return { text: out.length ? `${out.length} take(s) in ${s.root}.` : `No takes in ${s.root} yet.`, data: out, summary: `Listed ${out.length} takes` };
+    return { text: out.length ? `${out.length} take(s) in ${s.root}.` : `No takes in ${s.root} yet.`, data: out, summary: tr("sum.listed", { count: out.length }) };
   });
 
   tool("get_take", {
@@ -156,7 +157,7 @@ export function registerTools(server: McpServer, ctx: Context) {
       chapters: (await s.chapters(id, durationMs)).map((c) => ({ at_s: sec(c.t), title: c.title })),
       exports: (meta.exports ?? []).filter((f) => existsSync(f)),
     };
-    return { text: `Take ${id}${meta.title ? ` "${meta.title}"` : ""}, ${fmt(durationMs)} long${data.cuts.cut ? `, ${fmt(keptDuration(keep))} after cuts` : ""}.`, data, summary: "Read the take", takeId: id };
+    return { text: `Take ${id}${meta.title ? ` "${meta.title}"` : ""}, ${fmt(durationMs)} long${data.cuts.cut ? `, ${fmt(keptDuration(keep))} after cuts` : ""}.`, data, summary: tr("sum.readTake"), takeId: id };
   });
 
   tool("get_transcript", {
@@ -183,15 +184,15 @@ export function registerTools(server: McpServer, ctx: Context) {
       const done = await waitJob(ctx, job.id, Math.max(1000, CALL_BUDGET_MS - (Date.now() - t0)));
       if (!done.done) {
         pendingCaptions.set(job.id, snap);
-        return { text: `Making captions for ${id}: ${done.stage}${done.ratio != null ? ` (${Math.round(done.ratio * 100)}%)` : ""}. Call get_transcript again in a minute, or get_job with job_id ${job.id}.`, summary: "Started making captions", takeId: id };
+        return { text: `Making captions for ${id}: ${done.stage}${done.ratio != null ? ` (${Math.round(done.ratio * 100)}%)` : ""}. Call get_transcript again in a minute, or get_job with job_id ${job.id}.`, summary: tr("sum.captionsStarted"), takeId: id };
       }
       if (done.error) throw new Error(`Could not make captions: ${done.error}`);
       caps = await s.captions(id);
       await tellApp(ctx, id);
-      if (!caps?.lines.length) return { text: "OpenTake listened to the take and heard no words.", summary: "Made captions: no words heard", takeId: id, snap };
-      return { text: transcriptOut(caps.lines, caps.lang, words, from_line, max_lines), summary: `Made captions: ${caps.lines.length} lines`, takeId: id, snap };
+      if (!caps?.lines.length) return { text: "OpenTake listened to the take and heard no words.", summary: tr("sum.captionsEmpty"), takeId: id, snap };
+      return { text: transcriptOut(caps.lines, caps.lang, words, from_line, max_lines), summary: tr("sum.captionsMade", { count: caps.lines.length }), takeId: id, snap };
     }
-    return { text: transcriptOut(caps.lines, caps.lang, words, from_line, max_lines), summary: `Read the transcript (${caps.lines.length} lines)`, takeId: id };
+    return { text: transcriptOut(caps.lines, caps.lang, words, from_line, max_lines), summary: tr("sum.readTranscript", { count: caps.lines.length }), takeId: id };
   });
 
   tool("get_frame", {
@@ -207,7 +208,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     const composite = s.track(id, meta, "composite");
     if (!composite) throw new Error("This take has no recording file");
     const png = await ctx.ff.frame(await seekableCopy(ctx, s.dir(id), composite, meta), ms, width, true);
-    return { text: `Frame of ${id} at ${sec(ms)} s on the take's clock.`, image: png, summary: `Looked at ${sec(ms)} s`, takeId: id };
+    return { text: `Frame of ${id} at ${sec(ms)} s on the take's clock.`, image: png, summary: tr("sum.frame", { at: sec(ms) }), takeId: id };
   });
 
   tool("find_moments", {
@@ -240,7 +241,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     const tl = await s.timeline(id);
     if (kinds.includes("scenes")) out.scene_switches = (tl?.scenes ?? []).map((x) => ({ at: sec(x.t), scene: x.scene }));
     if (kinds.includes("clicks")) out.click_bursts = clickBursts(tl?.clicks ?? []).slice(0, 200).map((b) => ({ start: sec(b.start), end: sec(b.end), clicks: b.clicks }));
-    return { text: [`Moments in ${id} (${fmt(durationMs)} long).`, ...notes].join(" "), data: out, summary: `Found moments (${kinds.join(", ")})`, takeId: id };
+    return { text: [`Moments in ${id} (${fmt(durationMs)} long).`, ...notes].join(" "), data: out, summary: tr("sum.moments", { kinds: kinds.join(", ") }), takeId: id };
   });
 
   // ---------------- edit ----------------
@@ -252,11 +253,11 @@ export function registerTools(server: McpServer, ctx: Context) {
     const r = await next(before, durationMs, id);
     if (!r.keep.length) throw new Error("That would cut the whole take. An edit has to keep something.");
     const result = { before: summaryOfCuts(before, durationMs).edited_length_s, ...summaryOfCuts(r.keep, durationMs) };
-    if (dryRun) return { text: `Not saved (dry run): ${r.what}. The edit would be ${fmt(keptDuration(r.keep))} long.`, data: result, summary: `Tried: ${r.what}`, takeId: id };
+    if (dryRun) return { text: `Not saved (dry run): ${r.what}. The edit would be ${fmt(keptDuration(r.keep))} long.`, data: result, summary: tr("sum.tried", { what: r.what }), takeId: id };
     const snap = await snapshot(id, dir, ["edit.json"]);
     await s.writeEdit(id, r.keep, durationMs);
     await tellApp(ctx, id);
-    return { text: `${r.what}. The edit is now ${fmt(keptDuration(r.keep))} long (was ${fmt(keptDuration(before))}). The take's files are untouched; undo_change or the editor can put it back.`, data: result, summary: `${r.what}: ${fmt(keptDuration(before))} to ${fmt(keptDuration(r.keep))}`, takeId: id, snap };
+    return { text: `${r.what}. The edit is now ${fmt(keptDuration(r.keep))} long (was ${fmt(keptDuration(before))}). The take's files are untouched; undo_change or the editor can put it back.`, data: result, summary: tr("sum.cut", { what: r.what, from: fmt(keptDuration(before)), to: fmt(keptDuration(r.keep)) }), takeId: id, snap };
   };
 
   tool("set_cuts", {
@@ -264,22 +265,22 @@ export function registerTools(server: McpServer, ctx: Context) {
     description: "Replaces the take's whole edit with exactly these kept stretches (seconds on the take's clock), in order. reset puts the whole take back. Use cut_ranges or keep_ranges to change the current edit instead.",
     input: { take: takeArg, keep: z.array(rangeArg).max(2000).default([]), reset: z.boolean().default(false) },
   }, async ({ take, keep, reset }) => saveCuts(take, (_k, d) => {
-    if (reset) return { keep: wholeTake(d), what: "Put the whole take back" };
+    if (reset) return { keep: wholeTake(d), what: tr("sum.wholeBack") };
     if (!keep.length) throw new Error("Give the stretches to keep, or reset: true for the whole take");
-    return { keep: keep.map((r) => rangeFromSeconds(r, d)), what: `Set ${keep.length} kept stretch(es)` };
+    return { keep: keep.map((r) => rangeFromSeconds(r, d)), what: tr("sum.setKept", { count: keep.length }) };
   }));
 
   tool("cut_ranges", {
     title: "Cut ranges",
     description: "Cuts these stretches (seconds on the take's clock) out of the current edit. Only the edit changes; the recording stays whole.",
     input: { take: takeArg, ranges: z.array(rangeArg).min(1).max(2000) },
-  }, async ({ take, ranges: rs }) => saveCuts(take, (k, d) => ({ keep: subtractRanges(k, rs.map((r) => rangeFromSeconds(r, d)), d), what: `Cut ${rs.length} stretch(es)` })));
+  }, async ({ take, ranges: rs }) => saveCuts(take, (k, d) => ({ keep: subtractRanges(k, rs.map((r) => rangeFromSeconds(r, d)), d), what: tr("sum.cutParts", { count: rs.length }) })));
 
   tool("keep_ranges", {
     title: "Keep only ranges",
     description: "Keeps only these stretches (seconds on the take's clock) of what the edit keeps now, and cuts the rest. Good for picking the best 60 seconds.",
     input: { take: takeArg, ranges: z.array(rangeArg).min(1).max(2000) },
-  }, async ({ take, ranges: rs }) => saveCuts(take, (k, d) => ({ keep: intersectRanges(k, rs.map((r) => rangeFromSeconds(r, d)), d), what: `Kept only ${rs.length} stretch(es)` })));
+  }, async ({ take, ranges: rs }) => saveCuts(take, (k, d) => ({ keep: intersectRanges(k, rs.map((r) => rangeFromSeconds(r, d)), d), what: tr("sum.keptOnly", { count: rs.length }) })));
 
   tool("remove_silences", {
     title: "Remove silences",
@@ -297,7 +298,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     if (!composite) throw new Error("This take has no recording file");
     const sil = parseSilences(await ctx.ff.silences(composite, silenceFilter(silence_db, Math.min(min_silence_s * 1000, 400))), d);
     const cuts = silenceCuts(sil, { minMs: min_silence_s * 1000, keepMs: keep_pause_s * 1000 });
-    return { keep: subtractRanges(k, cuts, d), what: `Removed ${cuts.length} silence(s)` };
+    return { keep: subtractRanges(k, cuts, d), what: tr("sum.silences", { count: cuts.length }) };
   }, dry_run));
 
   tool("remove_filler_words", {
@@ -316,7 +317,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     const fillers = findFillers(caps.lines, caps.lang, { maybe: include_maybe, extra: extra_words });
     const cuts = fillerCuts(fillers, caps.lines, pad_s * 1000);
     const kinds = [...new Set(fillers.map((f) => f.text.toLowerCase()))].slice(0, 8).join(", ");
-    return { keep: subtractRanges(k, cuts, d), what: `Removed ${cuts.length} filler word(s)${kinds ? ` (${kinds})` : ""}` };
+    return { keep: subtractRanges(k, cuts, d), what: `${tr("sum.fillers", { count: cuts.length })}${kinds ? ` (${kinds})` : ""}` };
   }, dry_run));
 
   tool("edit_captions", {
@@ -342,7 +343,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     const snap = await snapshot(id, dir, ["captions.json"]);
     await s.writeCaptions(id, { version: 1, lang: caps.lang, lines: r.lines });
     await tellApp(ctx, id);
-    return { text: `Made ${r.applied} of ${changes.length} caption change(s).${r.problems.length ? ` Skipped: ${r.problems.join(". ")}.` : ""}`, summary: `Edited captions (${r.applied} changes)`, takeId: id, snap };
+    return { text: `Made ${r.applied} of ${changes.length} caption change(s).${r.problems.length ? ` Skipped: ${r.problems.join(". ")}.` : ""}`, summary: tr("sum.captionsEdited", { count: r.applied }), takeId: id, snap };
   });
 
   tool("set_caption_style", {
@@ -353,7 +354,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     const { s, id, dir } = await open(take);
     const snap = await snapshot(id, dir, ["caption-style.json"]);
     await s.writeCaptionStyle(id, { style, position, margin });
-    return { text: `Captions on ${id} will be ${style}, at the ${position}.`, summary: `Caption style: ${style}, ${position}`, takeId: id, snap };
+    return { text: `Captions on ${id} will be ${style}, at the ${position}.`, summary: tr("sum.captionStyle", { style, position: position === "top" ? tr("sum.top") : tr("sum.bottom") }), takeId: id, snap };
   });
 
   tool("set_title", {
@@ -365,7 +366,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     const snap = await snapshot(id, dir, [TITLE]);
     const t = await s.setTitle(id, title);
     await tellApp(ctx, id);
-    return { text: t ? `The take is now called "${t}".` : "The take has no title now.", summary: t ? `Title: ${t}` : "Cleared the title", takeId: id, snap };
+    return { text: t ? `The take is now called "${t}".` : "The take has no title now.", summary: t ? tr("sum.title", { title: t }) : tr("sum.titleCleared"), takeId: id, snap };
   });
 
   tool("add_chapters", {
@@ -383,7 +384,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     const dropped = next.length - youtube.length;
     return {
       text: `${next.length} chapter(s) on ${id}.${dropped ? ` ${dropped} fall in cut stretches and are left out of the list below.` : ""}\n\nFor YouTube:\n${youtube.join("\n")}`,
-      data: next.map((c) => ({ at_s: sec(c.t), title: c.title })), summary: `Chapters: ${next.length}`, takeId: id, snap,
+      data: next.map((c) => ({ at_s: sec(c.t), title: c.title })), summary: tr("sum.chapters", { count: next.length }), takeId: id, snap,
     };
   });
 
@@ -450,7 +451,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     if (now.done && now.error) throw new Error(now.error);
     return {
       text: now.done ? `Exported: ${now.output?.join(", ")}` : `Exporting ${id} (${now.stage}${now.ratio != null ? `, ${Math.round(now.ratio * 100)}%` : ""}). Call get_job with job_id ${job.id} to follow it.`,
-      data: jobOut(now), summary: `Export ${a.preset} ${a.format}${burn ? " with captions" : ""}`, takeId: id,
+      data: jobOut(now), summary: tr(burn ? "sum.exportCaptions" : "sum.export", { preset: a.preset, format: a.format }), takeId: id,
     };
   });
 
@@ -464,9 +465,9 @@ export function registerTools(server: McpServer, ctx: Context) {
     const snap = pendingCaptions.get(job_id);
     if (j.done && snap) {
       pendingCaptions.delete(job_id);
-      if (!j.error) await record(ctx.userData, { tool: "get_transcript", takeId: j.takeId, summary: "Made captions", ok: true }, snap).catch(() => {});
+      if (!j.error) await record(ctx.userData, { tool: "get_transcript", takeId: j.takeId, summary: tr("sum.captionsMade", { count: (await ctx.store().captions(j.takeId).catch(() => null))?.lines.length ?? 0 }), ok: true }, snap).catch(() => {});
     }
-    return { text: j.done ? (j.error ? `Failed: ${j.error}` : `Done.${j.output?.length ? ` Files: ${j.output.join(", ")}` : ""}`) : `${j.stage}${j.ratio != null ? ` (${Math.round(j.ratio * 100)}%)` : ""}`, data: jobOut(j), summary: `Job ${j.kind}: ${j.done ? (j.error ? "failed" : "done") : j.stage}`, takeId: j.takeId };
+    return { text: j.done ? (j.error ? `Failed: ${j.error}` : `Done.${j.output?.length ? ` Files: ${j.output.join(", ")}` : ""}`) : `${j.stage}${j.ratio != null ? ` (${Math.round(j.ratio * 100)}%)` : ""}`, data: jobOut(j), summary: tr("sum.job", { stage: j.done ? (j.error ? tr("as.failed") : tr("main.export.done")) : j.stage }), takeId: j.takeId };
   });
 
   tool("export_timeline", {
@@ -500,7 +501,7 @@ export function registerTools(server: McpServer, ctx: Context) {
       `Wrote ${r.otio}${r.fcpxml ? ` and ${r.fcpxml}` : ""}${r.srt ? ` and ${r.srt}` : ""}: ${r.clips} clip(s) on ${r.layout} tracks, ${r.markers} marker(s), ${r.captions} caption(s), ${fmt((r.frames / r.fps) * 1000)} at ${r.fps} fps.${r.notes.length ? ` ${r.notes.join(" ")}` : ""} Open the .otio in FilmCraft or DaVinci Resolve (File, Import, Timeline).`;
     if (!a.compatible_media) {
       const r = await runIt();
-      return { text: describe(r), data: r, summary: `Timeline: ${basename(r.otio)}`, takeId: id };
+      return { text: describe(r), data: r, summary: tr("sum.timeline", { file: basename(r.otio) }), takeId: id };
     }
     const job: AssistantJob = { id: `local-${Date.now().toString(36)}`, kind: "timeline", takeId: id, stage: "Starting", ratio: null, done: false, startedAt: Date.now() };
     localJobs.set(job.id, job);
@@ -510,7 +511,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     );
     const now = await waitJob(ctx, job.id, 45_000);
     if (now.done && now.error) throw new Error(now.error);
-    return { text: now.done ? now.stage : `Making editor-friendly copies (${now.stage}). Call get_job with job_id ${job.id}.`, data: jobOut(now), summary: "Timeline with MP4 copies", takeId: id };
+    return { text: now.done ? now.stage : `Making editor-friendly copies (${now.stage}). Call get_job with job_id ${job.id}.`, data: jobOut(now), summary: tr("sum.timelineMp4"), takeId: id };
   });
 
   // ---------------- import ----------------
@@ -524,7 +525,7 @@ export function registerTools(server: McpServer, ctx: Context) {
     const job = await importVideo(ctx, path, title);
     const now = await waitJob(ctx, job.id, 45_000);
     if (now.done && now.error) throw new Error(now.error);
-    return { text: now.done ? `Imported as take ${now.takeId}.` : `Importing (${now.stage}). Call get_job with job_id ${job.id}.`, data: jobOut(now), summary: `Imported ${basename(path)}`, takeId: now.takeId || undefined };
+    return { text: now.done ? `Imported as take ${now.takeId}.` : `Importing (${now.stage}). Call get_job with job_id ${job.id}.`, data: jobOut(now), summary: tr("sum.imported", { file: basename(path) }), takeId: now.takeId || undefined };
   });
 
   // ---------------- prompts ----------------

@@ -3,6 +3,7 @@
 // so closing the window can ask first).
 import { useEffect } from "react";
 import { IPC } from "@shared/ipc";
+import { t } from "@shared/i18n";
 import { hasBridge } from "../record/api";
 import { refreshTakes, stopForQuit } from "../record/recorder";
 import { useRecord } from "../record/store";
@@ -38,7 +39,7 @@ function StartupTasks() {
       await refreshTakes();
       const s = useRecord.getState();
       if (!s.notice && !s.error) {
-        s.set({ notice: n === 1 ? "A take was still recording when OpenTake closed. It was recovered and is in Takes." : `${n} takes were still recording when OpenTake closed. They were recovered and are in Takes.`, noticeAction: "takes" });
+        s.set({ notice: t("shell.recovered", { count: n }), noticeAction: "takes" });
       }
     }, () => {});
   }, []);

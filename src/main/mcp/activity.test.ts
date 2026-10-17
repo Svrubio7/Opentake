@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readActivity, record, snapshot, TITLE, undo } from "./activity";
 import { allowed } from "./bridge-server";
+import { setLang } from "../../shared/i18n";
 
 let base: string, userData: string, take: string;
 beforeEach(() => {
@@ -66,8 +67,10 @@ describe("activity and undo", () => {
     expect(e.undoable).toBe(false);
   });
 
-  it("rejects ids that are not ours", async () => {
-    expect((await undo(userData, "../../x")).ok).toBe(false);
+  it("rejects ids that are not ours, in the app's language", async () => {
+    expect((await undo(userData, "../../x")).message).toBe("That is not a change OpenTake knows.");
+    setLang("es");
+    try { expect((await undo(userData, "../../x")).message).toBe("OpenTake no conoce ese cambio."); } finally { setLang("en"); }
   });
 });
 

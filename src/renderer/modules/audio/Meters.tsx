@@ -4,10 +4,11 @@ import { Gauge } from "lucide-react";
 import { CardMark } from "../../ui";
 import { getEngine } from "./engine";
 import { useAudioStore } from "./store";
+import { num, t } from "@shared/i18n";
 
 const FLOOR = -60;
 const pct = (db: number) => `${Math.max(0, Math.min(1, (db - FLOOR) / -FLOOR)) * 100}%`;
-const fmt = (db: number, digits = 0) => (db <= -100 ? "-inf" : db.toFixed(digits));
+const fmt = (db: number, digits = 0) => (db <= -100 ? "-inf" : num(db, { minimumFractionDigits: digits, maximumFractionDigits: digits }));
 const PEAK_FALL_DB = 1; // per message, about 20 dB a second
 
 function useMeterRefs() {
@@ -38,10 +39,10 @@ function draw(refs: ReturnType<typeof useMeterRefs>, peakDb: number, rmsDb: numb
 }
 
 const GR = [
-  { key: "gateDb", label: "Gate" },
-  { key: "deessDb", label: "De-ess" },
-  { key: "compDb", label: "Comp" },
-  { key: "limDb", label: "Limit" },
+  { key: "gateDb", label: "audio.gr.gate" },
+  { key: "deessDb", label: "audio.gr.deess" },
+  { key: "compDb", label: "audio.gr.comp" },
+  { key: "limDb", label: "audio.gr.limit" },
 ] as const;
 
 export function Meters() {
@@ -67,31 +68,31 @@ export function Meters() {
         const el = gr.current[key];
         if (el) el.style.width = `${Math.min(1, -m[key] / 20) * 100}%`;
       }
-      if (lufs.current) lufs.current.textContent = m.lufsS < -70 ? "--" : m.lufsS.toFixed(1);
+      if (lufs.current) lufs.current.textContent = m.lufsS < -70 ? "--" : fmt(m.lufsS, 1);
       lufsBox.current?.classList.toggle("near", Math.abs(m.lufsS - targetRef.current) <= 2);
-      if (agc.current) agc.current.textContent = `${m.agcDb >= 0 ? "+" : ""}${m.agcDb.toFixed(1)} dB`;
+      if (agc.current) agc.current.textContent = `${m.agcDb >= 0 ? "+" : ""}${fmt(m.agcDb, 1)} dB`;
     });
     return () => { offIn(); offOut(); };
   }, []);
 
   return (
     <section className="card au-meters">
-      <div className="card-head"><h3 className="card-title"><CardMark icon={Gauge} />Levels</h3><span className="au-clip" ref={clip}>Clipping. Turn the mic gain down.</span></div>
-      <Bar label="Input" refs={input} />
-      <Bar label="Output" refs={output} />
+      <div className="card-head"><h3 className="card-title"><CardMark icon={Gauge} />{t("audio.levels")}</h3><span className="au-clip" ref={clip}>{t("audio.clipping")}</span></div>
+      <Bar label={t("audio.meter.input")} refs={input} />
+      <Bar label={t("audio.meter.output")} refs={output} />
       <div className="au-gr">
         {GR.map(({ key, label }) => (
-          <div key={key} className="au-gr-item" title={`${label} gain reduction`}>
-            <span>{label}</span>
+          <div key={key} className="au-gr-item" title={t("audio.gr.title", { stage: t(label) })}>
+            <span>{t(label)}</span>
             <div className="au-gr-track"><div ref={(el) => { gr.current[key] = el; }} /></div>
           </div>
         ))}
       </div>
       <div className="au-loud" ref={lufsBox}>
-        <div title="Short-term loudness of what is being recorded"><span className="au-loud-num" ref={lufs}>--</span><span className="au-loud-unit">LUFS</span></div>
+        <div title={t("audio.loudnessHint")}><span className="au-loud-num" ref={lufs}>--</span><span className="au-loud-unit">LUFS</span></div>
         <div className="au-loud-side">
-          <span>Target <span className="au-num">{target}</span></span>
-          <span>Auto level <span ref={agc} className="au-num">+0.0 dB</span></span>
+          <span>{t("audio.target")} <span className="au-num">{num(target)}</span></span>
+          <span>{t("audio.autoLevel")} <span ref={agc} className="au-num">{`+${fmt(0, 1)} dB`}</span></span>
         </div>
       </div>
     </section>

@@ -11,10 +11,12 @@ import { publishStream } from "@core/streams";
 import voiceWorkletUrl from "./voice.worklet.ts?worker&url";
 import { feedbackStep, initialFeedback, type ChainSettings, type NsMode } from "./audio-core";
 import { useAudioStore } from "./store";
+import { t } from "../../../shared/i18n";
 
 const SAMPLE_RATE = 48000;
 /** RNNoise buffers 480-sample frames inside 128-sample render quanta: its output trails by 512 samples. */
-const RNNOISE_LATENCY = 512;
+// measured: a chirp through the RNNoise worklet offline comes out 992 samples (20.7 ms) later
+const RNNOISE_LATENCY = 992;
 
 export interface InputMeter { peakDb: number; rmsDb: number; clips: number }
 export interface OutputMeter {
@@ -151,13 +153,13 @@ class Chain {
 export function describeMicError(e: unknown): string {
   const name = (e as { name?: string })?.name ?? "";
   if (name === "NotAllowedError" || name === "SecurityError") {
-    return "OpenTake can't use the microphone. Allow microphone access in Windows Settings, Privacy and security, Microphone, then press Try again.";
+    return t("audio.err.denied");
   }
-  if (name === "NotFoundError" || name === "OverconstrainedError") return "No microphone found. Plug one in and press Try again.";
+  if (name === "NotFoundError" || name === "OverconstrainedError") return t("audio.err.notFound");
   if (name === "NotReadableError" || name === "AbortError") {
-    return "The microphone is busy or failed to start. Close other apps that use it and press Try again.";
+    return t("audio.err.busy");
   }
-  return `The microphone could not start${e instanceof Error && e.message ? ` (${e.message})` : ""}.`;
+  return e instanceof Error && e.message ? t("audio.err.failedWhy", { reason: e.message }) : t("audio.err.failed");
 }
 
 // ---------------------------------------------------------------- the engine
@@ -189,7 +191,7 @@ class VoiceEngine {
   start() {
     this.booting ??= this.boot().catch((e) => {
       this.booting = null;
-      useAudioStore.getState().set({ status: "error", error: `Audio engine failed to start (${(e as Error).message}).` });
+      useAudioStore.getState().set({ status: "error", error: t("audio.err.engine", { reason: (e as Error).message }) });
     });
     return this.booting;
   }
@@ -236,7 +238,7 @@ class VoiceEngine {
   async refreshDevices() {
     try {
       const all = await navigator.mediaDevices.enumerateDevices();
-      const devices = all.filter((d) => d.kind === "audioinput").map((d, i) => ({ id: d.deviceId, label: d.label || `Microphone ${i + 1}` }));
+      const devices = all.filter((d) => d.kind === "audioinput").map((d, i) => ({ id: d.deviceId, label: d.label || t("audio.deviceN", { n: i + 1 }) }));
       useAudioStore.getState().set({ devices });
       return devices;
     } catch {
@@ -285,7 +287,7 @@ class VoiceEngine {
       if (this.stream !== stream) return;
       this.detach();
       publishStream("mic", null);
-      useAudioStore.getState().set({ status: "error", error: "Your microphone was disconnected. Plug it back in, or pick another one." });
+      useAudioStore.getState().set({ status: "error", error: t("audio.err.disconnected") });
       void this.onDeviceChange();
     });
     const actualId = track.getSettings().deviceId ?? deviceId;
@@ -321,6 +323,27 @@ class VoiceEngine {
     }
   }
 
+  /**
+   * The processed voice `ms` later, as its own stream from this same graph (a DelayNode before a second
+   * destination). A delayed take's composite takes its voice from here: a trip through another audio
+   * context would add about 50 ms of its own and put the sound behind the picture.
+   */
+  delayedVoice(ms: number): { track: MediaStreamTrack; dispose: () => void } | null {
+    if (!this.ctx || !this.chain || !this.stream) return null;
+    const delay = new DelayNode(this.ctx, { maxDelayTime: ms / 1000 + 1, delayTime: ms / 1000 });
+    const dest = new MediaStreamAudioDestinationNode(this.ctx);
+    const out = this.chain.output;
+    out.connect(delay).connect(dest);
+    return {
+      track: dest.stream.getAudioTracks()[0],
+      dispose: () => {
+        try { out.disconnect(delay); } catch { /* the chain was rebuilt */ }
+        delay.disconnect();
+        dest.stream.getTracks().forEach((t) => t.stop());
+      },
+    };
+  }
+
   applySettings(s: ChainSettings) {
     if (!this.chain) return;
     this.chain.update(s);
@@ -346,13 +369,13 @@ class VoiceEngine {
     this.feedback = r.state;
     if (!r.tripped) return;
     this.setMonitor(false);
-    useAudioStore.getState().set({ monitor: false, monitorNotice: "Listen was turned off: the speakers were feeding back into the mic. Use headphones." });
+    useAudioStore.getState().set({ monitor: false, monitorNotice: t("audio.listenOff") });
   }
 
   /** Records `seconds` of the raw mic (before any processing). */
   captureRaw(seconds: number, onProgress?: (fraction: number, chunk: Float32Array) => void, signal?: AbortSignal): Promise<Float32Array> {
     const ctx = this.ctx, tap = this.tap;
-    if (!ctx || !tap || useAudioStore.getState().status !== "running") return Promise.reject(new Error("The microphone is not running."));
+    if (!ctx || !tap || useAudioStore.getState().status !== "running") return Promise.reject(new Error(t("audio.err.notRunning")));
     const total = Math.round(seconds * ctx.sampleRate);
     const buf = new Float32Array(total);
     let got = 0;

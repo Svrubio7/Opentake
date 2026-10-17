@@ -1,6 +1,7 @@
 // "Open in an editor": a take's timeline as an .otio (and .fcpxml) file next to its media, so FilmCraft,
 // DaVinci Resolve, Premiere or Final Cut open the take with its cuts, markers and captions. No Electron:
 // the app and the MCP server both call this, each with its own ffmpeg runner and settings.
+import { t } from "../../shared/i18n";
 import { existsSync } from "node:fs";
 import { rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -64,6 +65,8 @@ export interface TimelineResult {
 
 const MAX_CLICK_MARKERS = 500;
 
+const trackName = (track: string) => (["screen", "camera", "system", "composite"].includes(track) ? t(`tl.track.${track}` as "tl.track.screen") : track);
+
 interface Probe { durationMs: number | null; width?: number; height?: number; video: boolean; audio: boolean }
 
 async function probe(run: Run, file: string): Promise<Probe> {
@@ -84,11 +87,11 @@ async function editable(run: Run, dir: string, track: string, file: string, fps:
   if (compatible && ext === "webm") {
     const out = join(dir, `${track}.edit.mp4`);
     if (await fresh(out, file)) return out;
-    onStage?.(`Making an MP4 copy of the ${track} track`);
+    onStage?.(t("tl.stage.mp4", { track: trackName(track) }));
     const tmp = join(dir, `${track}.edit.tmp.mp4`);
     const r = await run(["-nostdin", "-y", "-hide_banner", "-i", file, "-map", "0:v?", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
       "-r", String(fps || 30), "-fps_mode", "cfr", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", tmp]);
-    if (r.code !== 0) { await rm(tmp, { force: true }); throw new Error(`Could not make an MP4 copy of the ${track} track`); }
+    if (r.code !== 0) { await rm(tmp, { force: true }); throw new Error(t("tl.mp4Failed", { track: trackName(track) })); }
     await rename(tmp, out);
     return out;
   }
@@ -96,7 +99,7 @@ async function editable(run: Run, dir: string, track: string, file: string, fps:
   if (p.durationMs != null) return file;
   const out = join(dir, track === "composite" ? `preview.${ext}` : `${track}.seekable.${ext}`);
   if (await fresh(out, file)) return out;
-  onStage?.(`Indexing the ${track} track`);
+  onStage?.(t("tl.stage.index", { track: trackName(track) }));
   const tmp = join(dir, `${track}.seekable.tmp.${ext}`);
   const r = await run(["-nostdin", "-y", "-hide_banner", "-i", file, "-map", "0", "-c", "copy", ...(ext === "mp4" ? ["-movflags", "+faststart"] : []), tmp]);
   if (r.code !== 0) { await rm(tmp, { force: true }); return file; }
@@ -114,13 +117,13 @@ export async function timelineInput(take: TimelineTake, run: Run, o: TimelineOpt
   const notes: string[] = [];
   const has = (k: keyof TimelineTake["containers"]) => !!take.containers[k] && existsSync(join(take.dir, `${k}.${take.containers[k]}`));
   const src = (k: keyof TimelineTake["containers"]) => join(take.dir, `${k}.${take.containers[k]}`);
-  if (!has("composite")) throw new Error("This take has no recording file");
+  if (!has("composite")) throw new Error(t("main.export.noRecording"));
   const fps = take.timeline?.layout.fps || take.fps || 30;
   const compatible = !!o.compatibleMedia;
 
   let layout = o.layout ?? "composite";
   if (layout === "separate" && !has("screen") && !has("camera")) {
-    notes.push("This take has no separate screen or camera tracks, so the timeline uses the composite.");
+    notes.push(t("tl.noSeparate"));
     layout = "composite";
   }
   const video: TimelineInput["video"] = [];
@@ -142,22 +145,22 @@ export async function timelineInput(take: TimelineTake, run: Run, o: TimelineOpt
       const c = await media(run, "composite", await editable(run, take.dir, "composite", src("composite"), fps, compatible, onStage));
       if (c.hasAudio) audio.push({ name: "A1", media: c });
     }
-    if (take.timeline?.layout.mode === "screen-camera" && has("camera")) notes.push("The camera is a full-size track above the screen: place and size it in your editor.");
+    if (take.timeline?.layout.mode === "screen-camera" && has("camera")) notes.push(t("tl.cameraAbove"));
   }
 
   const durationMs = take.durationMs ?? video[0]?.media.durationMs ?? 0;
-  if (!(durationMs > 0)) throw new Error("This take's length is not known yet. Open it in OpenTake once.");
+  if (!(durationMs > 0)) throw new Error(t("tl.lengthUnknown"));
   const keep = o.useEdit === false ? null : take.edit?.keep ?? null;
 
   const markers: TimelineMarker[] = [];
   if (o.clickMarkers !== false && take.timeline?.clicks.length) {
     const clicks = take.timeline.clicks;
-    if (clicks.length > MAX_CLICK_MARKERS) notes.push(`The take has ${clicks.length} clicks; the first ${MAX_CLICK_MARKERS} are markers.`);
-    for (const c of clicks.slice(0, MAX_CLICK_MARKERS)) markers.push({ t: c.t, name: "Click", kind: "click" });
+    if (clicks.length > MAX_CLICK_MARKERS) notes.push(t("tl.clicksCapped", { count: clicks.length, max: MAX_CLICK_MARKERS }));
+    for (const c of clicks.slice(0, MAX_CLICK_MARKERS)) markers.push({ t: c.t, name: t("tl.marker.click"), kind: "click" });
   }
   if (o.sceneMarkers !== false) {
-    const names = { camera: "Camera", "screen-camera": "Screen and camera", screen: "Screen" } as const;
-    for (const s of take.timeline?.scenes ?? []) markers.push({ t: s.t, name: `Scene: ${names[s.scene]}`, kind: "scene" });
+    const names = { camera: t("tl.scene.camera"), "screen-camera": t("tl.scene.screenCamera"), screen: t("tl.scene.screen") };
+    for (const s of take.timeline?.scenes ?? []) markers.push({ t: s.t, name: t("tl.marker.scene", { scene: names[s.scene] }), kind: "scene" });
   }
   for (const c of take.chapters) markers.push({ t: c.t, name: c.title, kind: "chapter" });
 
@@ -183,7 +186,7 @@ export const timelineFolder = (s: Pick<AppSettings, "exportDestination" | "expor
 
 /** Writes the timeline files under free names (nothing is overwritten). */
 export async function exportTimeline(take: TimelineTake, run: Run, settings: Pick<AppSettings, "exportDestination" | "exportDir" | "nameTemplate">, o: TimelineOptions = {}, onStage?: (s: string) => void): Promise<TimelineResult> {
-  onStage?.("Reading the take");
+  onStage?.(t("tl.stage.reading"));
   const { input, notes, layout } = await timelineInput(take, run, o, onStage);
   const l = layoutTimeline(input);
   const folder = timelineFolder(settings, take.dir);
@@ -191,7 +194,7 @@ export async function exportTimeline(take: TimelineTake, run: Run, settings: Pic
   const wantSrt = (take.captions?.lines.length ?? 0) > 0;
   const name = uniqueName(stem, "otio", (n) => existsSync(join(folder, n)), [...(o.fcpxml ? ["fcpxml"] : []), ...(wantSrt ? ["srt"] : [])]);
   const base = join(folder, name.replace(/\.otio$/, ""));
-  onStage?.("Writing the timeline");
+  onStage?.(t("tl.stage.writing"));
   const otio = `${base}.otio`;
   await writeFile(otio, otioJson(l, { captionMarkers: o.captionMarkers }), { flag: "wx" });
   const out: TimelineResult = {

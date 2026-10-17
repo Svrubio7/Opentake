@@ -9,6 +9,7 @@ import {
   easeToward, keyCommand, parseScript, positionToY, stepVelocity, wordAnchors, wordsPerSecond, yToPosition,
   type ParsedScript,
 } from "./prompter-core";
+import { t } from "@shared/i18n";
 import "./teleprompter.css";
 
 const LINE_HEIGHT = 1.45;
@@ -22,6 +23,8 @@ export function PrompterApp() {
     void window.take.invoke(IPC.prompterState).then((s) => { if (s) setState((cur) => cur ?? (s as PrompterState)); });
     return off;
   }, []);
+  // the window title follows the language (the page's own <title> is English)
+  useEffect(() => { document.title = t("prompter.windowTitle"); });
   useEffect(() => window.take.on(IPC.prompterWindowStatus, (m) => setClickThrough(!!(m as { clickThrough?: boolean }).clickThrough)), []);
 
   useEffect(() => {
@@ -35,7 +38,7 @@ export function PrompterApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!state) return <div className="pv-root"><div className="pv-empty">Connecting to OpenTake</div></div>;
+  if (!state) return <div className="pv-root"><div className="pv-empty">{t("prompter.view.connecting")}</div></div>;
   return (
     <PrompterSurface state={state} clickThrough={clickThrough}
       onPosition={(word, manual) => window.take.send(IPC.prompterPosition, manual ? { word, manual } : { word })}
@@ -162,8 +165,8 @@ export function PrompterSurface({ state, clickThrough = false, onPosition, onClo
     <div className={`pv-root${clickThrough ? " pv-through" : ""}${embedded ? " pv-embedded" : ""}`}>
       {!embedded && (
         <div className="pv-drag">
-          <span className="pv-drag-title">OpenTake prompter</span>
-          {onClose && <button type="button" className="pv-close" title="Close" aria-label="Close" onClick={onClose}><X /></button>}
+          <span className="pv-drag-title">{t("prompter.view.title")}</span>
+          {onClose && <button type="button" className="pv-close" title={t("prompter.view.close")} aria-label={t("prompter.view.close")} onClick={onClose}><X /></button>}
         </div>
       )}
       <div className="pv-viewport" ref={viewport} onWheel={onWheel} onClick={onClick}
@@ -176,7 +179,7 @@ export function PrompterSurface({ state, clickThrough = false, onPosition, onClo
           <ScriptBody parsed={parsed} showNotes={state.showNotes} />
         </div>
       </div>
-      {!parsed.words.length && <div className="pv-empty">Paste a script in the Teleprompter tab of OpenTake.</div>}
+      {!parsed.words.length && <div className="pv-empty">{t("prompter.view.empty")}</div>}
       <Countdown until={state.countdownUntil} playing={state.playing} />
     </div>
   );
@@ -217,7 +220,7 @@ function ScriptBody({ parsed, showNotes }: { parsed: ParsedScript; showNotes: bo
           </p>
         );
       })}
-      {parsed.words.length > 0 && <p className="pv-p pv-end">End</p>}
+      {parsed.words.length > 0 && <p className="pv-p pv-end">{t("prompter.view.end")}</p>}
     </>
   );
 }

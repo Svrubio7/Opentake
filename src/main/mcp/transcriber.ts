@@ -1,6 +1,7 @@
 // Captions for the assistant, made in a hidden window that runs the editor's recognizer (Vosk needs a
 // renderer: a web worker, WebAssembly and the model files). One job at a time; the window opens for a
 // job and closes after it, muted and never shown.
+import { t } from "../../shared/i18n";
 import { BrowserWindow, ipcMain } from "electron";
 import { IPC } from "../../shared/ipc";
 import type { CaptionLang, CaptionLine } from "../../shared/types";
@@ -35,10 +36,10 @@ function open(): Promise<void> {
   ready = new Promise<void>((resolve, reject) => {
     const onReady = (e: Electron.IpcMainEvent) => { if (e.sender === w.webContents) { ipcMain.off(IPC.assistantWorkerReady, onReady); resolve(); } };
     ipcMain.on(IPC.assistantWorkerReady, onReady);
-    w.webContents.once("did-fail-load", (_e, _c, desc) => reject(new Error(`The captions window did not load: ${desc}`)));
-    w.on("closed", () => { ipcMain.off(IPC.assistantWorkerReady, onReady); reject(new Error("The captions window closed")); });
+    w.webContents.once("did-fail-load", (_e, _c, desc) => reject(new Error(t("ma.captionsNoLoad", { detail: desc }))));
+    w.on("closed", () => { ipcMain.off(IPC.assistantWorkerReady, onReady); reject(new Error(t("ma.captionsClosed"))); });
   });
-  w.on("closed", () => { if (win === w) { win = null; ready = null; } current?.reject(new Error("The captions window closed")); });
+  w.on("closed", () => { if (win === w) { win = null; ready = null; } current?.reject(new Error(t("ma.captionsClosed"))); });
   void loadPage(w, "assistant");
   return ready;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { CircleDot, Film, Keyboard, Mic, ScrollText, Settings, Video, type LucideIcon } from "lucide-react";
+import { t } from "@shared/i18n";
 import markWhite from "./assets/iconwhitenobg.png";
 import { AudioPanel } from "./modules/audio";
 import { CameraPanel } from "./modules/camera";
@@ -12,31 +13,35 @@ import { AboutButton, UpdateNotice } from "./modules/update";
 import { SettingsPanel, ShellHost, refreshSettings, useShell } from "./modules/shell";
 import { AssistantSync } from "./modules/assistant";
 
-interface Tab { id: string; label: string; title: string; icon: LucideIcon; Panel: ComponentType; hint: string; foot?: boolean }
+type TabId = "record" | "takes" | "audio" | "camera" | "prompter" | "settings";
+interface Tab { id: TabId; icon: LucideIcon; Panel: ComponentType; foot?: boolean }
 
 const TABS: Tab[] = [
-  { id: "record", label: "Record", title: "Record", icon: CircleDot, Panel: RecordPanel, hint: "Set up and record a take" },
-  { id: "takes", label: "Takes", title: "Takes", icon: Film, Panel: TakesPanel, hint: "Your recordings: edit, export, rename" },
-  { id: "audio", label: "Mic", title: "Microphone", icon: Mic, Panel: AudioPanel, hint: "Microphone and voice cleanup" },
-  { id: "camera", label: "Camera", title: "Camera", icon: Video, Panel: CameraPanel, hint: "Camera, lighting and background" },
-  { id: "prompter", label: "Teleprompter", title: "Teleprompter", icon: ScrollText, Panel: TeleprompterPanel, hint: "A script that scrolls as you read" },
-  { id: "settings", label: "Settings", title: "Settings", icon: Settings, Panel: SettingsPanel, hint: "Folders, export names and help", foot: true },
+  { id: "record", icon: CircleDot, Panel: RecordPanel },
+  { id: "takes", icon: Film, Panel: TakesPanel },
+  { id: "audio", icon: Mic, Panel: AudioPanel },
+  { id: "camera", icon: Video, Panel: CameraPanel },
+  { id: "prompter", icon: ScrollText, Panel: TeleprompterPanel },
+  { id: "settings", icon: Settings, Panel: SettingsPanel, foot: true },
 ];
+const label = (id: TabId) => t(`app.tab.${id}`);
+const title = (id: TabId) => t(`app.tab.${id}.title`);
+const hint = (id: TabId) => t(`app.tab.${id}.hint`);
 
 function RailItem({ tab, on, onClick, dot }: { tab: Tab; on: boolean; onClick: () => void; dot?: boolean }) {
   const Icon = tab.icon;
   return (
-    <button type="button" className={on ? "rail-item on" : "rail-item"} onClick={onClick} title={`${tab.label}: ${tab.hint}`} aria-current={on ? "page" : undefined}>
+    <button type="button" className={on ? "rail-item on" : "rail-item"} onClick={onClick} title={t("app.railHint", { label: label(tab.id), hint: hint(tab.id) })} aria-current={on ? "page" : undefined}>
       <Icon className="rail-icon" />
-      <span className="rail-label">{tab.label}</span>
+      <span className="rail-label">{label(tab.id)}</span>
       {on && <i className="rail-dot" aria-hidden />}
-      {!on && dot && <i className="rail-dot new" aria-label="New take" />}
+      {!on && dot && <i className="rail-dot new" aria-label={t("app.newTake")} />}
     </button>
   );
 }
 
 export function App() {
-  const [tab, setTab] = useState("record");
+  const [tab, setTab] = useState<TabId>("record");
   const setShell = useShell((s) => s.set);
   // a dot on Takes when a take arrived since you last looked
   const newest = useRecord((s) => s.takes[0]?.createdAt ?? 0);
@@ -46,7 +51,7 @@ export function App() {
   useEffect(() => {
     linkPrompterToRecorder();
     // other modules ask for a tab (the record bar sends you to write a script, a notice to your takes)
-    const onTab = (e: Event) => { const id = (e as CustomEvent<string>).detail; if (TABS.some((t) => t.id === id)) setTab(id); };
+    const onTab = (e: Event) => { const id = (e as CustomEvent<string>).detail; const known = TABS.find((x) => x.id === id); if (known) setTab(known.id); };
     window.addEventListener("opentake:tab", onTab);
     return () => window.removeEventListener("opentake:tab", onTab);
   }, []);
@@ -60,19 +65,19 @@ export function App() {
   return (
     <div className="app">
       <AssistantSync />
-      <nav className="rail" aria-label="Sections">
+      <nav className="rail" aria-label={t("app.sections")}>
         <div className="rail-brand">
           <img src={markWhite} alt="" className="rail-mark" />
-          <span className="rail-label rail-brand-text"><b>OpenTake</b><small>by Quetzal</small></span>
+          <span className="rail-label rail-brand-text"><b>OpenTake</b><small>{t("app.byQuetzal")}</small></span>
         </div>
         {TABS.filter((t) => !t.foot).map((t) => (
           <RailItem key={t.id} tab={t} on={t.id === tab} onClick={() => setTab(t.id)} dot={t.id === "takes" && newest > seen} />
         ))}
         <div className="rail-foot">
           <RecordRailStatus onOpen={() => setTab("record")} />
-          <button type="button" className="rail-item" onClick={() => setShell({ shortcutsOpen: true })} title="Keyboard shortcuts (?)">
+          <button type="button" className="rail-item" onClick={() => setShell({ shortcutsOpen: true })} title={t("app.shortcutsHint")}>
             <Keyboard className="rail-icon" />
-            <span className="rail-label">Shortcuts</span>
+            <span className="rail-label">{t("app.shortcuts")}</span>
           </button>
           {TABS.filter((t) => t.foot).map((t) => <RailItem key={t.id} tab={t} on={t.id === tab} onClick={() => setTab(t.id)} />)}
           <AboutButton />
@@ -86,9 +91,9 @@ export function App() {
 
       <aside className="side">
         {/* Every panel stays mounted so its engine keeps running while another tab is open. */}
-        {TABS.map(({ id, title, Panel }) => (
-          <section key={id} className="panel" hidden={id !== tab} aria-label={title}>
-            <h1 className="panel-title">{title}</h1>
+        {TABS.map(({ id, Panel }) => (
+          <section key={id} className="panel" hidden={id !== tab} aria-label={title(id)}>
+            <h1 className="panel-title">{title(id)}</h1>
             <Panel />
           </section>
         ))}

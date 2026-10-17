@@ -13,6 +13,7 @@ import {
 } from "./export-core";
 import { SILENCE_FILTER, hasAudioStream, hiresGraph, loudnormFilter, parseLoudnorm, parseProgressTime, parseSilenceTrim } from "./ffmpeg-core";
 import { readMeta, type TakeMeta } from "./takes";
+import { t } from "../../shared/i18n";
 
 type Run = (args: string[], onStdout?: (s: string) => void) => Promise<{ code: number; stderr: string }>;
 type HiresSource = (takeId: string, dir: string, meta: TakeMeta, files: TakeFiles, offsetMs: number) => Promise<Omit<Parameters<typeof hiresGraph>[0], "trim" | "audio">>;
@@ -54,8 +55,8 @@ export async function canBurnCaptions(run: Run): Promise<boolean> {
 export async function exportEdited(o: ExportOptions, c: EditedContext): Promise<string> {
   const { dir, meta, files, run, progress } = c;
   const output = o.output ?? { preset: "original", format: "mp4", fit: "fit", quality: { mode: "crf", crf: 18 } };
-  if (!files.composite) throw new Error("This take has no recording file");
-  progress("Reading the take", 0);
+  if (!files.composite) throw new Error(t("main.export.noRecording"));
+  progress(t("main.export.reading"), 0);
   const probe = await run(["-nostdin", "-hide_banner", "-i", files.composite]);
   const audio = hasAudioStream(probe.stderr);
   const durationMs = meta.durationMs ?? parseDurationMs(probe.stderr);
@@ -66,17 +67,17 @@ export async function exportEdited(o: ExportOptions, c: EditedContext): Promise<
 
   if (o.trimSilence && audio) {
     // silence is measured on what the cuts leave, so the trim lands at the edited start and end
-    progress("Finding silence", 0.02);
+    progress(t("main.export.findingSilence"), 0.02);
     const r = await run(cutAudioArgs(files.composite, keep, SILENCE_FILTER));
     const total = keep ? keptDuration(keep) : durationMs;
-    const t = parseSilenceTrim(r.stderr, total != null ? total / 1000 : null);
-    if (t.start > 0 || t.end != null) keep = clipEdited(keep ?? wholeTake(durationMs ?? Infinity), t.start * 1000, t.end != null ? t.end * 1000 : null);
+    const sil = parseSilenceTrim(r.stderr, total != null ? total / 1000 : null);
+    if (sil.start > 0 || sil.end != null) keep = clipEdited(keep ?? wholeTake(durationMs ?? Infinity), sil.start * 1000, sil.end != null ? sil.end * 1000 : null);
   }
-  if (keep && !keep.length) throw new Error("Nothing is left after the cuts");
+  if (keep && !keep.length) throw new Error(t("main.export.nothingLeft"));
 
   let loudness: string | null = null;
   if (o.loudness !== "off" && audio && output.format !== "gif") {
-    progress("Measuring loudness", 0.05);
+    progress(t("main.export.measuringLoudness"), 0.05);
     const r = await run(cutAudioArgs(files.composite, keep, loudnormFilter(o.loudness)));
     const m = parseLoudnorm(r.stderr);
     loudness = m ? loudnormFilter(o.loudness, m) : null;
@@ -100,8 +101,8 @@ export async function exportEdited(o: ExportOptions, c: EditedContext): Promise<
   const lines = caps?.lines.length ? remapLines(caps.lines, keep) : null;
   let burn: { ass: string; fontsDir: string } | null = null;
   if (output.captions) {
-    if (!lines?.length) throw new Error("This take has no captions yet. Make them in the editor first.");
-    if (!(await canBurnCaptions(run))) throw new Error("This copy of ffmpeg cannot draw captions. Export the .srt file instead.");
+    if (!lines?.length) throw new Error(t("main.export.noCaptions"));
+    if (!(await canBurnCaptions(run))) throw new Error(t("main.export.cantBurn"));
     await writeFile(join(dir, "captions.ass"), toAss(lines, output.captions, frame.W, frame.H));
     await mkdir(join(dir, ".fonts"), { recursive: true });
     await writeFile(join(dir, ".fonts", "Geist-Bold.ttf"), await readFile(geistBold));
@@ -110,10 +111,10 @@ export async function exportEdited(o: ExportOptions, c: EditedContext): Promise<
 
   const out = c.out;
   const encodeMs = keep ? keptDuration(keep) : (durationMs ?? 0);
-  const stageName = output.format === "gif" ? "Making the GIF" : `Encoding ${output.format.toUpperCase()}`;
+  const stageName = output.format === "gif" ? t("main.export.makingGif") : t("main.export.encoding", { format: output.format.toUpperCase() });
   const watch = (from: number, to: number, stage: string) => (s: string) => {
-    const t = parseProgressTime(s);
-    if (t != null) progress(stage, Number.isFinite(encodeMs) && encodeMs > 0 ? Math.min(to, from + (to - from) * (t / encodeMs)) : null);
+    const at = parseProgressTime(s);
+    if (at != null) progress(stage, Number.isFinite(encodeMs) && encodeMs > 0 ? Math.min(to, from + (to - from) * (at / encodeMs)) : null);
   };
   const base = { source, srcSize, audio, keep, loudness, output, burn, out, limitSec: Number.isFinite(encodeMs) && encodeMs > 0 ? encodeMs / 1000 : null };
 
@@ -122,16 +123,16 @@ export async function exportEdited(o: ExportOptions, c: EditedContext): Promise<
       const audioKbps = audio ? (output.format === "webm" ? AUDIO_KBPS.webm : AUDIO_KBPS.mp4Size) : 0;
       const kbps = sizeBitrateKbps(output.quality.mb, encodeMs / 1000, audioKbps);
       const log = "ffpass";
-      progress(`${stageName}, pass 1 of 2`, 0.1);
-      const r1 = await run(editExportArgs({ ...base, pass: { n: 1, log, kbps } }), watch(0.1, 0.5, `${stageName}, pass 1 of 2`));
-      if (r1.code !== 0) throw new Error(`ffmpeg failed: ${tail(r1.stderr)}`);
-      progress(`${stageName}, pass 2 of 2`, 0.5);
-      const r2 = await run(editExportArgs({ ...base, pass: { n: 2, log, kbps } }), watch(0.5, 0.99, `${stageName}, pass 2 of 2`));
-      if (r2.code !== 0) throw new Error(`ffmpeg failed: ${tail(r2.stderr)}`);
+      progress(t("main.export.pass", { stage: stageName, n: 1 }), 0.1);
+      const r1 = await run(editExportArgs({ ...base, pass: { n: 1, log, kbps } }), watch(0.1, 0.5, t("main.export.pass", { stage: stageName, n: 1 })));
+      if (r1.code !== 0) throw new Error(t("main.export.ffmpegFailed", { detail: tail(r1.stderr) }));
+      progress(t("main.export.pass", { stage: stageName, n: 2 }), 0.5);
+      const r2 = await run(editExportArgs({ ...base, pass: { n: 2, log, kbps } }), watch(0.5, 0.99, t("main.export.pass", { stage: stageName, n: 2 })));
+      if (r2.code !== 0) throw new Error(t("main.export.ffmpegFailed", { detail: tail(r2.stderr) }));
     } else {
       progress(stageName, 0.1);
       const r = await run(editExportArgs(base), watch(0.1, 0.99, stageName));
-      if (r.code !== 0) throw new Error(`ffmpeg failed: ${tail(r.stderr)}`);
+      if (r.code !== 0) throw new Error(t("main.export.ffmpegFailed", { detail: tail(r.stderr) }));
     }
   } catch (e) {
     // a failed or cancelled export leaves no half-written file behind

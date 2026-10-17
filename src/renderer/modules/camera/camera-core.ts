@@ -1,5 +1,6 @@
 // Pure camera math: no DOM, no WebGL. Measurement, auto lighting control, looks (3D LUTs),
 // framing and resolution helpers. The shader in gl.ts mirrors toneCurve/wbGains exactly.
+import { t } from "../../../shared/i18n";
 
 /* ------------------------------------------------------------------ adjustments */
 
@@ -30,18 +31,19 @@ export const NEUTRAL: Adjust = {
   saturation: 0, vibrance: 0, sharpen: 0.25, vignette: 0, smoothing: 0,
 };
 
-export const ADJUST_META: Record<AdjustKey, { label: string; min: number; max: number; step: number }> = {
-  exposure: { label: "Exposure", min: -2, max: 2, step: 0.01 },
-  shadows: { label: "Shadows", min: -1, max: 1, step: 0.01 },
-  highlights: { label: "Highlights", min: -1, max: 1, step: 0.01 },
-  temperature: { label: "Temperature", min: -1, max: 1, step: 0.01 },
-  tint: { label: "Tint", min: -1, max: 1, step: 0.01 },
-  contrast: { label: "Contrast", min: -1, max: 1, step: 0.01 },
-  saturation: { label: "Saturation", min: -1, max: 1, step: 0.01 },
-  vibrance: { label: "Vibrance", min: -1, max: 1, step: 0.01 },
-  sharpen: { label: "Sharpen", min: 0, max: 1, step: 0.01 },
-  smoothing: { label: "Skin smoothing", min: 0, max: 1, step: 0.01 },
-  vignette: { label: "Vignette", min: 0, max: 1, step: 0.01 },
+// each label is read in the current language when it is shown (the app switches language live)
+export const ADJUST_META: Record<AdjustKey, { readonly label: string; min: number; max: number; step: number }> = {
+  exposure: { get label() { return t("camera.adjust.exposure"); }, min: -2, max: 2, step: 0.01 },
+  shadows: { get label() { return t("camera.adjust.shadows"); }, min: -1, max: 1, step: 0.01 },
+  highlights: { get label() { return t("camera.adjust.highlights"); }, min: -1, max: 1, step: 0.01 },
+  temperature: { get label() { return t("camera.adjust.temperature"); }, min: -1, max: 1, step: 0.01 },
+  tint: { get label() { return t("camera.adjust.tint"); }, min: -1, max: 1, step: 0.01 },
+  contrast: { get label() { return t("camera.adjust.contrast"); }, min: -1, max: 1, step: 0.01 },
+  saturation: { get label() { return t("camera.adjust.saturation"); }, min: -1, max: 1, step: 0.01 },
+  vibrance: { get label() { return t("camera.adjust.vibrance"); }, min: -1, max: 1, step: 0.01 },
+  sharpen: { get label() { return t("camera.adjust.sharpen"); }, min: 0, max: 1, step: 0.01 },
+  smoothing: { get label() { return t("camera.adjust.smoothing"); }, min: 0, max: 1, step: 0.01 },
+  vignette: { get label() { return t("camera.adjust.vignette"); }, min: 0, max: 1, step: 0.01 },
 };
 
 export const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -110,7 +112,7 @@ export type LookId = "natural" | "warm" | "cool" | "cinematic" | "bright" | "bw"
 
 export interface LookDef {
   id: LookId;
-  label: string;
+  readonly label: string;
   /** what Auto steers toward */
   target: { faceLuma: number; warmth: number; tint: number; shadowFloor: number };
   /** creative grade baked into the 3D LUT */
@@ -129,16 +131,16 @@ export interface LookDef {
 const g0 = { gain: [1, 1, 1] as [number, number, number], shadowTint: [0, 0, 0] as [number, number, number], highTint: [0, 0, 0] as [number, number, number], gamma: 1, contrast: 0, saturation: 1, fade: 0, mono: false };
 
 export const LOOKS: LookDef[] = [
-  { id: "natural", label: "Natural", target: { faceLuma: 0.56, warmth: 0.03, tint: 0, shadowFloor: 0.06 }, grade: { ...g0, contrast: 0.06 } },
-  { id: "warm", label: "Warm studio", target: { faceLuma: 0.57, warmth: 0.14, tint: 0.02, shadowFloor: 0.07 },
+  { id: "natural", get label() { return t("camera.look.natural"); }, target: { faceLuma: 0.56, warmth: 0.03, tint: 0, shadowFloor: 0.06 }, grade: { ...g0, contrast: 0.06 } },
+  { id: "warm", get label() { return t("camera.look.warm"); }, target: { faceLuma: 0.57, warmth: 0.14, tint: 0.02, shadowFloor: 0.07 },
     grade: { ...g0, gain: [1.03, 1.0, 0.95], highTint: [0.03, 0.015, -0.02], gamma: 0.97, contrast: 0.08, saturation: 1.05 } },
-  { id: "cool", label: "Cool tech", target: { faceLuma: 0.55, warmth: -0.08, tint: 0, shadowFloor: 0.05 },
+  { id: "cool", get label() { return t("camera.look.cool"); }, target: { faceLuma: 0.55, warmth: -0.08, tint: 0, shadowFloor: 0.05 },
     grade: { ...g0, gain: [0.98, 1.0, 1.03], shadowTint: [-0.03, 0.01, 0.04], contrast: 0.14, saturation: 0.94 } },
-  { id: "cinematic", label: "Cinematic", target: { faceLuma: 0.5, warmth: 0.04, tint: 0, shadowFloor: 0.04 },
+  { id: "cinematic", get label() { return t("camera.look.cinematic"); }, target: { faceLuma: 0.5, warmth: 0.04, tint: 0, shadowFloor: 0.04 },
     grade: { ...g0, shadowTint: [-0.04, 0.015, 0.05], highTint: [0.05, 0.015, -0.04], contrast: 0.2, saturation: 0.9, fade: 0.03 } },
-  { id: "bright", label: "Bright & clean", target: { faceLuma: 0.62, warmth: 0.02, tint: 0, shadowFloor: 0.1 },
+  { id: "bright", get label() { return t("camera.look.bright"); }, target: { faceLuma: 0.62, warmth: 0.02, tint: 0, shadowFloor: 0.1 },
     grade: { ...g0, gamma: 0.9, contrast: 0.04, saturation: 1.04, highTint: [0.01, 0.01, 0.01] } },
-  { id: "bw", label: "B&W", target: { faceLuma: 0.54, warmth: 0, tint: 0, shadowFloor: 0.05 },
+  { id: "bw", get label() { return t("camera.look.bw"); }, target: { faceLuma: 0.54, warmth: 0, tint: 0, shadowFloor: 0.05 },
     grade: { ...g0, contrast: 0.18, mono: true } },
 ];
 
@@ -408,28 +410,28 @@ export function assessLighting(s: FrameStats, faceExpected: boolean): LightingRe
   if (f < 0.32) {
     const pen = ((0.32 - f) / 0.32) * 55;
     score -= pen;
-    tips.push({ p: pen + (f < 0.2 ? 40 : 0), tip: f < 0.2 ? "Too dark, add a light in front of you" : "A bit dim. More light in front of you will look sharper" });
+    tips.push({ p: pen + (f < 0.2 ? 40 : 0), tip: f < 0.2 ? t("camera.tip.tooDark") : t("camera.tip.dim") });
   }
   if (s.hasFace && s.faceClip > 0.04) {
     const pen = clamp(s.faceClip * 300, 0, 35);
     score -= pen;
-    tips.push({ p: pen + 10, tip: "Too bright on your face, dim the light or move it back" });
+    tips.push({ p: pen + 10, tip: t("camera.tip.faceBright") });
   } else if (f > 0.8) {
     score -= 20;
-    tips.push({ p: 20, tip: "Very bright picture, lower the light a little" });
+    tips.push({ p: 20, tip: t("camera.tip.veryBright") });
   }
   const backlight = stopsBetween(s.bgLuma, f);
   if ((s.hasFace || !faceExpected) && (backlight > 1.1 || (s.bgClip > 0.15 && s.faceClip < 0.02))) {
     const pen = clamp((backlight - 1.1) * 25 + s.bgClip * 40, 8, 40);
     score -= pen;
-    tips.push({ p: pen + 15, tip: "Backlit window behind you. Face the window or add a light in front" });
+    tips.push({ p: pen + 15, tip: t("camera.tip.backlit") });
   }
   if (s.faceLeft != null && s.faceRight != null) {
     const uneven = Math.abs(stopsBetween(s.faceLeft, s.faceRight));
     if (uneven > 0.9) {
       const pen = clamp((uneven - 0.9) * 20, 4, 20);
       score -= pen;
-      tips.push({ p: pen, tip: "One side of your face is in shadow, add a soft light on that side" });
+      tips.push({ p: pen, tip: t("camera.tip.uneven") });
     }
   }
   const wb = invertWb(s.neutral ?? s.grey);
@@ -437,16 +439,16 @@ export function assessLighting(s: FrameStats, faceExpected: boolean): LightingRe
   if (cast > 0.7) {
     const pen = clamp((cast - 0.7) * 20, 3, 15);
     score -= pen;
-    tips.push({ p: pen, tip: "Strong colour cast. Mixed light colours? Use one kind of light" });
+    tips.push({ p: pen, tip: t("camera.tip.cast") });
   }
   if (faceExpected && !s.hasFace) {
     score -= 10;
-    tips.push({ p: 12, tip: "Face not found. Centre yourself in the frame" });
+    tips.push({ p: 12, tip: t("camera.tip.noFace") });
   }
   score = Math.round(clamp(score, 0, 100));
   tips.sort((a, b) => b.p - a.p);
   const level = score >= 80 ? "good" : score >= 55 ? "ok" : "poor";
-  return { score, level, tip: tips[0]?.tip ?? "Lighting looks good" };
+  return { score, level, tip: tips[0]?.tip ?? t("camera.tip.good") };
 }
 
 /* ------------------------------------------------------------------ framing */

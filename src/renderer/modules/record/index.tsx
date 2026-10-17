@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Monitor, Pause, PictureInPicture2, Play, Square, Video, X } from "lucide-react";
 import type { OutputAspect, RecordMode, ScreenSource } from "@shared/types";
+import { num, t } from "@shared/i18n";
 import { Button, Card, Field, Hint, Segmented, Slider, Switch } from "../../ui";
 import { api, hasBridge } from "./api";
 import { compositor } from "./engine";
@@ -104,7 +105,7 @@ export function Stage() {
       />
       {status === "countdown" && <div className="rec-countdown" key={countdownValue}>{countdownValue}</div>}
       <StageEmpty />
-      {mode === "screen-camera" && status === "idle" && sourceId && <div className="rec-stage-tip">Drag the camera to move it, drag its edge to resize</div>}
+      {mode === "screen-camera" && status === "idle" && sourceId && <div className="rec-stage-tip">{t("record.stage.tip")}</div>}
     </div>
   );
 }
@@ -138,10 +139,10 @@ function useMessageJanitor() {
 }
 
 // the scenes: pick one before a take, or switch live while recording (Ctrl+Shift+1, 2, 3)
-const MODES: { value: RecordMode; label: ReactNode; hint: string }[] = [
-  { value: "camera", label: <Video />, hint: "Camera only (Ctrl+Shift+1)" },
-  { value: "screen-camera", label: <PictureInPicture2 />, hint: "Screen and camera (Ctrl+Shift+2)" },
-  { value: "screen", label: <Monitor />, hint: "Screen only (Ctrl+Shift+3)" },
+const modes = (): { value: RecordMode; label: ReactNode; hint: string }[] => [
+  { value: "camera", label: <Video />, hint: t("record.mode.camera") },
+  { value: "screen-camera", label: <PictureInPicture2 />, hint: t("record.mode.screenCamera") },
+  { value: "screen", label: <Monitor />, hint: t("record.mode.screen") },
 ];
 const ASPECTS: OutputAspect[] = ["16:9", "9:16", "1:1"];
 const aspectLabel = (a: OutputAspect, w: number, h: number) => (a === "custom" ? `${w}×${h}` : a);
@@ -173,22 +174,22 @@ export function RecordBar() {
   }, []);
   const msgAction = noticeAction && (
     <button type="button" className="rec-msg-action" onClick={() => { if (noticeAction === "overlays") goToRecord("overlays"); else goTo(noticeAction); set({ error: null, notice: null, noticeAction: null }); }}>
-      {noticeAction === "takes" ? "Open Takes" : noticeAction === "overlays" ? "Open Overlays" : "Open Settings"}
+      {noticeAction === "takes" ? t("record.msg.openTakes") : noticeAction === "overlays" ? t("record.msg.openOverlays") : t("record.msg.openSettings")}
     </button>
   );
 
   return (
     <div className="rec-dock">
-      {error && <div className="rec-msg danger" role="alert"><span>{error}</span>{msgAction}<button type="button" className="rec-msg-x" onClick={() => set({ error: null, noticeAction: null })} title="Dismiss" aria-label="Dismiss"><X /></button></div>}
-      {notice && !error && <div className="rec-msg" role="status"><span>{notice}</span>{msgAction}<button type="button" className="rec-msg-x" onClick={() => set({ notice: null, noticeAction: null })} title="Dismiss" aria-label="Dismiss"><X /></button></div>}
+      {error && <div className="rec-msg danger" role="alert"><span>{error}</span>{msgAction}<button type="button" className="rec-msg-x" onClick={() => set({ error: null, noticeAction: null })} title={t("record.dismiss")} aria-label={t("record.dismiss")}><X /></button></div>}
+      {notice && !error && <div className="rec-msg" role="status"><span>{notice}</span>{msgAction}<button type="button" className="rec-msg-x" onClick={() => set({ notice: null, noticeAction: null })} title={t("record.dismiss")} aria-label={t("record.dismiss")}><X /></button></div>}
       <div className="rec-bar">
         <div className="rec-bar-side">
-          <Segmented icon label={live ? "Scene: switch while recording" : "What to record"} value={mode} options={MODES} onChange={switchScene} disabled={status === "stopping"} />
+          <Segmented icon label={live ? t("record.bar.sceneLive") : t("record.bar.whatToRecord")} value={mode} options={modes()} onChange={switchScene} disabled={status === "stopping"} />
           <span className="rec-sep" aria-hidden />
           {needsScreen(mode) && (
             // mid-take a screen can be picked only if the take began without one (its own track is already running otherwise)
-            <Button className="rec-src" disabled={(busy && (!!sourceId || status === "stopping")) || !bridge} onClick={() => setPicking(true)} title={sourceName ? `Recording ${sourceName}. Click to change.` : "Choose a screen or window"}>
-              <Monitor /><span>{sourceId ? sourceName : "Choose screen"}</span>
+            <Button className="rec-src" disabled={(busy && (!!sourceId || status === "stopping")) || !bridge} onClick={() => setPicking(true)} title={sourceName ? t("record.bar.sourceTitle", { name: sourceName }) : t("record.bar.chooseSource")}>
+              <Monitor /><span>{sourceId ? sourceName : t("record.bar.chooseScreen")}</span>
             </Button>
           )}
           <PrompterToggle />
@@ -196,31 +197,34 @@ export function RecordBar() {
 
         <div className="rec-bar-main">
           {!busy && (
-            <Button variant="ink" size="lg" className="rec-go" onClick={startRecording} disabled={!bridge} title="Start recording (Ctrl+Shift+R)">
-              <span className="rec-dot still" />Record
+            <Button variant="ink" size="lg" className="rec-go" onClick={startRecording} disabled={!bridge} title={t("record.bar.startTitle")}>
+              <span className="rec-dot still" />{t("record.bar.record")}
             </Button>
           )}
-          {status === "countdown" && <Button size="lg" onClick={() => void stopRecording()}>Cancel</Button>}
+          {status === "countdown" && <Button size="lg" onClick={() => void stopRecording()}>{t("record.cancel")}</Button>}
           {live && (
             <>
               <span className={status === "paused" ? "rec-clock paused" : "rec-clock"}><span className="rec-dot" />{formatClock(elapsedMs)}</span>
-              <Button size="icon" onClick={togglePause} title={status === "paused" ? "Resume (Ctrl+Shift+P)" : "Pause (Ctrl+Shift+P)"} aria-label={status === "paused" ? "Resume" : "Pause"}>
+              <Button size="icon" onClick={togglePause} title={status === "paused" ? t("record.bar.resumeTitle") : t("record.bar.pauseTitle")} aria-label={status === "paused" ? t("record.bar.resume") : t("record.bar.pause")}>
                 {status === "paused" ? <Play /> : <Pause />}
               </Button>
-              {outro && <span className="note">Outro</span>}
-              <Button variant="danger" size="lg" onClick={() => void stopRecording()} title={outro ? "End the take now" : "Stop (Ctrl+Shift+R)"}><Square />{outro ? "Stop now" : "Stop"}</Button>
+              {outro && <span className="note">{t("record.bar.outro")}</span>}
+              <Button variant="danger" size="lg" onClick={() => void stopRecording()} title={outro ? t("record.bar.endNowTitle") : t("record.bar.stopTitle")}><Square />{outro ? t("record.bar.stopNow") : t("record.bar.stop")}</Button>
             </>
           )}
-          {status === "stopping" && <span className="note">Saving the take</span>}
+          {status === "stopping" && <span className="note">{t("record.bar.saving")}</span>}
         </div>
 
         <div className="rec-bar-side end">
           <DockLevel />
-          <span className="rec-sep" aria-hidden />
+          {/* the frame cannot change during a take, so it makes room for the take's own controls */}
+          {!busy && <span className="rec-sep" aria-hidden />}
           {/* the three common frames, plus the current one when the Record panel set another */}
-          <Segmented label="Frame" value={aspect}
-            options={(ASPECTS.includes(aspect) ? ASPECTS : [...ASPECTS, aspect]).map((a) => ({ value: a, label: aspectLabel(a, customW, customH), hint: a === "custom" ? "A custom frame (Record panel, Frame)" : `Record a ${a} frame` }))}
-            onChange={(a) => set({ aspect: a })} disabled={busy} />
+          {!busy && (
+            <Segmented label={t("record.bar.frame")} value={aspect}
+              options={(ASPECTS.includes(aspect) ? ASPECTS : [...ASPECTS, aspect]).map((a) => ({ value: a, label: aspectLabel(a, customW, customH), hint: a === "custom" ? t("record.bar.customFrame") : t("record.bar.aspectHint", { aspect: a }) }))}
+              onChange={(a) => set({ aspect: a })} />
+          )}
         </div>
       </div>
       {picking && <SourcePicker onClose={() => setPicking(false)} />}
@@ -234,7 +238,7 @@ export function RecordRailStatus({ onOpen }: { onOpen: () => void }) {
   const elapsedMs = useRecord((s) => s.elapsedMs);
   if (status !== "recording" && status !== "paused") return null;
   return (
-    <button type="button" className={status === "paused" ? "rail-rec paused" : "rail-rec"} onClick={onOpen} title={status === "paused" ? "Paused" : "Recording"}>
+    <button type="button" className={status === "paused" ? "rail-rec paused" : "rail-rec"} onClick={onOpen} title={status === "paused" ? t("record.rail.paused") : t("record.rail.recording")}>
       <span className="rec-dot" />
       <span className="tnum">{formatClock(elapsedMs)}</span>
     </button>
@@ -257,23 +261,23 @@ function SourcePicker({ onClose }: { onClose: () => void }) {
     set({ sourceId: s.id, sourceName: s.name, displayId: s.displayId ?? null });
     onClose();
     try { await compositor().useScreen(s.id, s.displayId ?? null); } catch (e) {
-      set({ sourceId: null, sourceName: null, displayId: null, error: `Could not capture ${s.name}: ${e instanceof Error ? e.message : e}` });
+      set({ sourceId: null, sourceName: null, displayId: null, error: t("record.picker.captureFailed", { name: s.name, reason: e instanceof Error ? e.message : String(e) }) });
     }
   };
   const screens = sources?.filter((s) => s.id.startsWith("screen:")) ?? [];
   const windows = sources?.filter((s) => !s.id.startsWith("screen:")) ?? [];
   return (
     <div className="modal-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" role="dialog" aria-label="Choose what to record">
+      <div className="modal" role="dialog" aria-label={t("record.picker.title")}>
         <div className="row">
-          <h2 className="modal-title">Choose what to record</h2>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close"><X /></Button>
+          <h2 className="modal-title">{t("record.picker.title")}</h2>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("record.close")}><X /></Button>
         </div>
         {err && <p className="note note-danger">{err}</p>}
-        {!sources && !err && <p className="note">Looking for screens and windows</p>}
-        {([["Screens", screens], ["Windows", windows]] as const).map(([title, list]) => list.length > 0 && (
-          <div key={title} className="stack">
-            <h3 className="rec-pick-title">{title}{title === "Windows" && <Hint text="Auto zoom follows clicks on whole screens. On a single window it stays off." />}</h3>
+        {!sources && !err && <p className="note">{t("record.picker.looking")}</p>}
+        {([["screens", screens], ["windows", windows]] as const).map(([kind, list]) => list.length > 0 && (
+          <div key={kind} className="stack">
+            <h3 className="rec-pick-title">{kind === "screens" ? t("record.picker.screens") : t("record.picker.windows")}{kind === "windows" && <Hint text={t("record.picker.windowsHint")} />}</h3>
             <div className="rec-picker-grid">
               {list.map((s) => (
                 <button key={s.id} type="button" className="rec-source" onClick={() => choose(s)} title={s.name}>
@@ -289,10 +293,10 @@ function SourcePicker({ onClose }: { onClose: () => void }) {
   );
 }
 
-const SECTIONS: { value: RecordSection; label: string; hint: string }[] = [
-  { value: "setup", label: "Setup", hint: "What is ready, the recording options and what happens when you stop" },
-  { value: "look", label: "Look", hint: "Frame, background, the screen window and the camera" },
-  { value: "overlays", label: "Overlays", hint: "Pointer, drawing, keys, logo, name card, intro and outro" },
+const sections = (): { value: RecordSection; label: string; hint: string }[] => [
+  { value: "setup", label: t("record.section.setup"), hint: t("record.section.setupHint") },
+  { value: "look", label: t("record.section.look"), hint: t("record.section.lookHint") },
+  { value: "overlays", label: t("record.section.overlays"), hint: t("record.section.overlaysHint") },
 ];
 
 /** How many overlays are on, for the section's label. */
@@ -318,17 +322,17 @@ export function RecordPanel() {
     }
   }, [s.mode, busy]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!hasBridge()) return <div className="cards"><Card className="card-danger"><p className="note note-danger">The recorder needs the desktop app.</p></Card></div>;
+  if (!hasBridge()) return <div className="cards"><Card className="card-danger"><p className="note note-danger">{t("record.needsApp")}</p></Card></div>;
 
   return (
     <div className="cards">
       <div className="rec-sections">
-        <Segmented fill value={section} label="Record settings"
-          options={SECTIONS.map((x) => ({
+        <Segmented fill value={section} label={t("record.sections.label")}
+          options={sections().map((x) => ({
             ...x,
-            hint: x.value === "setup" && problems ? "Something needs a fix before you record" : x.hint,
-            label: x.value === "overlays" && overlays > 0 ? <>{x.label}<span className="rec-count tnum" aria-label={`${overlays} on`}>{overlays}</span></>
-              : x.value === "setup" && problems > 0 && section !== "setup" ? <>{x.label}<i className="rec-alert" aria-label="Needs a fix" /></> : x.label,
+            hint: x.value === "setup" && problems ? t("record.section.needsFixHint") : x.hint,
+            label: x.value === "overlays" && overlays > 0 ? <>{x.label}<span className="rec-count tnum" aria-label={t("record.section.countOn", { count: overlays })}>{overlays}</span></>
+              : x.value === "setup" && problems > 0 && section !== "setup" ? <>{x.label}<i className="rec-alert" aria-label={t("record.needsFix")} /></> : x.label,
           }))}
           onChange={(recordSection) => setShell({ recordSection })} />
       </div>
@@ -337,45 +341,45 @@ export function RecordPanel() {
         <>
           <ReadinessCard />
           <Suggestions />
-          <Card title="Recording">
+          <Card title={t("card.recording")}>
             <div className="row">
-              <span className="row-label">Frame rate <Hint text="60 fps is smoother for fast screen movement and makes bigger files" /></span>
+              <span className="row-label">{t("record.fps.label")} <Hint text={t("record.fps.hint")} /></span>
               <Segmented<30 | 60> value={s.fps} options={[{ value: 30, label: "30 fps" }, { value: 60, label: "60 fps" }]} onChange={(fps) => s.set({ fps })} disabled={busy} />
             </div>
-            <Switch label="3, 2, 1 countdown" checked={s.countdown} onChange={(countdown) => s.set({ countdown })} />
-            <Switch label="Separate tracks" hint="Also saves the raw screen, the camera and the computer sound as their own files, for editing later" checked={s.isoTracks} onChange={(isoTracks) => s.set({ isoTracks })} disabled={busy} />
+            <Switch label={t("record.countdown")} checked={s.countdown} onChange={(countdown) => s.set({ countdown })} />
+            <Switch label={t("record.iso")} hint={t("record.iso.hint")} checked={s.isoTracks} onChange={(isoTracks) => s.set({ isoTracks })} disabled={busy} />
             <SystemSoundControls />
             <div className="rec-keys-line">
-              <span className="note"><Keys keys={["Mod", "Shift", "R"]} /> starts and stops from any app</span>
-              <Button variant="link" onClick={() => setShell({ shortcutsOpen: true })} title="Or press ? anywhere in OpenTake">All shortcuts</Button>
+              <span className="note"><Keys keys={["Mod", "Shift", "R"]} /> {t("record.keysLine")}</span>
+              <Button variant="link" onClick={() => setShell({ shortcutsOpen: true })} title={t("record.allShortcutsTitle")}>{t("record.allShortcuts")}</Button>
             </div>
           </Card>
 
           {needsScreen(s.mode) && (
-            <Card title="Auto zoom" hint="Zooms in where you click, then eases back out">
-              <Switch label="Zoom into clicks" checked={s.zoomEnabled} onChange={(zoomEnabled) => s.set({ zoomEnabled })} disabled={busy} />
-              {s.zoomEnabled && <Slider label="Zoom" value={s.zoomScale} min={1.4} max={2.4} step={0.1} onChange={(zoomScale) => s.set({ zoomScale })} format={(v) => `${v.toFixed(1)}x`} />}
+            <Card title={t("card.autoZoom")} hint={t("record.zoom.hint")}>
+              <Switch label={t("record.zoom.switch")} checked={s.zoomEnabled} onChange={(zoomEnabled) => s.set({ zoomEnabled })} disabled={busy} />
+              {s.zoomEnabled && <Slider label={t("record.zoom.slider")} value={s.zoomScale} min={1.4} max={2.4} step={0.1} onChange={(zoomScale) => s.set({ zoomScale })} format={(v) => `${num(v, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}x`} />}
               {s.tracking && (
                 <p className="note" title={s.tracking.reason ?? undefined}>
-                  {!s.tracking.normalized ? "A single window is selected: zoom stays off." :
-                    s.tracking.hooks ? "Clicks are tracked across the whole screen." :
-                      "Global clicks are unavailable, so the zoom follows where the cursor stops."}
+                  {!s.tracking.normalized ? t("record.zoom.window") :
+                    s.tracking.hooks ? t("record.zoom.hooks") :
+                      t("record.zoom.cursor")}
                 </p>
               )}
             </Card>
           )}
 
-          <Card title="When you stop" hint="What happens to each take as soon as you press Stop. The Export button on a take can always make other versions.">
-            <Switch label="Export an MP4 right away" checked={s.autoExport} onChange={(autoExport) => s.set({ autoExport })} />
-            <Field label="Loudness" inline hint="Evens out the volume. -14 LUFS suits social video, -16 LUFS podcasts and YouTube.">
+          <Card title={t("card.whenYouStop")} hint={t("record.stop.hint")}>
+            <Switch label={t("record.stop.autoExport")} checked={s.autoExport} onChange={(autoExport) => s.set({ autoExport })} />
+            <Field label={t("record.loudness")} inline hint={t("record.loudness.hint")}>
               <select className="select" value={s.loudness} onChange={(e) => s.set({ loudness: e.target.value as typeof s.loudness })}>
-                <option value="off">As recorded</option>
-                <option value="-14">-14 LUFS (social)</option>
-                <option value="-16">-16 LUFS (podcast, YouTube)</option>
+                <option value="off">{t("record.loudness.off")}</option>
+                <option value="-14">{t("record.loudness.social")}</option>
+                <option value="-16">{t("record.loudness.podcast")}</option>
               </select>
             </Field>
-            <Switch label="Trim silence at start and end" checked={s.trimSilence} onChange={(trimSilence) => s.set({ trimSilence })} />
-            <Button variant="link" className="rec-where" onClick={() => goTo("settings")}>Where exports go and their names</Button>
+            <Switch label={t("record.trim")} checked={s.trimSilence} onChange={(trimSilence) => s.set({ trimSilence })} />
+            <Button variant="link" className="rec-where" onClick={() => goTo("settings")}>{t("record.where")}</Button>
           </Card>
         </>
       )}

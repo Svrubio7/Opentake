@@ -1,6 +1,7 @@
 // Connecting Claude or Codex to OpenTake, as pure functions (tested in setup-core.test.ts): the command
 // that starts the bundled MCP server for this copy of the app, the claude_desktop_config.json merge
 // (other servers and settings are kept as they are), and the lines for Claude Code and Codex.
+import { t } from "../../shared/i18n";
 import { join, posix, win32 } from "node:path";
 import type { ServerLaunch } from "../../shared/assistant";
 
@@ -62,8 +63,8 @@ export function mergeClaudeDesktop(existing: string | null, launch: ServerLaunch
   let doc: Record<string, unknown> = {};
   if (existing != null && existing.trim()) {
     let parsed: unknown;
-    try { parsed = JSON.parse(existing); } catch { throw new Error("claude_desktop_config.json is not valid JSON, so OpenTake left it alone. Fix it or set it up by hand."); }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("claude_desktop_config.json does not hold a settings object, so OpenTake left it alone.");
+    try { parsed = JSON.parse(existing); } catch { throw new Error(t("ma.setup.notJson")); }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(t("ma.setup.notObject"));
     doc = parsed as Record<string, unknown>;
   }
   const servers = doc.mcpServers && typeof doc.mcpServers === "object" && !Array.isArray(doc.mcpServers) ? (doc.mcpServers as Record<string, unknown>) : {};
