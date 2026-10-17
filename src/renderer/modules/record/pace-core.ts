@@ -7,16 +7,29 @@
 
 export class FramePacer {
   private next = -Infinity;
-  constructor(private periodMs: number) {}
+  /**
+   * `earlyMs`: how early a frame may come and still count. Half a millisecond for a timer tick (a
+   * tick that lands at 16.0 for a 16.67 period); the composite's own capture, which only ever sees
+   * frames the compositor drew on its own pacer, takes half a period (see captureEarlyMs).
+   */
+  constructor(private periodMs: number, private earlyMs = 0.5) {}
 
   /** True when a frame is due at `now`; keeps the cadence, and never bursts after a stall. */
   due(now: number): boolean {
-    // half a millisecond early still counts: a tick that lands at 16.0 for a 16.67 period
-    if (now + 0.5 < this.next) return false;
+    if (now + this.earlyMs < this.next) return false;
     this.next = now - this.next > this.periodMs ? now + this.periodMs : this.next + this.periodMs;
     return true;
   }
 }
+
+/**
+ * How early a drawn frame may reach the composite's capture and still be taken. The compositor
+ * draws on its own pacer at the same rate, a tick (up to TICK_MS) after each frame is due; a second
+ * pacer that only allowed half a millisecond fell out of step with the first and dropped about one
+ * frame in 25 (a 1080p60 take recorded ~56 fps). Half a period takes every drawn frame and still
+ * holds the rate when frames come faster.
+ */
+export const captureEarlyMs = (periodMs: number) => periodMs / 2;
 
 /**
  * How often the worker timer ticks (ms). The compositor draws on the first tick a frame is due, so a

@@ -321,7 +321,7 @@ async function begin() {
     // While encoders start, a GPU readback on this thread would wait for them and freeze the picture.
     holdGpuReadbacks(ENCODER_START_MS);
     for (const t of sess.tracks) {
-      if (t.track === "composite") sess.later(() => { holdGpuReadbacks(ENCODER_START_MS); if (t.rec.state === "inactive") { t.rec.start(1000); t.startedAt = Date.now(); } });
+      if (t.track === "composite") sess.later(() => { holdGpuReadbacks(ENCODER_START_MS); if (t.rec.state === "inactive") { t.rec.start(1000); t.startedAt = Date.now(); comp.startCapture(); } });
       else { t.rec.start(1000); t.startedAt = Date.now(); }
     }
     session = sess;
