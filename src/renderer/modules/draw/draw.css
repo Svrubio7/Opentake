@@ -25,7 +25,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- strokes ---------- */
 .draw-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; pointer-events: none; }
-.draw-canvas.on { pointer-events: auto; cursor: crosshair; }
+/* a pen with its tip on the hotspot, readable on light and dark screens */
+.draw-canvas.on {
+  pointer-events: auto;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 21l1.5-5L16 4.5a2.1 2.1 0 0 1 3 3L7.5 19z' fill='%23111' stroke='white' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 3 21, crosshair;
+}
+.draw-dock, .draw-hint { cursor: default; }
+.draw-btn, .draw-swatch { cursor: pointer; }
 .draw-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .draw-stroke.hl { stroke-linecap: butt; }
 
